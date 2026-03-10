@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSK · AI 训练管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#18181b; --ink-light:#71717a; --stone:#f4f4f5; --stone-dark:#e4e4e7;
+  --mist:#fafafa; --white:#ffffff; --sidebar-w:220px; --header-h:54px;
+  --text-xs:11.5px; --text-sm:13px; --text-base:14px;
+  --radius-sm:4px; --radius:8px; --radius-lg:12px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04); --shadow:0 4px 12px rgba(0,0,0,.06); --shadow-lg:0 16px 40px rgba(0,0,0,.1);
+  --tr:all .18s cubic-bezier(.16,1,.3,1);
+  --teal:#059669; --teal-l:#ecfdf5; --amber:#d97706; --amber-l:#fffbeb;
+  --rose:#e11d48; --rose-l:#fff1f3; --indigo:#4f46e5; --indigo-l:#eef2ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans','Noto Serif SC',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;background:var(--mist);color:var(--ink);font-size:var(--text-base);line-height:1.5;overflow:hidden;height:100vh}
+.app{display:flex;height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar-w);background:#121212;display:flex;flex-direction:column;flex-shrink:0;z-index:10}
+.sidebar-logo{padding:18px 16px 12px;border-bottom:1px solid rgba(255,255,255,.05)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:28px;height:28px;background:#27272a;border:1px solid rgba(255,255,255,.1);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'Noto Serif SC';color:#fff;font-size:12px;font-weight:600}
+.logo-text{color:#fff;font-size:13px;font-weight:500;letter-spacing:-.3px}
+.logo-sub{color:#52525b;font-size:10px;letter-spacing:.5px;margin-top:1px}
+.sidebar-nav{flex:1;padding:10px 10px;overflow-y:auto}
+.sidebar-nav::-webkit-scrollbar{width:3px}
+.sidebar-nav::-webkit-scrollbar-thumb{background:#3f3f46;border-radius:3px}
+.nav-section{margin-bottom:8px}
+.nav-label{padding:4px 10px 5px;font-size:10px;font-weight:500;letter-spacing:1px;color:#3f3f46;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;color:#71717a;font-size:var(--text-sm);cursor:pointer;transition:var(--tr);margin-bottom:1px;position:relative;user-select:none}
+.nav-item:hover{background:rgba(255,255,255,.05);color:#d4d4d8}
+.nav-item.active{background:rgba(255,255,255,.07);color:#fff;font-weight:500}
+.nav-item.active::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:2px;background:#fff;border-radius:0 2px 2px 0}
+.nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.75}
+.nav-badge{margin-left:auto;background:#27272a;color:#a1a1aa;font-size:9px;font-weight:500;padding:2px 5px;border-radius:8px;border:1px solid rgba(255,255,255,.04);font-family:'JetBrains Mono'}
+.sidebar-footer{padding:12px 10px;border-top:1px solid rgba(255,255,255,.05)}
+.user-card{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:7px;cursor:pointer;transition:var(--tr)}
+.user-card:hover{background:rgba(255,255,255,.04)}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:#27272a;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;border:1px solid rgba(255,255,255,.1);flex-shrink:0}
+.user-name{color:#e4e4e7;font-size:var(--text-sm);font-weight:500}
+.user-role{color:#52525b;font-size:10.5px;margin-top:1px}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:var(--header-h);background:var(--white);border-bottom:1px solid var(--stone-dark);display:flex;align-items:center;padding:0 24px;gap:14px;flex-shrink:0}
+.breadcrumb{display:flex;align-items:center;gap:7px;font-size:var(--text-sm);color:var(--ink-light)}
+.breadcrumb-sep{color:#d4d4d8}
+.breadcrumb-curr{color:var(--ink);font-weight:500}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.search-bar{display:flex;align-items:center;gap:7px;background:var(--mist);border:1px solid var(--stone-dark);border-radius:6px;padding:6px 12px;font-size:var(--text-sm);width:200px;transition:var(--tr)}
+.search-bar:focus-within{border-color:#a1a1aa;background:var(--white)}
+.search-bar input{border:none;background:transparent;outline:none;font-family:inherit;font-size:var(--text-sm);color:var(--ink);width:100%}
+.search-bar input::placeholder{color:#a1a1aa}
+.search-bar svg{color:#a1a1aa;flex-shrink:0;width:13px;height:13px}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;padding:24px 28px;background:var(--mist)}
+.content::-webkit-scrollbar{width:5px}
+.content::-webkit-scrollbar-thumb{background:var(--stone-dark);border-radius:5px}
+.page{display:none}
+.page.active{display:block;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.page-title{font-size:16px;font-weight:500;color:var(--ink);letter-spacing:-.4px}
+.page-subtitle{font-size:var(--text-sm);color:var(--ink-light);margin-top:4px}
+.page-actions{display:flex;gap:8px;align-items:center}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:6px;font-size:var(--text-sm);font-weight:500;cursor:pointer;transition:var(--tr);outline:none;font-family:inherit;border:1px solid transparent}
+.btn-primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn-primary:hover{background:#27272a}
+.btn-secondary{background:var(--white);color:var(--ink);border-color:var(--stone-dark)}
+.btn-secondary:hover{background:var(--stone)}
+.btn-ghost{background:transparent;color:var(--ink-light)}
+.btn-ghost:hover{background:var(--stone);color:var(--ink)}
+.btn-danger{background:transparent;color:#9c6065}
+.btn-danger:hover{background:var(--rose-l)}
+.btn svg{width:13px;height:13px}
+.btn-sm{padding:4px 9px;font-size:11.5px}
+
+/* ── STATS ROW ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat-card{background:var(--white);border-radius:var(--radius-lg);padding:16px 18px;border:1px solid var(--stone-dark);display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm)}
+.stat-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.stat-icon.grey{background:#f4f4f5}
+.stat-icon.green{background:var(--teal-l)}
+.stat-icon.blue{background:var(--indigo-l)}
+.stat-icon.amber{background:var(--amber-l)}
+.stat-val{font-size:20px;font-weight:500;font-family:'JetBrains Mono';color:var(--ink);line-height:1;letter-spacing:-.5px}
+.stat-label{font-size:var(--text-xs);color:var(--ink-light);margin-top:4px;font-weight:500}
+
+/* ── CARD ── */
+.card{background:var(--white);border:1px solid var(--stone-dark);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm)}
+.card+.card{margin-top:14px}
+.card-header{padding:13px 18px;border-bottom:1px solid var(--stone-dark);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:var(--text-sm);font-weight:600}
+.card-body{padding:18px}
+
+/* ── TABLE ── */
+.table-wrap{background:var(--white);border-radius:var(--radius-lg);border:1px solid var(--stone-dark);overflow:hidden;box-shadow:var(--shadow-sm)}
+.table-top{padding:13px 18px;border-bottom:1px solid var(--stone-dark);display:flex;align-items:center;gap:10px}
+.table-count{font-size:var(--text-xs);color:var(--ink-light);font-weight:500}
+table{width:100%;border-collapse:collapse}
+th{padding:9px 16px;text-align:left;font-size:10.5px;font-weight:500;letter-spacing:.4px;color:var(--ink-light);background:var(--white);border-bottom:1px solid var(--stone-dark);text-transform:uppercase;white-space:nowrap}
+td{padding:10px 16px;font-size:var(--text-sm);color:var(--ink);border-bottom:1px solid var(--stone)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--mist)}
+.td-mono{font-family:'JetBrains Mono';font-size:11.5px;color:var(--ink-light)}
+
+/* ── FORM ── */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-row-3{grid-template-columns:repeat(3,1fr)}
+.form-group{margin-bottom:14px}
+.form-group:last-child{margin-bottom:0}
+.form-label{font-size:10.5px;font-weight:500;letter-spacing:.4px;text-transform:uppercase;color:var(--ink-light);display:block;margin-bottom:7px}
+.form-label span{color:#9c6065;margin-left:2px}
+.form-input{width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--stone-dark);background:var(--mist);font-family:inherit;font-size:var(--text-sm);color:var(--ink);outline:none;transition:var(--tr)}
+.form-input:focus{border-color:#a1a1aa;background:var(--white);box-shadow:0 0 0 3px rgba(24,24,27,.04)}
+.form-input::placeholder{color:#a1a1aa}
+textarea.form-input{resize:vertical;min-height:72px}
+.form-select{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2371717a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:28px}
+.form-hint{font-size:11px;color:var(--ink-light);margin-top:5px}
+.divider{border:none;border-top:1px solid var(--stone-dark);margin:14px 0}
+
+/* ── BADGE ── */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-size:10.5px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.badge-draft{background:#f4f4f5;color:#52525b;border-color:#e4e4e7}
+.badge-published{background:var(--teal-l);color:var(--teal)}
+.badge-teal{background:var(--teal-l);color:var(--teal)}
+.badge-amber{background:var(--amber-l);color:var(--amber)}
+.badge-rejected{background:var(--rose-l);color:#9c6065}
+.badge-indigo{background:var(--indigo-l);color:var(--indigo)}
+.badge-muted{background:#f4f4f5;color:#71717a}
+.status-dot{display:inline-flex;align-items:center;gap:5px;font-size:11.5px}
+.status-dot::before{content:'';width:5px;height:5px;border-radius:50%;display:inline-block}
+.status-dot.published::before{background:var(--teal)}
+.status-dot.draft::before{background:#d4d4d8}
+
+/* ── TOGGLE ── */
+.tog{width:36px;height:20px;background:#e4e4e7;border-radius:10px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.tog.on{background:var(--ink)}
+.tog::after{content:'';position:absolute;width:14px;height:14px;background:white;border-radius:50%;top:3px;left:3px;transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.tog.on::after{left:19px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--stone-dark)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-label{font-size:var(--text-sm);font-weight:500}
+.toggle-desc{font-size:11.5px;color:var(--ink-light);margin-top:2px}
+
+/* ── AI ROLE CARDS ── */
+.role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.ai-role-card{border:1px solid var(--stone-dark);border-radius:8px;padding:14px;cursor:pointer;transition:var(--tr);position:relative;background:var(--white)}
+.ai-role-card:hover{border-color:#a1a1aa;box-shadow:var(--shadow)}
+.ai-role-card.selected{border-color:var(--ink);background:var(--mist)}
+.ai-role-card.selected::after{content:'✓';position:absolute;top:10px;right:10px;width:18px;height:18px;background:var(--ink);color:white;border-radius:50%;font-size:9px;display:flex;align-items:center;justify-content:center;line-height:18px;text-align:center}
+.ai-role-avatar{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:8px}
+
+/* ── SCENE CARDS ── */
+.scene-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.scene-card{background:var(--white);border:1px solid var(--stone-dark);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:var(--tr);display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow-sm)}
+.scene-card:hover{border-color:#a1a1aa;box-shadow:var(--shadow);transform:translateY(-1px)}
+.scene-card-add{align-items:center;justify-content:center;border-style:dashed;background:var(--mist);min-height:160px}
+.scene-card-add:hover{border-color:var(--ink);background:var(--stone)}
+.scene-emoji{width:40px;height:40px;font-size:20px;display:flex;align-items:center;justify-content:center;background:var(--stone);border-radius:9px;flex-shrink:0}
+.scene-name{font-size:13.5px;font-weight:600}
+.scene-en{font-size:11px;color:var(--ink-light);margin-top:1px}
+.scene-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.scene-meta{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--ink-light)}
+.scene-goals{display:flex;flex-wrap:wrap;gap:5px}
+.scene-goal-tag{background:var(--stone);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--ink-light)}
+.scene-footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--stone);padding-top:10px;margin-top:2px}
+
+/* ── SECTION TITLE ── */
+.section-title{font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-light);margin:20px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--stone-dark)}
+.section-title:first-child{margin-top:0}
+
+/* ── EDITOR PANEL ── */
+.editor-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.22);z-index:500;justify-content:flex-end;opacity:0;transition:opacity .25s}
+.editor-overlay.open{display:flex;opacity:1}
+.editor-panel{width:780px;max-width:96vw;background:var(--white);border-left:1px solid var(--stone-dark);box-shadow:-8px 0 40px rgba(0,0,0,.1);display:flex;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.editor-overlay.open .editor-panel{transform:translateX(0)}
+.editor-header{padding:16px 22px;border-bottom:1px solid var(--stone-dark);display:flex;align-items:center;gap:12px;flex-shrink:0;background:var(--white)}
+.editor-title{font-size:15px;font-weight:600}
+.editor-body{flex:1;overflow-y:auto;padding:22px}
+.editor-body::-webkit-scrollbar{width:4px}
+.editor-body::-webkit-scrollbar-thumb{background:var(--stone-dark);border-radius:4px}
+.editor-footer{padding:14px 22px;border-top:1px solid var(--stone-dark);display:flex;justify-content:space-between;align-items:center;background:var(--mist);flex-shrink:0}
+.modal-close{width:28px;height:28px;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;background:transparent;color:var(--ink-light);transition:var(--tr);font-size:14px}
+.modal-close:hover{background:var(--stone);color:var(--ink)}
+
+/* ── LANG TABS ── */
+.ltabs-wrap{border:1px solid var(--stone-dark);border-radius:var(--radius);overflow:hidden}
+.ltabs-bar{display:flex;overflow-x:auto;background:var(--mist);border-bottom:1px solid var(--stone-dark)}
+.ltabs-bar::-webkit-scrollbar{display:none}
+.ltab{padding:7px 11px;font-size:11.5px;font-weight:500;color:var(--ink-light);cursor:pointer;background:transparent;border:none;border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;transition:var(--tr)}
+.ltab:hover{background:var(--stone);color:var(--ink)}
+.ltab.act{background:var(--white);color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
+.ltab-content{display:none}
+.ltab-content.act{display:block}
+.ltab-content textarea,.ltab-content input[type=text]{width:100%;border:none;padding:10px 12px;font-family:inherit;font-size:13px;color:var(--ink);background:transparent;outline:none;resize:none;min-height:60px}
+
+/* ── GOAL ROWS ── */
+.goal-row{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--stone-dark);border-radius:6px;background:var(--mist);margin-bottom:6px}
+.goal-idx{width:20px;height:20px;background:var(--stone-dark);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--ink-light);font-family:'JetBrains Mono';flex-shrink:0}
+.goal-row input{flex:1;border:none;background:transparent;font-family:inherit;font-size:13px;color:var(--ink);outline:none}
+.goal-del-btn{width:22px;height:22px;border-radius:4px;border:none;background:transparent;cursor:pointer;color:#ccc;font-size:12px;display:flex;align-items:center;justify-content:center;transition:var(--tr)}
+.goal-del-btn:hover{background:var(--rose-l);color:var(--rose)}
+
+/* ── SW WEIGHT ── */
+.sw-row{display:flex;align-items:center;gap:8px}
+.sw-track{flex:1;height:4px;background:var(--stone-dark);border-radius:2px;overflow:hidden}
+.sw-fill{height:100%;background:var(--ink);border-radius:2px;transition:width .2s}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-select{padding:5px 10px;border-radius:6px;border:1px solid var(--stone-dark);background:var(--white);font-family:inherit;font-size:var(--text-sm);color:var(--ink);outline:none;cursor:pointer;appearance:none;padding-right:24px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2371717a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:28px;right:28px;z-index:2000;background:#18181b;color:#fff;padding:12px 18px;border-radius:7px;font-size:var(--text-sm);font-weight:500;box-shadow:var(--shadow-lg);transform:translateY(10px);opacity:0;transition:all .25s cubic-bezier(.16,1,.3,1);display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.08);pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-left:3px solid var(--teal)}
+.toast.error{border-left:3px solid #9c6065}
+.toast.info{border-left:3px solid #63758a}
+
+/* ── Embed Content Mode (hide inner shell) ── */
+body.embed-content .sidebar{display:none}
+body.embed-content .topbar{display:none}
+body.embed-content .content{padding:0;background:var(--mist)}
+body.embed-content .main{width:100%}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══ SIDEBAR ══ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">
+      <div class="logo-icon">汉</div>
+      <div>
+        <div class="logo-text">NSK C-LingoAI</div>
+        <div class="logo-sub">AI TRAINER ADMIN</div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-label">AI 配置</div>
+
+      <div class="nav-item" id="nav-ai-roles" onclick="showPage('ai-roles',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        AI 角色配置
+        <span class="nav-badge">3</span>
+      </div>
+
+      <div class="nav-item active" id="nav-ai-free" onclick="showPage('ai-free',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        自由对话训练
+        <span class="nav-badge">3</span>
+      </div>
+
+      <div class="nav-item" id="nav-ai-scene" onclick="showPage('ai-scene',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        场景训练管理
+        <span class="nav-badge">5</span>
+      </div>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="user-avatar">管</div>
+      <div>
+        <div class="user-name">张晓明</div>
+        <div class="user-role">管理员</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+  <header class="topbar">
+    <div class="breadcrumb" id="breadcrumb">
+      <span>NSK</span><span class="breadcrumb-sep">›</span>
+      <span>AI 配置</span><span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-curr">自由对话训练</span>
+    </div>
+    <div class="topbar-right">
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input placeholder="搜索配置...">
+      </div>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- ══════════ PAGE: AI ROLES ══════════ -->
+    <div class="page" id="page-ai-roles">
+      <div class="page-header">
+        <div>
+          <div class="page-title">AI 角色配置</div>
+          <div class="page-subtitle">管理对话中 AI 助手的角色人设、功能开关与模型设置</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="openRoleEditor('new')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            新建角色
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-icon blue">🤖</div><div><div class="stat-val">3</div><div class="stat-label">AI 角色总数</div></div></div>
+        <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-val">2</div><div class="stat-label">已启用</div></div></div>
+        <div class="stat-card"><div class="stat-icon amber">⭐</div><div><div class="stat-val">1</div><div class="stat-label">Premium 专属</div></div></div>
+        <div class="stat-card"><div class="stat-icon grey">💬</div><div><div class="stat-val">41,208</div><div class="stat-label">本月对话次数</div></div></div>
+      </div>
+
+      <div class="role-grid">
+        <div class="ai-role-card selected" onclick="selectRoleCard(this);openRoleEditor('edit',0)">
+          <div class="ai-role-avatar" style="background:#eef2ff;">🎓</div>
+          <div style="font-size:13px;font-weight:600;">AI 老师 Lin</div>
+          <div style="font-size:11.5px;color:var(--ink-light);margin-top:3px;">教学型 · 语法纠错 · 发音评测</div>
+          <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;">
+            <span class="badge badge-teal">主要角色</span>
+            <span class="badge badge-published">已启用</span>
+          </div>
+        </div>
+        <div class="ai-role-card" onclick="selectRoleCard(this);openRoleEditor('edit',1)">
+          <div class="ai-role-avatar" style="background:#fafaf9;">📖</div>
+          <div style="font-size:13px;font-weight:600;">AI 词典助手</div>
+          <div style="font-size:11.5px;color:var(--ink-light);margin-top:3px;">辅助型 · 即时查词 · 字源解析</div>
+          <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;">
+            <span class="badge badge-muted">辅助角色</span>
+            <span class="badge badge-published">已启用</span>
+          </div>
+        </div>
+        <div class="ai-role-card" onclick="selectRoleCard(this);openRoleEditor('edit',2)">
+          <div class="ai-role-avatar" style="background:#fffbeb;">🤝</div>
+          <div style="font-size:13px;font-weight:600;">AI 陪伴伙伴</div>
+          <div style="font-size:11.5px;color:var(--ink-light);margin-top:3px;">对话型 · 情感陪伴 · 自由聊天</div>
+          <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;">
+            <span class="badge badge-amber">Premium</span>
+            <span class="badge badge-draft">未启用</span>
+          </div>
+        </div>
+      </div>
+    </div><!-- /ai-roles -->
+
+    <!-- ══════════ PAGE: AI FREE ══════════ -->
+    <div class="page active" id="page-ai-free">
+      <div class="page-header">
+        <div>
+          <div class="page-title">自由对话训练</div>
+          <div class="page-subtitle">管理「自由对话」模式配置 · 用户可 DIY 任意场景主题</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="openEditor('free','new')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            新建配置
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-icon blue">💬</div><div><div class="stat-val">3</div><div class="stat-label">配置总数</div></div></div>
+        <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-val">2</div><div class="stat-label">已上线</div></div></div>
+        <div class="stat-card"><div class="stat-icon grey">📝</div><div><div class="stat-val">1</div><div class="stat-label">草稿</div></div></div>
+        <div class="stat-card"><div class="stat-icon amber">🗣️</div><div><div class="stat-val">12,841</div><div class="stat-label">本月对话次数</div></div></div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-top">
+          <span class="card-title" style="font-size:13px;font-weight:600;">配置列表</span>
+          <span class="table-count" style="margin-left:6px;">共 3 条</span>
+          <div style="margin-left:auto;">
+            <select class="filter-select">
+              <option>全部难度</option>
+              <option>入门</option><option>初级</option><option>中级</option><option>高级</option><option>自适应</option>
+            </select>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>配置名称</th>
+              <th>难度</th>
+              <th>免费轮数</th>
+              <th>付费轮数</th>
+              <th>AI 角色</th>
+              <th>状态</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div style="font-weight:500;">通用自由对话</div>
+                <div style="font-size:11px;color:var(--ink-light);margin-top:1px;">适合任意日常话题练习</div>
+              </td>
+              <td><span class="badge badge-muted">自适应</span></td>
+              <td><span class="td-mono">5</span></td>
+              <td><span class="td-mono">无限</span></td>
+              <td>AI 老师 Lin</td>
+              <td><span class="status-dot published">已上线</span></td>
+              <td class="td-mono" style="font-size:11px;">2026-03-01</td>
+              <td>
+                <div style="display:flex;gap:5px;">
+                  <button class="btn btn-ghost btn-sm" onclick="openEditor('free','edit',0)">编辑</button>
+                  <button class="btn btn-danger btn-sm" onclick="confirmDelete(this)">删除</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div style="font-weight:500;">职场中文进阶</div>
+                <div style="font-size:11px;color:var(--ink-light);margin-top:1px;">商务场景 DIY 自定义</div>
+              </td>
+              <td><span class="badge badge-rejected">高级</span></td>
+              <td><span class="td-mono">3</span></td>
+              <td><span class="td-mono">30</span></td>
+              <td>AI 老师 Lin</td>
+              <td><span class="status-dot published">已上线</span></td>
+              <td class="td-mono" style="font-size:11px;">2026-02-18</td>
+              <td>
+                <div style="display:flex;gap:5px;">
+                  <button class="btn btn-ghost btn-sm" onclick="openEditor('free','edit',1)">编辑</button>
+                  <button class="btn btn-danger btn-sm" onclick="confirmDelete(this)">删除</button>
+                </div>
+              </td>
+            </tr>
+            <tr style="opacity:.6;">
+              <td>
+                <div style="font-weight:500;">文化交流对话</div>
+                <div style="font-size:11px;color:var(--ink-light);margin-top:1px;">中国文化相关自由聊天</div>
+              </td>
+              <td><span class="badge badge-teal">初级</span></td>
+              <td><span class="td-mono">5</span></td>
+              <td><span class="td-mono">20</span></td>
+              <td>AI 老师 Lin</td>
+              <td><span class="status-dot draft">草稿</span></td>
+              <td class="td-mono" style="font-size:11px;">2026-02-28</td>
+              <td>
+                <div style="display:flex;gap:5px;">
+                  <button class="btn btn-ghost btn-sm" onclick="openEditor('free','edit',2)">编辑</button>
+                  <button class="btn btn-secondary btn-sm" onclick="showToast('已发布','success')">发布</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- /ai-free -->
+
+    <!-- ══════════ PAGE: AI SCENE ══════════ -->
+    <div class="page" id="page-ai-scene">
+      <div class="page-header">
+        <div>
+          <div class="page-title">场景训练管理</div>
+          <div class="page-subtitle">管理预设场景练习 · 咖啡厅、约会、市场、旅游、面试等</div>
+        </div>
+        <div class="page-actions">
+          <select class="filter-select">
+            <option>全部难度</option><option>初级</option><option>中级</option><option>高级</option>
+          </select>
+          <button class="btn btn-primary" onclick="openEditor('scene','new')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            新建场景
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-icon blue">🎬</div><div><div class="stat-val">5</div><div class="stat-label">场景总数</div></div></div>
+        <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-val">4</div><div class="stat-label">已上线</div></div></div>
+        <div class="stat-card"><div class="stat-icon amber">⭐</div><div><div class="stat-val">1</div><div class="stat-label">Premium 专属</div></div></div>
+        <div class="stat-card"><div class="stat-icon grey">🔁</div><div><div class="stat-val">28,304</div><div class="stat-label">本月练习次数</div></div></div>
+      </div>
+
+      <div class="scene-grid">
+
+        <div class="scene-card" onclick="openEditor('scene','edit',0)">
+          <div class="scene-card-top">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="scene-emoji">☕</div>
+              <div><div class="scene-name">咖啡厅点餐</div><div class="scene-en">Coffee Shop</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <span class="badge badge-teal">初级</span>
+              <div class="tog on" onclick="event.stopPropagation();this.classList.toggle('on')"></div>
+            </div>
+          </div>
+          <div class="scene-meta">
+            <span>👤 顾客 vs 咖啡师</span>
+            <span>🔄 5轮(免费) · 20轮(付费)</span>
+          </div>
+          <div class="scene-goals">
+            <span class="scene-goal-tag">点餐基础</span>
+            <span class="scene-goal-tag">询问菜单</span>
+            <span class="scene-goal-tag">结账对话</span>
+          </div>
+          <div class="scene-footer">
+            <span class="td-mono" style="font-size:10.5px;">2026-03-01</span>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditor('scene','edit',0)">编辑 →</button>
+          </div>
+        </div>
+
+        <div class="scene-card" onclick="openEditor('scene','edit',1)">
+          <div class="scene-card-top">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="scene-emoji">💑</div>
+              <div><div class="scene-name">约会对话</div><div class="scene-en">Asking Out</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <span class="badge badge-amber">中级</span>
+              <div class="tog on" onclick="event.stopPropagation();this.classList.toggle('on')"></div>
+            </div>
+          </div>
+          <div class="scene-meta">
+            <span>👤 约会者 vs 对方</span>
+            <span>🔄 5轮(免费) · 15轮(付费)</span>
+          </div>
+          <div class="scene-goals">
+            <span class="scene-goal-tag">表达情感</span>
+            <span class="scene-goal-tag">邀约日期</span>
+          </div>
+          <div class="scene-footer">
+            <span class="td-mono" style="font-size:10.5px;">2026-02-20</span>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditor('scene','edit',1)">编辑 →</button>
+          </div>
+        </div>
+
+        <div class="scene-card" onclick="openEditor('scene','edit',2)">
+          <div class="scene-card-top">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="scene-emoji">🍎</div>
+              <div><div class="scene-name">菜市场购物</div><div class="scene-en">At the Market</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <span class="badge badge-teal">初级</span>
+              <div class="tog on" onclick="event.stopPropagation();this.classList.toggle('on')"></div>
+            </div>
+          </div>
+          <div class="scene-meta">
+            <span>👤 买家 vs 摊主</span>
+            <span>🔄 5轮(免费) · 20轮(付费)</span>
+          </div>
+          <div class="scene-goals">
+            <span class="scene-goal-tag">询问价格</span>
+            <span class="scene-goal-tag">砍价表达</span>
+          </div>
+          <div class="scene-footer">
+            <span class="td-mono" style="font-size:10.5px;">2026-02-15</span>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditor('scene','edit',2)">编辑 →</button>
+          </div>
+        </div>
+
+        <div class="scene-card" onclick="openEditor('scene','edit',3)">
+          <div class="scene-card-top">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="scene-emoji">✈️</div>
+              <div><div class="scene-name">旅游问路</div><div class="scene-en">Travel Help</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <span class="badge badge-amber">中级</span>
+              <div class="tog on" onclick="event.stopPropagation();this.classList.toggle('on')"></div>
+            </div>
+          </div>
+          <div class="scene-meta">
+            <span>👤 旅客 vs 当地人</span>
+            <span>🔄 5轮(免费) · 18轮(付费)</span>
+          </div>
+          <div class="scene-goals">
+            <span class="scene-goal-tag">问路方向</span>
+            <span class="scene-goal-tag">交通工具</span>
+          </div>
+          <div class="scene-footer">
+            <span class="td-mono" style="font-size:10.5px;">2026-02-10</span>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditor('scene','edit',3)">编辑 →</button>
+          </div>
+        </div>
+
+        <div class="scene-card" onclick="openEditor('scene','edit',4)">
+          <div class="scene-card-top">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="scene-emoji">💼</div>
+              <div><div class="scene-name">求职面试</div><div class="scene-en">Job Interview</div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <span class="badge badge-rejected">高级</span>
+              <span class="badge badge-amber" style="font-size:10px;">★ Premium</span>
+              <div class="tog on" onclick="event.stopPropagation();this.classList.toggle('on')"></div>
+            </div>
+          </div>
+          <div class="scene-meta">
+            <span>👤 求职者 vs 面试官</span>
+            <span>🔄 — (仅付费) · 25轮</span>
+          </div>
+          <div class="scene-goals">
+            <span class="scene-goal-tag">自我介绍</span>
+            <span class="scene-goal-tag">回答问题</span>
+            <span class="scene-goal-tag">提问环节</span>
+          </div>
+          <div class="scene-footer">
+            <span class="td-mono" style="font-size:10.5px;">2026-01-30</span>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditor('scene','edit',4)">编辑 →</button>
+          </div>
+        </div>
+
+        <div class="scene-card scene-card-add" onclick="openEditor('scene','new')">
+          <div style="font-size:2rem;color:#d4d4d8;">＋</div>
+          <div style="font-size:13px;font-weight:500;color:var(--ink-light);">新建场景</div>
+          <div style="font-size:11.5px;color:#a1a1aa;margin-top:2px;">点击创建新场景配置</div>
+        </div>
+
+      </div>
+    </div><!-- /ai-scene -->
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ══ EDITOR PANEL (shared) ══ -->
+<div class="editor-overlay" id="editorOverlay">
+  <div class="editor-panel" id="editorPanel">
+    <div class="editor-header">
+      <div style="flex:1;">
+        <div class="editor-title" id="editorTitle">配置编辑</div>
+        <div id="editorSub" style="font-size:11px;color:var(--ink-light);margin-top:2px;"></div>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;">
+        <span class="badge" id="editorBadge">草稿</span>
+        <button class="btn btn-secondary btn-sm" onclick="showToast('草稿已保存','success')">保存草稿</button>
+        <button class="btn btn-primary btn-sm" onclick="showToast('已发布','success');closeEditor()">发布</button>
+        <button class="modal-close" onclick="closeEditor()">✕</button>
+      </div>
+    </div>
+    <div class="editor-body" id="editorBody"></div>
+    <div class="editor-footer">
+      <button class="btn btn-danger btn-sm" onclick="showToast('已删除','error');closeEditor()">删除此配置</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" onclick="closeEditor()">取消</button>
+        <button class="btn btn-primary" onclick="showToast('配置已保存','success');closeEditor()">💾 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ROLE EDITOR PANEL ══ -->
+<div class="editor-overlay" id="roleOverlay">
+  <div class="editor-panel" id="rolePanel">
+    <div class="editor-header">
+      <div style="flex:1;">
+        <div class="editor-title" id="rolePanelTitle">AI 角色配置</div>
+        <div id="rolePanelSub" style="font-size:11px;color:var(--ink-light);margin-top:2px;"></div>
+      </div>
+      <div style="display:flex;gap:7px;align-items:center;">
+        <button class="btn btn-secondary btn-sm" onclick="showToast('草稿已保存','success')">保存草稿</button>
+        <button class="btn btn-primary btn-sm" onclick="showToast('已保存','success');closeRoleEditor()">保存</button>
+        <button class="modal-close" onclick="closeRoleEditor()">✕</button>
+      </div>
+    </div>
+    <div class="editor-body" id="roleBody"></div>
+    <div class="editor-footer">
+      <button class="btn btn-danger btn-sm" onclick="showToast('已删除','error');closeRoleEditor()">删除角色</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" onclick="closeRoleEditor()">取消</button>
+        <button class="btn btn-primary" onclick="showToast('配置已保存','success');closeRoleEditor()">💾 保存配置</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ── Data ──
+const LANGS = [
+  {f:'🇺🇸',l:'EN'},{f:'🇨🇳',l:'中文'},{f:'🇪🇸',l:'ES'},{f:'🇫🇷',l:'FR'},
+  {f:'🇧🇷',l:'PT'},{f:'🇯🇵',l:'日本語'},{f:'🇰🇷',l:'한국어'},{f:'🇻🇳',l:'VI'},
+  {f:'🇹🇭',l:'TH'},{f:'🇮🇩',l:'ID'},{f:'🇲🇾',l:'MS'},{f:'🇰🇭',l:'KM'}
+];
+
+const SCENE_DATA = [
+  {emoji:'☕',nameCn:'咖啡厅点餐',nameEn:'Coffee Shop',diff:'初级',aiRole:'咖啡师小美',userRole:'顾客',roundsFree:5,roundsPaid:20,
+   goals:['能用中文询问菜单饮品种类','表达口味偏好（甜度/温度）','完成点餐结账全流程'],
+   bg:'你走进一家温馨的咖啡厅，咖啡厅里播放着轻柔的音乐，空气中弥漫着咖啡香气...',
+   prompt:'你是咖啡厅的热情服务员小美。帮助用户练习中文点餐对话，回复保持在3句以内，语气亲切自然。{{difficulty}} {{user_role}}',
+   reportPrompt:'根据以下对话记录，评估用户的中文对话能力，生成JSON学习报告。包含：overall_score, highlights(array), improvements(array), vocabulary_learned(array)。\n\n对话：{{conversation_history}}\n目标：{{learning_goals}}'},
+  {emoji:'💑',nameCn:'约会对话',nameEn:'Asking Out',diff:'中级',aiRole:'约会对象',userRole:'约会者',roundsFree:5,roundsPaid:15,
+   goals:['用中文表达约会邀请','说明时间地点','礼貌婉拒或接受邀请'],
+   bg:'你认识了一位喜欢的朋友，想用中文邀请对方一起吃饭...',
+   prompt:'你是一位友善的中文母语者，帮助用户练习约会邀约对话。保持自然口语风格。',
+   reportPrompt:'分析用户约会对话的中文表达能力...'},
+  {emoji:'🍎',nameCn:'菜市场购物',nameEn:'At the Market',diff:'初级',aiRole:'摊主老王',userRole:'买家',roundsFree:5,roundsPaid:20,
+   goals:['询问商品价格','用中文进行讨价还价','完成购买交易'],
+   bg:'你来到一个热闹的中国菜市场，想买一些蔬菜水果...',
+   prompt:'你是一位热情的市场摊主，帮用户练习买菜砍价中文对话。语气接地气。',
+   reportPrompt:'...'},
+  {emoji:'✈️',nameCn:'旅游问路',nameEn:'Travel Help',diff:'中级',aiRole:'当地居民',userRole:'旅客',roundsFree:5,roundsPaid:18,
+   goals:['用中文询问路线方向','了解交通工具选项','表达感谢与告别'],
+   bg:'你第一次来到中国城市，需要找到附近的地铁站...',
+   prompt:'你是一位乐于助人的当地居民，帮旅客练习问路中文对话。',
+   reportPrompt:'...'},
+  {emoji:'💼',nameCn:'求职面试',nameEn:'Job Interview',diff:'高级',aiRole:'HR面试官',userRole:'求职者',roundsFree:0,roundsPaid:25,
+   goals:['流利地进行中文自我介绍','描述工作经历与技能','回答面试专业问题','把握提问环节'],
+   bg:'你正在参加一家中国公司的职位面试，面试官将用中文进行全程对话...',
+   prompt:'你是一位专业的HR面试官，语气正式但友善。评估求职者的中文表达能力和职业素养。',
+   reportPrompt:'...'},
+];
+
+const FREE_DATA = [
+  {nameCn:'通用自由对话',diff:'自适应',aiRole:'AI 老师 Lin',roundsFree:5,roundsPaid:0,
+   goals:['用中文自然表达日常想法','保持对话流畅衔接','扩展词汇使用范围'],
+   bg:'',
+   prompt:'你是NSK AI老师Lin，陪伴用户进行自由中文对话练习，话题不限。根据用户水平自动调整难度，适时纠错并给予鼓励。',
+   reportPrompt:'根据自由对话内容生成个性化学习报告...'},
+  {nameCn:'职场中文进阶',diff:'高级',aiRole:'AI 老师 Lin',roundsFree:3,roundsPaid:30,
+   goals:['使用正式商务中文表达','清晰说明工作内容与职责','处理职场日常沟通场景'],
+   bg:'',
+   prompt:'你是AI老师，专注帮助用户练习职场中文。使用正式但自然的商务语气。',
+   reportPrompt:'...'},
+  {nameCn:'文化交流对话',diff:'初级',aiRole:'AI 老师 Lin',roundsFree:5,roundsPaid:20,
+   goals:['用中文讨论中国传统文化','分享个人文化体验与见解'],
+   bg:'',
+   prompt:'你是AI老师，引导用户用中文探讨中国文化话题，营造轻松愉快的交流氛围。',
+   reportPrompt:'...'},
+];
+
+const ROLE_DATA = [
+  {name:'AI 老师 Lin', emoji:'🎓', type:'教学型 Teaching', model:'GPT-4o (OpenAI)', lang:'中英双语 CN+EN',
+   prompt:'你是NSK字灵大陆的AI中文老师Lin，专门帮助外国学习者学习中文。回复时：1) 先给出正确表达，2) 解释语法规则，3) 提供1-2个例句，4) 语气亲切鼓励。',
+   features:{grammar:true, pronunciation:true, translate:true, context:true, memory:false}},
+  {name:'AI 词典助手', emoji:'📖', type:'辅助型 Dictionary', model:'GPT-4o (OpenAI)', lang:'中英双语 CN+EN',
+   prompt:'你是AI词典助手，专注提供即时查词、字源解析和例句服务。回复结构化，先给释义，再给例句，最后给相关词汇。',
+   features:{grammar:false, pronunciation:false, translate:true, context:true, memory:false}},
+  {name:'AI 陪伴伙伴', emoji:'🤝', type:'对话型 Companion', model:'Claude Sonnet', lang:'中英双语 CN+EN',
+   prompt:'你是一位友善的中文母语者，像朋友一样陪伴用户练习日常中文对话。保持轻松自然的语气，不要过于正式。',
+   features:{grammar:false, pronunciation:false, translate:false, context:false, memory:true}},
+];
+
+// ── Navigation ──
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const labels = {'ai-roles':'AI 角色配置','ai-free':'自由对话训练','ai-scene':'场景训练管理'};
+  document.getElementById('breadcrumb').innerHTML =
+    `<span>NSK</span><span class="breadcrumb-sep">›</span><span>AI 配置</span><span class="breadcrumb-sep">›</span><span class="breadcrumb-curr">${labels[id]||id}</span>`;
+}
+
+// ── Toast ──
+let toastT;
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  const icons = {success:'✓',error:'✕',info:'·'};
+  t.textContent = `${icons[type]||'·'}  ${msg}`;
+  t.className = `toast show ${type}`;
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── Confirm delete ──
+function confirmDelete(btn) {
+  if (confirm('确认删除此配置？')) {
+    btn.closest('tr').style.opacity = '0';
+    setTimeout(() => btn.closest('tr').remove(), 300);
+    showToast('已删除','error');
+  }
+}
+
+// ── Role card select ──
+function selectRoleCard(el) {
+  document.querySelectorAll('.ai-role-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// ── Lang tabs helper ──
+let _ltc = 0;
+function buildLangTabs(value, isTextarea) {
+  const pid = 'lt' + (++_ltc);
+  const tabs = LANGS.map((l,i) =>
+    `<button class="ltab${i===0?' act':''}" onclick="swLT('${pid}',${i},event)">${l.f} ${l.l}</button>`
+  ).join('');
+  const contents = LANGS.map((l,i) =>
+    `<div class="ltab-content${i===0?' act':''}" id="${pid}-${i}">` +
+    (isTextarea
+      ? `<textarea placeholder="${l.l} 版本...">${i===0?(value||''):''}</textarea>`
+      : `<input type="text" placeholder="${l.l} 版本..." value="${i===0?(value||''):''}">`
+    ) + `</div>`
+  ).join('');
+  return `<div class="ltabs-wrap"><div class="ltabs-bar" id="${pid}-bar">${tabs}</div>${contents}</div>`;
+}
+function swLT(pid, idx, e) {
+  e && e.stopPropagation();
+  document.querySelectorAll(`#${pid}-bar .ltab`).forEach((t,i) => t.classList.toggle('act', i===idx));
+  LANGS.forEach((_,i) => {
+    const el = document.getElementById(`${pid}-${i}`);
+    if (el) el.classList.toggle('act', i===idx);
+  });
+}
+
+// ── Goals ──
+let _gc = 0;
+function addGoal(val) {
+  const c = document.getElementById('goals-c'); if (!c) return;
+  const id = 'g' + (++_gc);
+  const d = document.createElement('div'); d.className='goal-row'; d.id=id;
+  const n = c.children.length + 1;
+  d.innerHTML = `<div class="goal-idx">${n}</div><input type="text" value="${val||''}" placeholder="输入对话目标..."><button class="goal-del-btn" onclick="rmGoal('${id}')">✕</button>`;
+  c.appendChild(d);
+}
+function rmGoal(id) {
+  document.getElementById(id)?.remove();
+  document.querySelectorAll('#goals-c .goal-idx').forEach((el,i) => el.textContent = i+1);
+}
+
+// ── Render editor body (scene / free) ──
+function buildEditorHTML(mode, data) {
+  const isScene = mode === 'scene';
+  const diffs = ['入门','初级','中级','高级','母语','自适应'];
+  const diffOpts = diffs.map(d => `<option${d===data.diff?' selected':''}>${d}</option>`).join('');
+  const roleOpts = ROLE_DATA.map(r => `<option${r.name===data.aiRole?' selected':''}>${r.name}</option>`).join('');
+
+  return `
+    <div class="section-title">基本信息</div>
+    <div style="display:grid;grid-template-columns:${isScene?'56px 1fr 1fr':'1fr'};gap:12px;margin-bottom:14px;">
+      ${isScene?`<div class="form-group"><label class="form-label">图标</label><input class="form-input" value="${data.emoji||''}" style="font-size:20px;text-align:center;padding:6px;"></div>`:''}
+      <div class="form-group"><label class="form-label">名称（中文）<span>*</span></label><input class="form-input" value="${data.nameCn||''}" placeholder="配置名称"></div>
+      ${isScene?`<div class="form-group"><label class="form-label">名称（英文）</label><input class="form-input" value="${data.nameEn||''}" placeholder="e.g. Coffee Shop"></div>`:''}
+    </div>
+    <div class="form-group" style="margin-bottom:18px;"><label class="form-label">名称多语言</label>${buildLangTabs(data.nameCn||'', false)}</div>
+
+    <div class="section-title">难度 & 轮数限制</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="form-group"><label class="form-label">难度等级<span>*</span></label><select class="form-input form-select">${diffOpts}</select></div>
+      <div class="form-group"><label class="form-label">免费用户轮数</label><input type="number" class="form-input" value="${data.roundsFree||5}" min="0"><div class="form-hint">0 = 不可使用</div></div>
+      <div class="form-group"><label class="form-label">付费用户轮数</label><input type="number" class="form-input" value="${data.roundsPaid||0}" min="0"><div class="form-hint">0 = 无限制</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--stone-dark);border-radius:7px;background:var(--mist);">
+        <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Premium 专属</div><div style="font-size:11px;color:var(--ink-light);margin-top:1px;">仅付费用户可访问</div></div>
+        <div class="tog${data.roundsFree===0?' on':''}" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--stone-dark);border-radius:7px;background:var(--mist);">
+        <div style="flex:1;"><div style="font-size:13px;font-weight:500;">达上限自动结束</div><div style="font-size:11px;color:var(--ink-light);margin-top:1px;">触发 AI 总结与报告</div></div>
+        <div class="tog on" onclick="this.classList.toggle('on')"></div>
+      </div>
+    </div>
+
+    ${isScene?`
+    <div class="section-title">对话背景设定</div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">默认背景<span>*</span></label><textarea class="form-input" rows="3">${data.bg||''}</textarea></div>
+    <div class="form-group" style="margin-bottom:18px;"><label class="form-label">背景多语言</label>${buildLangTabs(data.bg||'', true)}</div>
+    `:''}
+
+    <div class="section-title">对话目标</div>
+    <div id="goals-c" style="margin-bottom:10px;"></div>
+    <button class="btn btn-secondary btn-sm" onclick="addGoal('')" style="margin-bottom:5px;">＋ 新增目标</button>
+    <div class="form-hint" style="margin-bottom:18px;">目标便于 AI 在评分报告中对应评估</div>
+
+    <div class="section-title">角色配置</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+      <div class="form-group"><label class="form-label">🤖 AI 角色<span>*</span></label><select class="form-input form-select">${roleOpts}</select><div class="form-hint">选择此场景使用的 AI 角色</div></div>
+      <div class="form-group"><label class="form-label">👤 用户角色<span>*</span></label><input class="form-input" value="${data.userRole||''}" placeholder="例：顾客、求职者..."><div class="form-hint">用户在对话中扮演的角色</div></div>
+    </div>
+
+    <div class="section-title">对话 Prompt</div>
+    <div class="form-group" style="margin-bottom:6px;"><label class="form-label">System Prompt<span>*</span></label><textarea class="form-input" rows="5" style="font-family:'JetBrains Mono';font-size:12px;line-height:1.7;">${data.prompt||''}</textarea></div>
+    <div class="form-hint" style="margin-bottom:18px;">变量：<code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{difficulty}}</code> <code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{user_role}}</code> <code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{ai_role}}</code> <code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{scenario}}</code></div>
+
+    <div class="section-title">AI 评分配置</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      ${[['语言准确性',30],['表达流利度',25],['目标完成度',30],['词汇丰富度',15]].map(([n,v])=>`
+      <div style="padding:12px;border:1px solid var(--stone-dark);border-radius:7px;background:var(--mist);">
+        <div style="font-size:11.5px;font-weight:500;color:var(--ink-light);margin-bottom:8px;">${n}</div>
+        <div class="sw-row">
+          <input type="number" class="form-input" value="${v}" min="0" max="100" style="width:54px;padding:4px 6px;text-align:center;font-family:'JetBrains Mono';" oninput="this.closest('.sw-row').querySelector('.sw-fill').style.width=this.value+'%'">
+          <span style="font-size:11px;color:var(--ink-light);">%</span>
+          <div class="sw-track"><div class="sw-fill" style="width:${v}%"></div></div>
+        </div>
+      </div>`).join('')}
+    </div>
+    <div class="form-group" style="margin-bottom:18px;"><label class="form-label">评分说明文案</label><textarea class="form-input" rows="2">综合评估语言准确性、表达流利度及对话目标完成情况，满分 100 分。</textarea></div>
+
+    <div class="section-title">AI 学习报告 Prompt</div>
+    <div class="form-group" style="margin-bottom:10px;"><label class="form-label">报告生成 Prompt<span>*</span></label><textarea class="form-input" rows="6" style="font-family:'JetBrains Mono';font-size:12px;line-height:1.7;">${data.reportPrompt||''}</textarea></div>
+    <div class="form-hint" style="margin-bottom:10px;">变量：<code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{conversation_history}}</code> <code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{learning_goals}}</code> <code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{difficulty}}</code></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--stone-dark);border-radius:7px;background:var(--mist);margin-bottom:24px;">
+      <div style="flex:1;"><div style="font-size:13px;font-weight:500;">强制 JSON 输出</div><div style="font-size:11px;color:var(--ink-light);margin-top:1px;">设置 response_format: json_object</div></div>
+      <div class="tog on" onclick="this.classList.toggle('on')"></div>
+    </div>
+  `;
+}
+
+// ── Open scene/free editor ──
+function openEditor(mode, action, idx) {
+  _gc = 0; _ltc = 0;
+  const data = action==='edit'
+    ? (mode==='scene' ? SCENE_DATA[idx] : FREE_DATA[idx])
+    : {};
+  const isNew = action==='new';
+  const modeLabel = mode==='scene' ? '场景训练' : '自由对话';
+
+  document.getElementById('editorTitle').textContent = isNew ? `新建${modeLabel}配置` : `编辑：${data.nameCn||''}`;
+  document.getElementById('editorSub').textContent = isNew ? modeLabel : `${data.emoji||''} ${data.nameCn||''} · ${modeLabel}`;
+  const badge = document.getElementById('editorBadge');
+  badge.textContent = isNew ? '草稿' : '已上线';
+  badge.className = 'badge ' + (isNew ? 'badge-draft' : 'badge-published');
+
+  document.getElementById('editorBody').innerHTML = buildEditorHTML(mode, data);
+  (data.goals||[]).forEach(g => addGoal(g));
+  if (!data.goals?.length) addGoal('');
+
+  const ov = document.getElementById('editorOverlay');
+  ov.style.display = 'flex';
+  requestAnimationFrame(() => ov.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+}
+function closeEditor() {
+  const ov = document.getElementById('editorOverlay');
+  ov.classList.remove('open');
+  setTimeout(() => { ov.style.display='none'; }, 300);
+  document.body.style.overflow = '';
+}
+
+// ── Open role editor ──
+function openRoleEditor(action, idx) {
+  const data = action==='edit' ? ROLE_DATA[idx] : {};
+  const isNew = action==='new';
+
+  document.getElementById('rolePanelTitle').textContent = isNew ? '新建 AI 角色' : `编辑：${data.name||''}`;
+  document.getElementById('rolePanelSub').textContent = isNew ? 'AI 角色配置' : `${data.emoji||''} ${data.name||''}`;
+
+  const feat = data.features || {};
+  document.getElementById('roleBody').innerHTML = `
+    <div class="section-title">角色基本信息</div>
+    <div style="display:grid;grid-template-columns:56px 1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div class="form-group"><label class="form-label">图标</label><input class="form-input" value="${data.emoji||''}" style="font-size:22px;text-align:center;padding:5px;"></div>
+      <div class="form-group"><label class="form-label">角色名称<span>*</span></label><input class="form-input" value="${data.name||''}" placeholder="如：AI 老师 Lin"></div>
+      <div class="form-group"><label class="form-label">角色类型</label>
+        <select class="form-input form-select">
+          <option${data.type?.includes('教学')?' selected':''}>教学型 Teaching</option>
+          <option${data.type?.includes('对话')?' selected':''}>对话型 Conversational</option>
+          <option${data.type?.includes('辅助')?' selected':''}>辅助型 Assistant</option>
+          <option${data.type?.includes('评测')?' selected':''}>评测型 Assessment</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+      <div class="form-group"><label class="form-label">底层 AI 模型</label>
+        <select class="form-input form-select">
+          <option${data.model?.includes('GPT-4o')?' selected':''}>GPT-4o (OpenAI)</option>
+          <option${data.model?.includes('Sonnet')?' selected':''}>Claude Sonnet (Anthropic)</option>
+          <option${data.model?.includes('Gemini')?' selected':''}>Gemini Pro (Google)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">回复语言偏好</label>
+        <select class="form-input form-select">
+          <option${data.lang?.includes('双语')?' selected':''}>中英双语 CN+EN</option>
+          <option>仅中文</option><option>仅英文</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-title">System Prompt（角色人设）</div>
+    <div class="form-group" style="margin-bottom:6px;">
+      <textarea class="form-input" rows="6" style="font-family:'JetBrains Mono';font-size:12px;line-height:1.7;">${data.prompt||''}</textarea>
+    </div>
+    <div class="form-hint" style="margin-bottom:18px;">变量：<code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{scenario}}</code> <code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{difficulty}}</code> <code style="background:var(--stone);padding:1px 4px;border-radius:3px;font-size:11px;">{{user_role}}</code></div>
+
+    <div class="section-title">功能开关</div>
+    <div class="card" style="margin-bottom:18px;">
+      <div class="card-body" style="padding:0 18px;">
+        <div class="toggle-row"><div><div class="toggle-label">语法纠错</div><div class="toggle-desc">自动检测并纠正语法错误</div></div><div class="tog${feat.grammar?' on':''}" onclick="this.classList.toggle('on')"></div></div>
+        <div class="toggle-row"><div><div class="toggle-label">发音评测</div><div class="toggle-desc">语音识别评估发音准确度</div></div><div class="tog${feat.pronunciation?' on':''}" onclick="this.classList.toggle('on')"></div></div>
+        <div class="toggle-row"><div><div class="toggle-label">翻译辅助</div><div class="toggle-desc">提供中英文对照翻译</div></div><div class="tog${feat.translate?' on':''}" onclick="this.classList.toggle('on')"></div></div>
+        <div class="toggle-row"><div><div class="toggle-label">语境差异解析</div><div class="toggle-desc">深度解析词汇在不同语境下的用法差异</div></div><div class="tog${feat.context?' on':''}" onclick="this.classList.toggle('on')"></div></div>
+        <div class="toggle-row"><div><div class="toggle-label">对话历史记忆</div><div class="toggle-desc">记住用户之前的学习偏好和薄弱点</div></div><div class="tog${feat.memory?' on':''}" onclick="this.classList.toggle('on')"></div></div>
+      </div>
+    </div>
+
+    <div class="section-title">权限与可见性</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--stone-dark);border-radius:7px;background:var(--mist);">
+        <div style="flex:1;"><div style="font-size:13px;font-weight:500;">启用此角色</div><div style="font-size:11px;color:var(--ink-light);margin-top:1px;">在 APP 中显示并可使用</div></div>
+        <div class="tog${isNew?'':' on'}" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--stone-dark);border-radius:7px;background:var(--mist);">
+        <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Premium 专属</div><div style="font-size:11px;color:var(--ink-light);margin-top:1px;">仅付费用户可使用</div></div>
+        <div class="tog${idx===2?' on':''}" onclick="this.classList.toggle('on')"></div>
+      </div>
+    </div>
+  `;
+
+  const ov = document.getElementById('roleOverlay');
+  ov.style.display = 'flex';
+  requestAnimationFrame(() => ov.classList.add('open'));
+  document.body.style.overflow = 'hidden';
+}
+function closeRoleEditor() {
+  const ov = document.getElementById('roleOverlay');
+  ov.classList.remove('open');
+  setTimeout(() => { ov.style.display='none'; }, 300);
+  document.body.style.overflow = '';
+}
+
+// ── Click outside to close ──
+document.getElementById('editorOverlay').addEventListener('click', function(e){ if(e.target===this) closeEditor(); });
+document.getElementById('roleOverlay').addEventListener('click', function(e){ if(e.target===this) closeRoleEditor(); });
+
+// ── Initial page from query ──
+(function initByQuery(){
+  const params = new URLSearchParams(location.search);
+  const p = params.get('page');
+  const embed = params.get('embed');
+  if (embed === 'content') {
+    document.body.classList.add('embed-content');
+  }
+  if(!p) return;
+  const id = ['ai-roles','ai-free','ai-scene'].includes(p) ? p : 'ai-free';
+  const navEl = document.getElementById('nav-' + id);
+  showPage(id, navEl);
+})();
+</script>
+</body>
+</html>
