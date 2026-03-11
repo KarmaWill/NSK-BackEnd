@@ -5,6 +5,8 @@ import { COURSE_LIBS_UPDATED_EVENT, loadCourseLibs, type CourseLibRow } from '..
 type Props = {
   activePanel: PanelId;
   onNavigate: (id: PanelId) => void;
+  activeCourseLibId: string;
+  onActiveCourseLibChange: (id: string) => void;
 };
 
 const ICONS: Record<string, JSX.Element> = {
@@ -32,17 +34,16 @@ const ICONS: Record<string, JSX.Element> = {
   sysconfig: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>),
 };
 
-export function Sidebar({ activePanel, onNavigate }: Props) {
+export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCourseLibChange }: Props) {
   const [role, setRole] = useState<'admin' | 'editor'>('admin');
   const [courseLibs, setCourseLibs] = useState<CourseLibRow[]>(() => loadCourseLibs());
-  const [activeCourseLib, setActiveCourseLib] = useState<string>(() => loadCourseLibs()[0]?.id ?? '');
   const isAdmin = role === 'admin';
   useEffect(() => {
     const sync = () => {
       const latest = loadCourseLibs();
       setCourseLibs(latest);
-      if (latest.length && !latest.some((row) => row.id === activeCourseLib)) {
-        setActiveCourseLib(latest[0].id);
+      if (latest.length && !latest.some((row) => row.id === activeCourseLibId)) {
+        onActiveCourseLibChange(latest[0].id);
       }
     };
     window.addEventListener(COURSE_LIBS_UPDATED_EVENT, sync);
@@ -51,7 +52,7 @@ export function Sidebar({ activePanel, onNavigate }: Props) {
       window.removeEventListener(COURSE_LIBS_UPDATED_EVENT, sync);
       window.removeEventListener('storage', sync);
     };
-  }, [activeCourseLib]);
+  }, [activeCourseLibId, onActiveCourseLibChange]);
 
   const nav = (id: PanelId, label: string, badge?: { text: string; className?: string }, extraClass?: string) => (
     <div
@@ -107,16 +108,16 @@ export function Sidebar({ activePanel, onNavigate }: Props) {
             {courseLibs.map((lib) => (
               <div key={lib.id} className="course-tree-node">
                 <div
-                  className={`course-lib-item ${activeCourseLib === lib.id ? 'active' : ''}`}
+                  className={`course-lib-item ${activeCourseLibId === lib.id ? 'active' : ''}`}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setActiveCourseLib(lib.id)}
-                  onKeyDown={(e) => e.key === 'Enter' && setActiveCourseLib(lib.id)}
+                  onClick={() => onActiveCourseLibChange(lib.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && onActiveCourseLibChange(lib.id)}
                 >
-                  <span className="course-lib-dot">{activeCourseLib === lib.id ? '▼' : '▶'}</span>
+                  <span className="course-lib-dot">{activeCourseLibId === lib.id ? '▼' : '▶'}</span>
                   <span className="course-lib-name">{lib.name}</span>
                 </div>
-                {activeCourseLib === lib.id && (
+                {activeCourseLibId === lib.id && (
                   <div className="course-lib-children">
                     {lib.modules.catalog && nav('catalog', '目录管理', undefined, 'course-child-item')}
                     {lib.modules.resources && nav('resources', '学习资源', { text: '77' }, 'course-child-item')}

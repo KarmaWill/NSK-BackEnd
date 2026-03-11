@@ -2,15 +2,27 @@ export type AiCapability = {
   aiId: string;
   levelId: string;
   unitId: string;
+  /** 选中的 AI 角色 ID（来自 AI 角色配置） */
+  aiRoleId?: string;
   themeNameByLang: Record<LangKey, string>;
   themeCategory: string;
   dialogBackground: string;
   dialogBackgroundByLang: Record<LangKey, string>;
+  /** 一句话背景描述，≤20 字（兼容旧数据） */
+  shortBackgroundDesc?: string;
+  /** 一句话背景描述（多语言） */
+  shortBackgroundDescByLang?: Record<LangKey, string>;
   goals: string[];
   prompt: string;
   turnLimit: number;
   roleA: string;
   roleB: string;
+  roleAByLang?: Record<LangKey, string>;
+  roleBByLang?: Record<LangKey, string>;
+  roleATaskByLang?: Record<LangKey, string>;
+  roleBTaskByLang?: Record<LangKey, string>;
+  roleAAvatarUrl?: string;
+  roleBAvatarUrl?: string;
   userPickRole: 'A' | 'B';
   firstSpeaker: 'A' | 'B';
   aiScoreDimension: ScoreDimension;
@@ -159,15 +171,24 @@ function normalizeAiCapability(input: unknown): AiCapability | null {
     aiId: row.aiId,
     levelId,
     unitId,
+    aiRoleId: row.aiRoleId ?? undefined,
     themeNameByLang: normalizeLangMap(row.themeNameByLang, themeName),
     themeCategory: row.themeCategory ?? row.level ?? '',
     dialogBackground: row.dialogBackground ?? row.scenario ?? '',
     dialogBackgroundByLang: normalizeLangMap(row.dialogBackgroundByLang, row.dialogBackground ?? row.scenario ?? ''),
+    shortBackgroundDesc: row.shortBackgroundDesc ?? undefined,
+    shortBackgroundDescByLang: normalizeLangMap(row.shortBackgroundDescByLang, row.shortBackgroundDesc ?? ''),
     goals: Array.isArray(row.goals) ? row.goals.filter(Boolean) : ['目标1', '目标2', '目标3'],
     prompt: row.prompt ?? '',
     turnLimit: typeof row.turnLimit === 'number' && Number.isFinite(row.turnLimit) ? row.turnLimit : 8,
     roleA: row.roleA ?? '学习者',
     roleB: row.roleB ?? 'AI老师',
+    roleAByLang: normalizeLangMap(row.roleAByLang, row.roleA ?? ''),
+    roleBByLang: normalizeLangMap(row.roleBByLang, row.roleB ?? ''),
+    roleATaskByLang: normalizeLangMap(row.roleATaskByLang, ''),
+    roleBTaskByLang: normalizeLangMap(row.roleBTaskByLang, ''),
+    roleAAvatarUrl: row.roleAAvatarUrl ?? undefined,
+    roleBAvatarUrl: row.roleBAvatarUrl ?? undefined,
     userPickRole,
     firstSpeaker,
     aiScoreDimension: scoreDimension,

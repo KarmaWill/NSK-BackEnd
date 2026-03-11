@@ -2,6 +2,7 @@ import type { ReactNode, CSSProperties } from 'react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { applyQuestionListOverrides, subscribeQuestionOverrideUpdates, upsertQuestionOverride } from '../stores/questionOverrides';
 import { loadAiCapabilities } from '../stores/aiCapabilities';
+import { loadCourseLibs, COURSE_LIBS_UPDATED_EVENT, type CourseLibRow } from '../stores/courseLibs';
 
 type LangKey = 'EN' | 'ES' | 'FR' | 'PT' | 'CN' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
 
@@ -289,7 +290,20 @@ function UnitModuleCard({ title, hint, children }: { title: string; hint?: strin
   );
 }
 
-export function Lessons() {
+type LessonsProps = {
+  onNavigate?: (id: import('../types').PanelId) => void;
+  activeCourseLibId?: string;
+  onActiveCourseLibChange?: (id: string) => void;
+};
+
+export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: LessonsProps) {
+  const [courseLibs, setCourseLibs] = useState<CourseLibRow[]>(() => loadCourseLibs());
+  useEffect(() => {
+    const sync = () => setCourseLibs(loadCourseLibs());
+    window.addEventListener(COURSE_LIBS_UPDATED_EVENT, sync);
+    return () => window.removeEventListener(COURSE_LIBS_UPDATED_EVENT, sync);
+  }, []);
+
   const [catalog, setCatalog] = useState<CatalogNode[]>(catalogData);
   const [selectedId, setSelectedId] = useState<string>('N10100');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(['N00000', 'N10000', 'N10100']));
@@ -618,7 +632,24 @@ export function Lessons() {
     <>
       <div className="page-header">
         <div>
-          <div className="page-title">目录管理</div>
+          <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span>目录管理</span>
+            {courseLibs.length > 1 && (
+              <select
+                className="form-input form-select"
+                style={{ width: 'auto', minWidth: 160, fontSize: 13 }}
+                value={activeCourseLibId}
+                onChange={(e) => onActiveCourseLibChange?.(e.target.value)}
+                aria-label="切换课程"
+              >
+                {courseLibs.map((lib) => (
+                  <option key={lib.id} value={lib.id}>
+                    {lib.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           <div className="page-subtitle">
             NSK Chinese A1 · {stats.levels} 个 Level · {stats.units} 个 Unit · {stats.lessons} 个 Lesson
           </div>

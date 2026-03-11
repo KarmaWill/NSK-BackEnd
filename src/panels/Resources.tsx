@@ -370,9 +370,6 @@ export function Resources() {
           value={dirKeyword}
           onChange={(e) => setDirKeyword(e.target.value)}
         />
-        <span className="filter-tag active">全部</span>
-        <span className="filter-tag">学习卡片</span>
-        <span className="filter-sep" />
         <span className="filter-tag active">全部词性</span>
         <span className="filter-tag">字</span>
         <span className="filter-tag">词</span>

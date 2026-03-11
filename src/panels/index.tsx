@@ -25,6 +25,8 @@ import { MediaLib } from './MediaLib';
 
 type PanelProps = {
   onNavigate: (id: PanelId) => void;
+  activeCourseLibId?: string;
+  onActiveCourseLibChange?: (id: string) => void;
 };
 
 const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
@@ -36,7 +38,7 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   'ai-scene': () => <AiScene />,
   'ai-eval': () => <AiTrainerSync page="ai-free" />,
   'ai-api': () => <AiTrainerSync page="ai-free" />,
-  catalog: () => <Lessons />,
+  catalog: (p) => <Lessons {...p} />,
   resources: () => <Resources />,
   'audio-reading': () => <AudioReading />,
   questions: () => <Questions />,
@@ -54,11 +56,21 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   sysconfig: () => <SysConfig />,
 };
 
-export function PanelContent({ panelId, onNavigate }: { panelId: PanelId; onNavigate: (id: PanelId) => void }) {
+export function PanelContent({
+  panelId,
+  onNavigate,
+  activeCourseLibId = '',
+  onActiveCourseLibChange = () => {},
+}: {
+  panelId: PanelId;
+  onNavigate: (id: PanelId) => void;
+  activeCourseLibId?: string;
+  onActiveCourseLibChange?: (id: string) => void;
+}) {
   const Comp = PANELS[panelId];
   if (!Comp) {
     const Fallback = PANELS.dashboard;
-    return <Fallback onNavigate={onNavigate} />;
+    return <Fallback onNavigate={onNavigate} activeCourseLibId={activeCourseLibId} onActiveCourseLibChange={onActiveCourseLibChange} />;
   }
-  return <Comp onNavigate={onNavigate} />;
+  return <Comp onNavigate={onNavigate} activeCourseLibId={activeCourseLibId} onActiveCourseLibChange={onActiveCourseLibChange} />;
 }
