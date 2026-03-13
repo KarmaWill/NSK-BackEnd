@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type LangKey = 'EN' | 'ES' | 'FR' | 'PT' | 'CN' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
 type AudioRef = { id: string; name: string; duration: string; size: string };
@@ -184,6 +184,7 @@ export function AudioReading() {
   const [audioSegmentIndex, setAudioSegmentIndex] = useState<number | null>(null);
   const [nameLangTab, setNameLangTab] = useState<LangKey>('CN');
   const [segmentLangTab, setSegmentLangTab] = useState<LangKey>('CN');
+  const [showBilingual, setShowBilingual] = useState(false);
 
   const autoTranslateByLang = (seed: string): Partial<Record<LangKey, string>> => {
     const base = seed.trim();
@@ -220,6 +221,7 @@ export function AudioReading() {
 
   const unitOptions = useMemo(() => (levelId ? UNITS.filter((u) => u.levelId === levelId) : []), [levelId]);
   const editing = useMemo(() => rows.find((r) => r.id === editingId) ?? null, [rows, editingId]);
+  useEffect(() => { setShowBilingual(false); }, [editingId]);
   const audioOptions = useMemo(
     () => AUDIO_LIBRARY.filter((a) => [a.id, a.name].join(' ').toLowerCase().includes(audioKeyword.toLowerCase())),
     [audioKeyword],
@@ -554,11 +556,7 @@ export function AudioReading() {
                       <div style={{ fontSize: 12, color: 'var(--ink-light)' }}>{editing.nameByLang.EN || 'Untitled'}</div>
                       <div className="td-mono" style={{ marginTop: 2 }}>{editing.unitName}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <span className="badge badge-muted">Pinyin</span>
-                      <span className="badge badge-muted">Chinese</span>
-                      <span className="badge badge-teal">Bilingual</span>
-                    </div>
+                    <button type="button" className={`badge ${showBilingual ? 'badge-teal' : 'badge-muted'}`} onClick={() => setShowBilingual((v) => !v)} style={{ cursor: 'pointer', border: 'none' }} title={showBilingual ? '再点一次隐藏' : '点击显示双语内容'}>Bilingual</button>
                   </div>
                   {(editing.segments.length ? editing.segments : [{ id: 'S1', textByLang: {}, audioId: '', pinyin: '' }]).map((seg, idx) => (
                     <div
@@ -571,21 +569,18 @@ export function AudioReading() {
                         background: '#fff',
                       }}
                     >
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                        <div style={{ fontSize: 13, lineHeight: 1.6 }}>{seg.textByLang.CN || '（未填写中文）'}</div>
-                        <div style={{ fontSize: 13, lineHeight: 1.6 }}>{seg.textByLang.EN || '—'}</div>
+                      {showBilingual && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
+                          <div style={{ fontSize: 13, lineHeight: 1.6 }}>{seg.textByLang.CN || '（未填写中文）'}</div>
+                          <div style={{ fontSize: 13, lineHeight: 1.6 }}>{seg.textByLang.EN || '—'}</div>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: showBilingual ? 0 : 0 }}>
+                        <span className="td-mono" style={{ marginTop: 6 }}>Audio: {seg.audioId || '—'}</span>
+                        <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 4 }} title="播放" aria-label="播放">▶ 播放</button>
                       </div>
-                      <div className="td-mono" style={{ marginTop: 6 }}>Audio: {seg.audioId || '—'}</div>
                     </div>
                   ))}
-                  <div style={{ marginTop: 10, border: '1px solid var(--stone-dark)', borderRadius: 12, padding: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span className="td-mono">CLICK TO READ</span>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <span className="badge badge-muted">⟲</span>
-                      <span className="badge badge-teal">⏸</span>
-                      <span className="badge badge-muted">1x</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>

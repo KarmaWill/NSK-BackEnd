@@ -334,7 +334,6 @@ export function AiFree() {
           <div className="page-subtitle">管理自由对话配置：主题多语言、角色关系、AI先开口、评分与反馈报告</div>
         </div>
         <div className="page-actions">
-          <button type="button" className="btn btn-secondary">导出</button>
           <button type="button" className="btn btn-primary" onClick={openCreate}>+ 新建配置</button>
         </div>
       </div>
