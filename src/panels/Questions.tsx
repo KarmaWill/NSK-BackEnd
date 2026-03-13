@@ -19,7 +19,8 @@ const defaultRows: QuestionRow[] = [
   { no: '002', dirId: 'N10101', typeName: '汉字填空', typeCode: 'T01_PICTURE_FILL_IN', resId: 'M0400001', diff: '★', knowledge: '米', enabled: true, createdAt: '2026-03-03 11:10', updatedAt: '2026-03-04 09:40' },
 ];
 
-type OptionItem = { cn: string; pinyin: string; emoji: string; correct: boolean };
+const OPTION_LANGS = ['EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const;
+type OptionItem = { cn: string; pinyin: string; emoji: string; correct: boolean; byLang?: Partial<Record<typeof OPTION_LANGS[number], string>> };
 const defaultOptions: OptionItem[] = [
   { cn: '面条', pinyin: 'miàn tiáo', emoji: '🍜', correct: true },
   { cn: '饺子', pinyin: 'jiǎo zi', emoji: '🥟', correct: false },
@@ -135,6 +136,14 @@ const IMAGE_REF_MAP: Record<string, { name: string; size: string; dirId: string;
   P100004: { name: '水主图.png', size: '102KB', dirId: 'N10201', usage: '学习资源/题库' },
   P100005: { name: '茶主图.png', size: '118KB', dirId: 'N10202', usage: '学习资源/题库' },
 };
+const AUDIO_REF_LIST: { id: string; name: string }[] = [
+  { id: 'Y100001', name: 'Unit1-MainFoods.mp3' },
+  { id: 'Y100002', name: 'Unit2-DailyDrinks.mp3' },
+  { id: 'Y100003', name: 'Unit3-WhatIsThis.mp3' },
+  { id: 'Y100004', name: 'Unit4-SelfIntro.mp3' },
+  { id: 'Y100005', name: 'Unit5-MyPet.mp3' },
+  { id: 'Y100006', name: 'Unit6-FamilyMembers.mp3' },
+];
 
 export function Questions() {
   const [rows, setRows] = useState<QuestionRow[]>(() => applyQuestionListOverrides(defaultRows));
@@ -147,13 +156,20 @@ export function Questions() {
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
   const [previewType, setPreviewType] = useState<PreviewType>('T00');
   const [orderNum, setOrderNum] = useState('1');
-  const [stemText, setStemText] = useState('noodles');
+  const [stemTextByLang, setStemTextByLang] = useState<Record<string, string>>({ CN: '', EN: 'noodles', ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' });
+  const [stemLang, setStemLang] = useState('EN');
   const [options, setOptions] = useState<OptionItem[]>(defaultOptions);
+  const [audioPickerOpen, setAudioPickerOpen] = useState(false);
+  const [imagePickerForOption, setImagePickerForOption] = useState<number | null>(null);
+  const [stemImagePickerOpen, setStemImagePickerOpen] = useState(false);
+  const [stemPinyin, setStemPinyin] = useState('');
+  const [stemImageIdT02, setStemImageIdT02] = useState('');
   const [cfgUnitId, setCfgUnitId] = useState<string>('N10100');
   const [cfgLessonId, setCfgLessonId] = useState<string>('N10101');
   const [cfgSerial, setCfgSerial] = useState<string>('01');
   const [cfgAudioId, setCfgAudioId] = useState('T100001.mp3');
-  const [cfgKnowledgeCn, setCfgKnowledgeCn] = useState('米饭');
+  const [cfgAnswerAnalysisByLang, setCfgAnswerAnalysisByLang] = useState<Record<string, string>>({ CN: '', EN: '', ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' });
+  const [cfgAnswerAnalysisLang, setCfgAnswerAnalysisLang] = useState('CN');
   const [cfgEnabled, setCfgEnabled] = useState(true);
   const [cfgErrors, setCfgErrors] = useState<Record<string, string>>({});
   const [selectedLevel, setSelectedLevel] = useState<string>('');
@@ -188,6 +204,10 @@ export function Questions() {
   const updateOption = (index: number, field: keyof OptionItem, value: string | boolean) => {
     setOptions((prev) => prev.map((o, i) => (i === index ? { ...o, [field]: value } : o)));
   };
+  const updateOptionByLang = (index: number, lang: typeof OPTION_LANGS[number], value: string) => {
+    setOptions((prev) => prev.map((o, i) => (i === index ? { ...o, byLang: { ...(o.byLang ?? {}), [lang]: value } } : o)));
+  };
+  const [optLang, setOptLang] = useState<typeof OPTION_LANGS[number]>('EN');
 
   const imageRefValues = useMemo(
     () =>
@@ -221,7 +241,7 @@ export function Questions() {
         setCfgLessonId(lesson?.id ?? unit.lessons[0]?.id ?? 'N10101');
       }
     }
-    setCfgKnowledgeCn(row.knowledge ?? '');
+    setCfgAnswerAnalysisByLang((prev) => ({ ...prev, CN: row.knowledge ?? '', EN: '', ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' }));
     setCfgAudioId('T100001.mp3');
     setCfgEnabled(row.enabled);
     setCfgErrors({});
@@ -254,15 +274,14 @@ export function Questions() {
   const cfgLessonNo = cfgLessonOptions.find((l) => l.id === cfgLessonId)?.lessonNo ?? 1;
   // 题号锁定前缀：Level(1) + 0Unit + 0Lesson + 序号，例如 U2/L3/01 => 1020301
   const lockedQuestionCode = `1${String(cfgUnitNo).padStart(2, '0')}${String(cfgLessonNo).padStart(2, '0')}${cfgSerial.padStart(2, '0')}`;
+  const stemText = previewType === 'T02' ? (stemTextByLang.CN || stemImageIdT02 || '') : (stemTextByLang.CN || stemTextByLang.EN || '');
   const validateConfig = () => {
     const errs: Record<string, string> = {};
-    if (!cfgUnitId) errs.unit = '请选择所属单元';
-    if (!cfgLessonId) errs.lesson = '请选择所属课程';
     if (!previewType) errs.type = '请选择题目类型';
-    if (!orderNum.trim()) errs.order = '请输入显示顺序编号';
     if (!stemText.trim()) errs.stem = '请输入题干';
     if (typeMeta.needAudio && !cfgAudioId.trim()) errs.audio = '该题型必须填写音频ID';
-    if (!cfgKnowledgeCn.trim()) errs.kcn = '请输入知识点';
+    const hasAnswer = Object.values(cfgAnswerAnalysisByLang).some((v) => v.trim());
+    if (!hasAnswer) errs.answer = '请填写答案解析（至少一种语言）';
     if (!cfgSerial.trim()) errs.serial = '请输入序号';
     if (options.filter((o) => o.correct).length !== 1) errs.correct = '必须且仅能选择 1 个正确答案';
     options.forEach((o, i) => {
@@ -570,7 +589,7 @@ export function Questions() {
 
       {/* 修改题库配置 — 含显示顺序/题干/可编辑选项、16:9 横屏预览、题型切换 */}
       <div className={`modal-overlay ${configModalOpen ? 'open' : ''}`} onClick={() => setConfigModalOpen(false)} role="dialog" aria-modal="true" aria-label="修改题库配置">
-        <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '95vw', width: 1200 }}>
           <div className="modal-header">
             <div>
               <div className="modal-title">修改题库配置</div>
@@ -580,16 +599,9 @@ export function Questions() {
             </div>
             <button type="button" className="modal-close" onClick={() => setConfigModalOpen(false)} aria-label="关闭">✕</button>
           </div>
-          <div className="modal-body" style={{ padding: 0, display: 'flex', minHeight: 680 }}>
-            {/* 左侧：题型所属 + 题型详情 + 选项 */}
+          <div className="modal-body" style={{ padding: 0, display: 'flex', minHeight: '80vh' }}>
+            {/* 左侧：题型详情 + 题干编辑 + 选项 */}
             <div style={{ flex: 1, padding: 24, overflowY: 'auto', borderRight: '1px solid var(--stone-dark)' }}>
-              <div style={{ background: 'var(--ink)', color: '#fff', padding: '9px 14px', borderRadius: 6, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>题型所属</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 18 }}>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">所属等级</label><select className="form-input form-select" defaultValue="1"><option value="1">Lv.1</option></select></div>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">所属单元</label><select className="form-input form-select" value={cfgUnitId} onChange={(e) => { setCfgUnitId(e.target.value); const first = LESSON_MAP.find((u) => u.id === e.target.value)?.lessons[0]?.id; if (first) setCfgLessonId(first); }}>{LESSON_MAP.map((u) => <option key={u.id} value={u.id}>Unit {u.unitNo}</option>)}</select></div>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">所属课程</label><select className="form-input form-select" value={cfgLessonId} onChange={(e) => setCfgLessonId(e.target.value)}>{cfgLessonOptions.map((l) => <option key={l.id} value={l.id}>Lesson {l.lessonNo}</option>)}</select></div>
-              </div>
-              {(cfgErrors.unit || cfgErrors.lesson) && <div className="form-hint" style={{ color: 'var(--rose)', marginTop: -8, marginBottom: 12 }}>{cfgErrors.unit || cfgErrors.lesson}</div>}
               <div style={{ background: 'var(--ink)', color: '#fff', padding: '9px 14px', borderRadius: 6, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>题型详情</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">* 题目类型</label><select className="form-input form-select" value={previewType} onChange={(e) => setPreviewType(e.target.value as PreviewType)}><option value="T00">T00 听音选图</option><option value="T01">T01 汉字填空</option><option value="T02">T02 词意选择1</option><option value="T03">T03 听力选择</option><option value="T04">T04 语序重组</option><option value="T05">T05 语义选择</option></select></div>
@@ -609,35 +621,94 @@ export function Questions() {
                   <div className="form-hint">完整题号：{lockedQuestionCode}（规则：Level + 0Unit + 0Lesson + 序号）</div>
                   {cfgErrors.serial && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.serial}</div>}
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">* 显示顺序编号</label><input className="form-input" value={orderNum} onChange={(e) => setOrderNum(e.target.value)} style={{ fontFamily: 'JetBrains Mono', width: '100%' }} />{cfgErrors.order && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.order}</div>}</div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">* {typeMeta.stemLabel}</label>
-                  <input
-                    className="form-input"
-                    value={stemText}
-                    onChange={(e) => setStemText(e.target.value)}
-                    onBlur={() => {
-                      if (!['T01', 'T02', 'T04'].includes(previewType)) return;
-                      setStemText((prev) => resolveImageId(prev));
-                    }}
-                    placeholder={typeMeta.stemPlaceholder}
-                    list={['T01', 'T02', 'T04'].includes(previewType) ? 'image-id-suggestions' : undefined}
-                  />
-                  {['T01', 'T02', 'T04'].includes(previewType) && (
-                    <div className="form-hint">
-                      可输入图片ID或关键词（如“米饭”），失焦后自动匹配为图片ID
-                      {IMAGE_REF_MAP[stemText] ? ` · 已关联：${IMAGE_REF_MAP[stemText].name} / ${IMAGE_REF_MAP[stemText].size}` : ''}
-                    </div>
+              </div>
+              <div style={{ background: 'var(--ink)', color: '#fff', padding: '9px 14px', borderRadius: 6, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>题干编辑</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                <div className="form-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                  {previewType === 'T01' ? (
+                    <>
+                      <label className="form-label">* {typeMeta.stemLabel}</label>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          className="form-input"
+                          style={{ flex: 1 }}
+                          value={stemTextByLang.CN ?? ''}
+                          onChange={(e) => setStemTextByLang((prev) => ({ ...prev, CN: e.target.value }))}
+                          onBlur={() => setStemTextByLang((prev) => ({ ...prev, CN: resolveImageId(prev.CN ?? '') }))}
+                          placeholder={typeMeta.stemPlaceholder}
+                          list="image-id-suggestions"
+                        />
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStemImagePickerOpen(true)}>从资源库选择图片</button>
+                      </div>
+                      <div className="form-hint">图片要求 1:1 比例，小于 1MB</div>
+                      {IMAGE_REF_MAP[stemText] ? <div className="form-hint">已关联：{IMAGE_REF_MAP[stemText].name} / {IMAGE_REF_MAP[stemText].size}</div> : null}
+                      {cfgErrors.stem && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.stem}</div>}
+                    </>
+                  ) : previewType === 'T02' ? (
+                    <>
+                      <label className="form-label">* 题干图片</label>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                        <input
+                          className="form-input"
+                          style={{ flex: 1 }}
+                          value={stemImageIdT02}
+                          onChange={(e) => setStemImageIdT02(e.target.value)}
+                          onBlur={() => setStemImageIdT02(resolveImageId(stemImageIdT02))}
+                          placeholder="如：P100001"
+                          list="image-id-suggestions"
+                        />
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStemImagePickerOpen(true)}>从资源库选择图片</button>
+                      </div>
+                      <div className="form-hint" style={{ marginBottom: 10 }}>图片要求 1:1 比例，小于 1MB</div>
+                      {IMAGE_REF_MAP[stemImageIdT02] ? <div className="form-hint" style={{ marginBottom: 10 }}>已关联：{IMAGE_REF_MAP[stemImageIdT02].name} / {IMAGE_REF_MAP[stemImageIdT02].size}</div> : null}
+                      <label className="form-label">* 题干中文</label>
+                      <input className="form-input" style={{ marginBottom: 10 }} value={stemTextByLang.CN ?? ''} onChange={(e) => setStemTextByLang((prev) => ({ ...prev, CN: e.target.value }))} placeholder="如：米饭" />
+                      <label className="form-label">题干拼音</label>
+                      <input className="form-input" value={stemPinyin} onChange={(e) => setStemPinyin(e.target.value)} placeholder="如：mǐfàn" style={{ fontStyle: 'italic' }} />
+                      {cfgErrors.stem && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.stem}</div>}
+                    </>
+                  ) : (
+                    <>
+                      <label className="form-label">* {typeMeta.stemLabel}（多语言）</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {(['CN', 'EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).map((lang) => (
+                            <button key={lang} type="button" className={`btn btn-sm ${stemLang === lang ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStemLang(lang)}>{lang}</button>
+                          ))}
+                        </div>
+                        <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setStemTextByLang((prev) => ({ ...prev, ...Object.fromEntries((['EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).filter((l) => l !== 'CN').map((l) => [l, (prev.EN || prev.CN || prev[l]) || ''])) }))}>自动翻译</button>
+                      </div>
+                      <input
+                        className="form-input"
+                        value={stemTextByLang[stemLang] ?? ''}
+                        onChange={(e) => setStemTextByLang((prev) => ({ ...prev, [stemLang]: e.target.value }))}
+                        onBlur={() => {
+                          if (previewType !== 'T04') return;
+                          const resolved = resolveImageId(stemTextByLang[stemLang] ?? '');
+                          if (resolved !== (stemTextByLang[stemLang] ?? '')) setStemTextByLang((prev) => ({ ...prev, [stemLang]: resolved }));
+                        }}
+                        placeholder={typeMeta.stemPlaceholder}
+                        list={previewType === 'T04' ? 'image-id-suggestions' : undefined}
+                      />
+                      {previewType === 'T04' && (
+                        <div className="form-hint">
+                          可输入图片ID或关键词（如“米饭”），失焦后自动匹配为图片ID
+                          {IMAGE_REF_MAP[stemText] ? ` · 已关联：${IMAGE_REF_MAP[stemText].name} / ${IMAGE_REF_MAP[stemText].size}` : ''}
+                        </div>
+                      )}
+                      {cfgErrors.stem && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.stem}</div>}
+                    </>
                   )}
-                  {cfgErrors.stem && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.stem}</div>}
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">{typeMeta.needAudio ? '* 音频ID' : '音频ID（可选）'}</label>
-                  <input className="form-input" value={cfgAudioId} onChange={(e) => setCfgAudioId(e.target.value)} style={{ fontFamily: 'JetBrains Mono', fontSize: '10.5px' }} />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input className="form-input" value={cfgAudioId} onChange={(e) => setCfgAudioId(e.target.value)} style={{ fontFamily: 'JetBrains Mono', fontSize: '10.5px', flex: 1 }} />
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAudioPickerOpen(true)}>从资源库选择</button>
+                  </div>
                   {cfgErrors.audio && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.audio}</div>}
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">启用状态</label><div style={{ display: 'flex', alignItems: 'center', height: 36, gap: 9 }}><label className="toggle-wrap"><input type="checkbox" checked={cfgEnabled} onChange={() => setCfgEnabled((v) => !v)} /><div className="toggle-track" /><div className="toggle-thumb" /></label><span style={{ fontSize: 12, color: 'var(--ink-light)' }}>{cfgEnabled ? '已启用' : '已停用'}</span></div></div>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">* 知识点</label><input className="form-input" value={cfgKnowledgeCn} onChange={(e) => setCfgKnowledgeCn(e.target.value)} />{cfgErrors.kcn && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.kcn}</div>}</div>
               </div>
               <div className="form-hint" style={{ marginTop: -4, marginBottom: 12 }}>{typeMeta.typeHint}</div>
               <div style={{ background: 'var(--ink)', color: '#fff', padding: '9px 14px', borderRadius: 6, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>选项（A-D，点击 ✓ 设为正确）</div>
@@ -656,7 +727,27 @@ export function Questions() {
                       {opt.correct ? <svg viewBox="0 0 24 24" width="10" height="10"><polyline points="20 6 9 17 4 12" stroke="white" strokeWidth="2.5" fill="none" /></svg> : null}
                     </button>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 8 }}><label className="form-label">{typeMeta.optionMainLabel}</label><input className="form-input" value={opt.cn} onChange={(e) => updateOption(i, 'cn', e.target.value)} onBlur={() => { if (previewType === 'T00') updateOption(i, 'cn', resolveImageId(opt.cn)); }} placeholder={typeMeta.optionMainPlaceholder} list={previewType === 'T00' ? 'image-id-suggestions' : undefined} /></div>
+                    <div className="form-group" style={{ marginBottom: 8 }}>
+                      <label className="form-label">{previewType === 'T02' ? '选项释义（多语言，中文除外）' : typeMeta.optionMainLabel}</label>
+                      {previewType === 'T02' ? (
+                        <>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {OPTION_LANGS.map((lang) => (
+                                <button key={lang} type="button" className={`btn btn-sm ${optLang === lang ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setOptLang(lang)}>{lang}</button>
+                              ))}
+                            </div>
+                            <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setOptions((prev) => prev.map((o, j) => (j === i ? { ...o, byLang: { ...(o.byLang ?? {}), ...Object.fromEntries(OPTION_LANGS.filter((l) => l !== 'EN').map((l) => [l, o.cn])) } } : o)))}>自动翻译</button>
+                          </div>
+                          <input className="form-input" value={optLang === 'EN' ? opt.cn : (opt.byLang?.[optLang] ?? '')} onChange={(e) => (optLang === 'EN' ? updateOption(i, 'cn', e.target.value) : updateOptionByLang(i, optLang, e.target.value))} placeholder={typeMeta.optionMainPlaceholder} />
+                        </>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input className="form-input" style={{ flex: 1 }} value={opt.cn} onChange={(e) => updateOption(i, 'cn', e.target.value)} onBlur={() => { if (previewType === 'T00') updateOption(i, 'cn', resolveImageId(opt.cn)); }} placeholder={typeMeta.optionMainPlaceholder} list={previewType === 'T00' ? 'image-id-suggestions' : undefined} />
+                          {previewType === 'T00' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setImagePickerForOption(i)}>从资源库选择</button>}
+                        </div>
+                      )}
+                    </div>
                     {previewType === 'T00' && (
                       <div className="form-hint" style={{ marginTop: -2, marginBottom: 8 }}>
                         可输入图片ID或关键词，自动匹配资源库图片
@@ -689,11 +780,22 @@ export function Questions() {
                   <option key={id} value={id}>{meta.name}</option>
                 ))}
               </datalist>
+              <div style={{ background: 'var(--ink)', color: '#fff', padding: '9px 14px', borderRadius: 6, marginTop: 18, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>答案解析（多语言）</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {(['CN', 'EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).map((lang) => (
+                    <button key={lang} type="button" className={`btn btn-sm ${cfgAnswerAnalysisLang === lang ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCfgAnswerAnalysisLang(lang)}>{lang}</button>
+                  ))}
+                </div>
+                <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setCfgAnswerAnalysisByLang((prev) => ({ ...prev, ...Object.fromEntries((['EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).filter((l) => l !== 'CN').map((l) => [l, prev.CN || prev[l] || ''])) }))}>自动翻译</button>
+              </div>
+              <textarea className="form-input" rows={3} value={cfgAnswerAnalysisByLang[cfgAnswerAnalysisLang] ?? ''} onChange={(e) => setCfgAnswerAnalysisByLang((prev) => ({ ...prev, [cfgAnswerAnalysisLang]: e.target.value }))} placeholder="答案解析（至少填写一种语言）" />
+              {cfgErrors.answer && <div className="form-hint" style={{ color: 'var(--rose)', marginTop: 4 }}>{cfgErrors.answer}</div>}
             </div>
-            {/* 右侧：16:9 横屏平板预览 + 题型切换 */}
-            <div style={{ width: 320, flexShrink: 0, padding: 22, background: 'var(--mist)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {/* 右侧：16:9 横屏平板预览 */}
+            <div style={{ width: 420, flexShrink: 0, padding: 22, background: 'var(--mist)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ fontSize: '10.5px', fontWeight: 600, letterSpacing: '.4px', textTransform: 'uppercase', color: 'var(--ink-light)', marginBottom: 14, alignSelf: 'flex-start' }}>实时预览（16:9 横屏）</div>
-              <div style={{ width: '100%', maxWidth: 320, aspectRatio: '16/9', background: '#1a1a1a', borderRadius: 12, padding: 6, boxShadow: '0 12px 32px rgba(0,0,0,0.14)' }}>
+              <div style={{ width: '100%', maxWidth: 400, aspectRatio: '16/9', background: '#1a1a1a', borderRadius: 12, padding: 6, boxShadow: '0 12px 32px rgba(0,0,0,0.14)' }}>
                 <div style={{ background: '#fff', borderRadius: 8, overflow: 'hidden', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--stone-dark)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                     <div style={{ width: 12, height: 12, background: 'var(--stone-dark)', borderRadius: '50%' }} />
@@ -730,21 +832,6 @@ export function Questions() {
                   </div>
                 </div>
               </div>
-              <div style={{ marginTop: 14, width: '100%' }}>
-                <div style={{ fontSize: '10.5px', color: 'var(--ink-light)', marginBottom: 6, fontWeight: 500 }}>切换题型预览</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {(['T00', 'T01', 'T02', 'T03', 'T04', 'T05'] as const).map((t) => (
-                    <button key={t} type="button" className={`btn btn-sm ${previewType === t ? 'btn-primary' : 'btn-secondary'}`} style={{ justifyContent: 'flex-start' }} onClick={() => setPreviewType(t)}>
-                      {t === 'T00' && 'T00 听音选图'}
-                      {t === 'T01' && 'T01 汉字填空'}
-                      {t === 'T02' && 'T02 词意选择1'}
-                      {t === 'T03' && 'T03 听力选择'}
-                      {t === 'T04' && 'T04 语序重组'}
-                      {t === 'T05' && 'T05 语义选择'}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
           <div className="modal-footer">
@@ -772,6 +859,72 @@ export function Questions() {
           </div>
         </div>
       )}
+
+      {audioPickerOpen && (
+        <div className="modal-overlay open" onClick={() => setAudioPickerOpen(false)} role="dialog" aria-modal="true" aria-label="选择音频">
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <div className="modal-title">从资源库选择音频</div>
+              <button type="button" className="modal-close" onClick={() => setAudioPickerOpen(false)} aria-label="关闭">✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                {AUDIO_REF_LIST.map((a) => (
+                  <button key={a.id} type="button" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }} onClick={() => { setCfgAudioId(a.id); setAudioPickerOpen(false); }}>
+                    <span className="td-mono">{a.id}</span>
+                    <span style={{ marginLeft: 8 }}>{a.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imagePickerForOption !== null && (
+        <div className="modal-overlay open" onClick={() => setImagePickerForOption(null)} role="dialog" aria-modal="true" aria-label="选择图片">
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <div className="modal-title">从资源库选择图片</div>
+              <button type="button" className="modal-close" onClick={() => setImagePickerForOption(null)} aria-label="关闭">✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                {Object.entries(IMAGE_REF_MAP).map(([id, meta]) => (
+                  <button key={id} type="button" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }} onClick={() => { updateOption(imagePickerForOption, 'cn', id); setImagePickerForOption(null); }}>
+                    <span className="td-mono">{id}</span>
+                    <span style={{ marginLeft: 8 }}>{meta.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stemImagePickerOpen && (
+        <div className="modal-overlay open" onClick={() => setStemImagePickerOpen(false)} role="dialog" aria-modal="true" aria-label="选择题干图片">
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <div className="modal-title">从资源库选择图片</div>
+              <button type="button" className="modal-close" onClick={() => setStemImagePickerOpen(false)} aria-label="关闭">✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-hint" style={{ marginBottom: 8 }}>图片要求 1:1 比例，小于 1MB</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                {Object.entries(IMAGE_REF_MAP).map(([id, meta]) => (
+                  <button key={id} type="button" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }} onClick={() => { if (previewType === 'T02') setStemImageIdT02(id); else setStemTextByLang((prev) => ({ ...prev, CN: id })); setStemImagePickerOpen(false); }}>
+                    <span className="td-mono">{id}</span>
+                    <span style={{ marginLeft: 8 }}>{meta.name}</span>
+                    {meta.size && <span style={{ marginLeft: 8, color: 'var(--ink-light)', fontSize: 12 }}>{meta.size}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toastText && <div className="toast show success">{toastText}</div>}
     </>
   );
