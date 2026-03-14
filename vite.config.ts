@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: { alias: { '@': '/src' } },
   server: {
-    host: true, // 允许局域网访问（本机 IP:5173）
+    host: 'localhost', // 避免 os.networkInterfaces() 在某些环境下报错，仅本机访问
   },
   build: {
     rollupOptions: {

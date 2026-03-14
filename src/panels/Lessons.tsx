@@ -6,6 +6,8 @@ import { loadCourseLibs, COURSE_LIBS_UPDATED_EVENT, type CourseLibRow } from '..
 
 type LangKey = 'EN' | 'ES' | 'FR' | 'PT' | 'CN' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
 
+type HskLevel = 'HSK1' | 'HSK2' | 'HSK3' | 'HSK4' | 'HSK5' | 'HSK6';
+
 type CatalogNode = {
   id: string;
   name: string;
@@ -20,6 +22,8 @@ type CatalogNode = {
   targetByLang?: Partial<Record<LangKey, string>>;
   resourceIds?: string[];
   questionIds?: string[];
+  /** 仅 Level 节点：HSK 分级标签，用于标识该 Level 所属进度 */
+  hskLevel?: HskLevel;
 };
 
 function withMultiLang(n: CatalogNode): CatalogNode {
@@ -1092,21 +1096,49 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
                     <div className="form-group full">
                       <label>名称（多语言）</label>
                       <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--mist)' }}>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                          {LANG_OPTIONS.map((o) => (
-                            <button
-                              key={o.key}
-                              type="button"
-                              className={`btn btn-sm ${nameLang === o.key ? 'btn-primary' : 'btn-secondary'}`}
-                              onClick={() => setNameLang(o.key)}
-                              style={langBtnStyle(o.key, nameLang === o.key)}
-                            >
-                              {o.key} {o.label}
-                            </button>
-                          ))}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {LANG_OPTIONS.map((o) => (
+                              <button
+                                key={o.key}
+                                type="button"
+                                className={`btn btn-sm ${nameLang === o.key ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setNameLang(o.key)}
+                                style={langBtnStyle(o.key, nameLang === o.key)}
+                              >
+                                {o.key} {o.label}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ marginLeft: 'auto' }}
+                            onClick={() => {
+                              const seed = (draftNameByLang.CN ?? draftNameByLang[nameLang] ?? '').trim();
+                              setDraftNameByLang((prev) => ({ ...prev, ...autoTranslateByLang(seed) }));
+                            }}
+                          >
+                            自动翻译
+                          </button>
                         </div>
                         <input type="text" className="form-input" style={{ width: '100%', boxSizing: 'border-box' }} value={draftNameByLang[nameLang] ?? ''} onChange={(e) => setDraftNameByLang((prev) => ({ ...prev, [nameLang]: e.target.value }))} placeholder={`${LANG_OPTIONS.find((l) => l.key === nameLang)?.label ?? nameLang}名称`} />
                       </div>
+                    </div>
+                    <div className="form-group full">
+                      <label>HSK分级标签</label>
+                      <p className="form-hint" style={{ marginBottom: 8 }}>确定该 Level 的所属进度，仅 Level 可配置；Unit、Lesson 无此选项。</p>
+                      <select
+                        className="form-input form-select"
+                        value={selectedNode.hskLevel ?? ''}
+                        onChange={(e) => updateSelectedNode({ hskLevel: (e.target.value || undefined) as HskLevel | undefined })}
+                        style={{ maxWidth: 200 }}
+                      >
+                        <option value="">未设置</option>
+                        {(['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'] as const).map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
                     </div>
                   </>
                 )}
