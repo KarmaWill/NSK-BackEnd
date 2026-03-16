@@ -428,19 +428,6 @@ export function AiFree() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">话题场景描述（多语言，≤50 字）</label>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {LANG_OPTIONS.map((o) => (
-                    <button key={o.key} type="button" className={`btn btn-sm ${topicDescLang === o.key ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTopicDescLang(o.key)} style={langBtnStyle(o.key, topicDescLang === o.key)}>{o.key}</button>
-                  ))}
-                </div>
-                <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setForm((p) => ({ ...p, topicDescByLang: { ...(p.topicDescByLang ?? createEmptyLangMap(p.topicDesc ?? '', '')), ...Object.fromEntries((LANG_OPTIONS.map((o) => o.key)).filter((k) => k !== 'CN').map((k) => [k, (p.topicDescByLang?.CN ?? p.topicDesc ?? p.topicDescByLang?.[k]) || ''])) as Record<LangKey, string> } }))}>自动翻译</button>
-              </div>
-              <textarea className="form-input" rows={2} maxLength={50} value={(form.topicDescByLang ?? createEmptyLangMap(form.topicDesc ?? '', ''))[topicDescLang]} onChange={(e) => setForm((p) => ({ ...p, topicDescByLang: { ...(p.topicDescByLang ?? createEmptyLangMap(p.topicDesc ?? '', '')), [topicDescLang]: e.target.value.slice(0, 50) } }))} placeholder="话题场景描述（50 字内）" />
-              <div className="form-hint" style={{ marginTop: 4 }}>{((form.topicDescByLang ?? createEmptyLangMap(form.topicDesc ?? '', ''))[topicDescLang] ?? '').length}/50</div>
-            </div>
-            <div className="form-group">
               <label className="form-label">一句话背景描述</label>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

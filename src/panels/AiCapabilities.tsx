@@ -233,31 +233,6 @@ export function AiCapabilities() {
           {editing && (
             <>
               <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">AI资源ID</label>
-                    <input className="form-input font-mono" value={editing.aiId} onChange={(e) => setEditing((p) => (p ? { ...p, aiId: e.target.value } : p))} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">NSK课程编号（Level / Unit）</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10 }}>
-                      <select className="form-input form-select" value={editing.levelId} onChange={(e) => setEditing((p) => (p ? { ...p, levelId: e.target.value } : p))}>
-                        <option value="1">Level 1</option>
-                        <option value="2">Level 2</option>
-                        <option value="3">Level 3</option>
-                      </select>
-                      <select className="form-input form-select" value={editing.unitId} onChange={(e) => setEditing((p) => (p ? { ...p, unitId: e.target.value } : p))}>
-                        <option value="N10100">N10100 · Unit 1 日常主食</option>
-                        <option value="N10200">N10200 · Unit 2 日常饮品</option>
-                        <option value="N10300">N10300 · Unit 3 这是什么</option>
-                        <option value="N10400">N10400 · Unit 4 自我介绍</option>
-                        <option value="N10500">N10500 · Unit 5 我的宠物</option>
-                        <option value="N10600">N10600 · Unit 6 家庭成员</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
                 <div className="section-title">基础信息</div>
                 <div className="form-row">
                   <div className="form-group">

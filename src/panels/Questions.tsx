@@ -99,13 +99,13 @@ const TYPE_META: Record<PreviewType, TypeMeta> = {
   },
   T03: {
     stemLabel: '题干说明（听力选择）',
-    stemPlaceholder: '如：听音频，选择正确图片',
+    stemPlaceholder: '如：听音频，选择你听到的句子',
     needAudio: true,
-    optionMainLabel: '选项图片ID',
-    optionMainPlaceholder: '如 [米饭图片]',
-    showPinyin: false,
+    optionMainLabel: '句子选项',
+    optionMainPlaceholder: '如：我吃包子。',
+    showPinyin: true,
     showVisual: false,
-    typeHint: 'T03：听力选择，A-D 选项为图片ID',
+    typeHint: 'T03：听力选择，A-D 选项为句子（中文+拼音）',
   },
   T04: {
     stemLabel: '英文题干',
@@ -123,9 +123,9 @@ const TYPE_META: Record<PreviewType, TypeMeta> = {
     needAudio: false,
     optionMainLabel: '中文句子选项',
     optionMainPlaceholder: '如：这是面条。',
-    showPinyin: false,
+    showPinyin: true,
     showVisual: false,
-    typeHint: 'T05：语义/语法选择，A-D 为中文句子',
+    typeHint: 'T05：语义/语法选择，A-D 为中文句子（可填拼音）',
   },
 };
 
@@ -161,6 +161,7 @@ export function Questions() {
   const [options, setOptions] = useState<OptionItem[]>(defaultOptions);
   const [audioPickerOpen, setAudioPickerOpen] = useState(false);
   const [imagePickerForOption, setImagePickerForOption] = useState<number | null>(null);
+  const [optionImagePickerField, setOptionImagePickerField] = useState<'cn' | 'emoji'>('cn');
   const [stemImagePickerOpen, setStemImagePickerOpen] = useState(false);
   const [stemPinyin, setStemPinyin] = useState('');
   const [stemImageIdT02, setStemImageIdT02] = useState('');
@@ -278,7 +279,7 @@ export function Questions() {
   const validateConfig = () => {
     const errs: Record<string, string> = {};
     if (!previewType) errs.type = '请选择题目类型';
-    if (previewType !== 'T03' && !stemText.trim()) errs.stem = '请输入题干';
+    if (previewType !== 'T00' && previewType !== 'T03' && !stemText.trim()) errs.stem = '请输入题干';
     if (typeMeta.needAudio && !cfgAudioId.trim()) errs.audio = '该题型必须填写音频ID';
     const hasAnswer = Object.values(cfgAnswerAnalysisByLang).some((v) => v.trim());
     if (!hasAnswer) errs.answer = '请填写答案解析（至少一种语言）';
@@ -604,7 +605,7 @@ export function Questions() {
             <div style={{ flex: 1, padding: 24, overflowY: 'auto', borderRight: '1px solid var(--stone-dark)' }}>
               <div style={{ background: 'var(--ink)', color: '#fff', padding: '9px 14px', borderRadius: 6, marginBottom: 14, fontSize: 13, fontWeight: 500 }}>题型详情</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">* 题目类型</label><select className="form-input form-select" value={previewType} onChange={(e) => setPreviewType(e.target.value as PreviewType)}><option value="T00">T00 听音选图</option><option value="T01">T01 汉字填空</option><option value="T02">T02 词意选择1</option><option value="T03">T03 听力选择</option><option value="T04">T04 语序重组</option><option value="T05">T05 语义选择</option></select></div>
+                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">* 题目类型</label><select className="form-input form-select" value={previewType} onChange={(e) => setPreviewType(e.target.value as PreviewType)}><option value="T00">T00 听音选图</option><option value="T01">T01 汉字填空</option><option value="T02">T02 词意选择1</option><option value="T03">T03 听力选择</option><option value="T04">T04 词意选择2</option><option value="T05">T05 语义选择</option></select></div>
                 {cfgErrors.type && <div className="form-hint" style={{ color: 'var(--rose)', marginTop: -6 }}>{cfgErrors.type}</div>}
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">* 题号（前缀自动锁定）</label>
@@ -667,8 +668,8 @@ export function Questions() {
                       <input className="form-input" value={stemPinyin} onChange={(e) => setStemPinyin(e.target.value)} placeholder="如：mǐfàn" style={{ fontStyle: 'italic' }} />
                       {cfgErrors.stem && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.stem}</div>}
                     </>
-                  ) : previewType === 'T03' ? (
-                    <div className="form-hint">本题型无需题干说明，请填写下方音频ID与选项（图片）</div>
+                  ) : (previewType === 'T00' || previewType === 'T03') ? (
+                    <div className="form-hint">本题型无需题干说明，请填写下方音频ID与选项{previewType === 'T00' ? '（图片）' : '（中文+拼音）'}</div>
                   ) : (
                     <>
                       <label className="form-label">* {typeMeta.stemLabel}（多语言）</label>
@@ -702,14 +703,16 @@ export function Questions() {
                     </>
                   )}
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">{typeMeta.needAudio ? '* 音频ID' : '音频ID（可选）'}</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input className="form-input" value={cfgAudioId} onChange={(e) => setCfgAudioId(e.target.value)} style={{ fontFamily: 'JetBrains Mono', fontSize: '10.5px', flex: 1 }} />
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAudioPickerOpen(true)}>从资源库选择</button>
+                {typeMeta.needAudio && (
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">* 音频ID</label>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input className="form-input" value={cfgAudioId} onChange={(e) => setCfgAudioId(e.target.value)} style={{ fontFamily: 'JetBrains Mono', fontSize: '10.5px', flex: 1 }} />
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAudioPickerOpen(true)}>从资源库选择</button>
+                    </div>
+                    {cfgErrors.audio && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.audio}</div>}
                   </div>
-                  {cfgErrors.audio && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.audio}</div>}
-                </div>
+                )}
                 <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">启用状态</label><div style={{ display: 'flex', alignItems: 'center', height: 36, gap: 9 }}><label className="toggle-wrap"><input type="checkbox" checked={cfgEnabled} onChange={() => setCfgEnabled((v) => !v)} /><div className="toggle-track" /><div className="toggle-thumb" /></label><span style={{ fontSize: 12, color: 'var(--ink-light)' }}>{cfgEnabled ? '已启用' : '已停用'}</span></div></div>
               </div>
               <div className="form-hint" style={{ marginTop: -4, marginBottom: 12 }}>{typeMeta.typeHint}</div>
@@ -745,12 +748,12 @@ export function Questions() {
                         </>
                       ) : (
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input className="form-input" style={{ flex: 1 }} value={opt.cn} onChange={(e) => updateOption(i, 'cn', e.target.value)} onBlur={() => { if (previewType === 'T00' || previewType === 'T03') updateOption(i, 'cn', resolveImageId(opt.cn)); }} placeholder={typeMeta.optionMainPlaceholder} list={(previewType === 'T00' || previewType === 'T03') ? 'image-id-suggestions' : undefined} />
-                          {(previewType === 'T00' || previewType === 'T03') && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setImagePickerForOption(i)}>从资源库选择</button>}
+                          <input className="form-input" style={{ flex: 1 }} value={opt.cn} onChange={(e) => updateOption(i, 'cn', e.target.value)} onBlur={() => { if (previewType === 'T00') updateOption(i, 'cn', resolveImageId(opt.cn)); }} placeholder={typeMeta.optionMainPlaceholder} list={previewType === 'T00' ? 'image-id-suggestions' : undefined} />
+                          {previewType === 'T00' && <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setOptionImagePickerField('cn'); setImagePickerForOption(i); }}>从资源库选择</button>}
                         </div>
                       )}
                     </div>
-                    {(previewType === 'T00' || previewType === 'T03') && (
+                    {previewType === 'T00' && (
                       <div className="form-hint" style={{ marginTop: -2, marginBottom: 8 }}>
                         可输入图片ID或关键词，自动匹配资源库图片
                         {IMAGE_REF_MAP[opt.cn] ? ` · 已关联：${IMAGE_REF_MAP[opt.cn].name}` : ''}
@@ -761,17 +764,21 @@ export function Questions() {
                       <div className="form-group" style={{ marginBottom: 8 }}><label className="form-label">拼音</label><input className="form-input" value={opt.pinyin} onChange={(e) => updateOption(i, 'pinyin', e.target.value)} style={{ fontStyle: 'italic' }} placeholder="如：jiǎozi" /></div>
                     )}
                     {typeMeta.showVisual && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, color: 'var(--ink-light)' }}>选项图片ID</span>
-                        <input
-                          className="form-input"
-                          value={opt.emoji}
-                          onChange={(e) => updateOption(i, 'emoji', e.target.value)}
-                          onBlur={() => updateOption(i, 'emoji', resolveImageId(opt.emoji))}
-                          style={{ flex: 1 }}
-                          placeholder="如：P100002 / 饺子"
-                          list="image-id-suggestions"
-                        />
+                      <div className="form-group" style={{ marginBottom: 8 }}>
+                        <label className="form-label">选项图片ID</label>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            className="form-input"
+                            value={opt.emoji}
+                            onChange={(e) => updateOption(i, 'emoji', e.target.value)}
+                            onBlur={() => updateOption(i, 'emoji', resolveImageId(opt.emoji))}
+                            style={{ flex: 1 }}
+                            placeholder="如：P100002 / 饺子"
+                            list="image-id-suggestions"
+                          />
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setOptionImagePickerField('emoji'); setImagePickerForOption(i); }}>从资源库选择</button>
+                        </div>
+                        {IMAGE_REF_MAP[opt.emoji] && <div className="form-hint" style={{ marginTop: 4 }}>已关联：{IMAGE_REF_MAP[opt.emoji].name}</div>}
                       </div>
                     )}
                   </div>
@@ -826,8 +833,8 @@ export function Questions() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, flex: 1, minHeight: 0 }}>
                       {options.map((opt, i) => (
                         <div key={i} style={{ borderRadius: 6, border: opt.correct ? '2px solid var(--teal)' : '1px solid var(--stone-dark)', background: opt.correct ? 'var(--teal-l)' : 'var(--stone)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: previewType === 'T01' ? 12 : 14 }}>
-                          <span>{(previewType === 'T00' || previewType === 'T03') && IMAGE_REF_MAP[opt.cn] ? IMAGE_REF_MAP[opt.cn].name : (opt.emoji || opt.cn)}</span>
-                          {previewType !== 'T00' && previewType !== 'T03' && <span style={{ fontSize: 7, fontFamily: 'Noto Serif SC' }}>{opt.cn}</span>}
+                          <span>{previewType === 'T00' && IMAGE_REF_MAP[opt.cn] ? IMAGE_REF_MAP[opt.cn].name : (opt.emoji || opt.cn)}</span>
+                          {previewType === 'T03' ? (opt.pinyin ? <span style={{ fontSize: 7, fontFamily: 'Noto Serif SC', fontStyle: 'italic' }}>{opt.pinyin}</span> : null) : previewType !== 'T00' ? <span style={{ fontSize: 7, fontFamily: 'Noto Serif SC' }}>{opt.cn}</span> : null}
                         </div>
                       ))}
                     </div>
@@ -893,7 +900,7 @@ export function Questions() {
             <div className="modal-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
                 {Object.entries(IMAGE_REF_MAP).map(([id, meta]) => (
-                  <button key={id} type="button" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }} onClick={() => { updateOption(imagePickerForOption, 'cn', id); setImagePickerForOption(null); }}>
+                  <button key={id} type="button" className="btn btn-secondary" style={{ justifyContent: 'flex-start' }} onClick={() => { updateOption(imagePickerForOption, optionImagePickerField, id); setImagePickerForOption(null); }}>
                     <span className="td-mono">{id}</span>
                     <span style={{ marginLeft: 8 }}>{meta.name}</span>
                   </button>
