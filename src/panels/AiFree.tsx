@@ -200,7 +200,7 @@ export function AiFree() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
   const [themeLang, setThemeLang] = useState<LangKey>('CN');
-  const [topicDescLang, setTopicDescLang] = useState<LangKey>('CN');
+  const [, setTopicDescLang] = useState<LangKey>('CN');
   const [shortDescLang, setShortDescLang] = useState<LangKey>('CN');
   const [roleLang, setRoleLang] = useState<LangKey>('CN');
   const [roleTaskLang, setRoleTaskLang] = useState<LangKey>('CN');

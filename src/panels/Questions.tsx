@@ -155,7 +155,6 @@ export function Questions() {
   const [editingQuestion, setEditingQuestion] = useState<QuestionRow | null>(null);
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
   const [previewType, setPreviewType] = useState<PreviewType>('T00');
-  const [orderNum, setOrderNum] = useState('1');
   const [stemTextByLang, setStemTextByLang] = useState<Record<string, string>>({ CN: '', EN: 'noodles', ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' });
   const [stemLang, setStemLang] = useState('EN');
   const [options, setOptions] = useState<OptionItem[]>(defaultOptions);
@@ -679,7 +678,7 @@ export function Questions() {
                             <button key={lang} type="button" className={`btn btn-sm ${stemLang === lang ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStemLang(lang)}>{lang}</button>
                           ))}
                         </div>
-                        <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setStemTextByLang((prev) => ({ ...prev, ...Object.fromEntries((['EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).filter((l) => l !== 'CN').map((l) => [l, (prev.EN || prev.CN || prev[l]) || ''])) }))}>自动翻译</button>
+                        <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setStemTextByLang((prev) => ({ ...prev, ...Object.fromEntries((['EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).map((l) => [l, (prev.EN || prev.CN || prev[l]) || ''])) }))}>自动翻译</button>
                       </div>
                       <input
                         className="form-input"
@@ -796,7 +795,7 @@ export function Questions() {
                     <button key={lang} type="button" className={`btn btn-sm ${cfgAnswerAnalysisLang === lang ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCfgAnswerAnalysisLang(lang)}>{lang}</button>
                   ))}
                 </div>
-                <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setCfgAnswerAnalysisByLang((prev) => ({ ...prev, ...Object.fromEntries((['EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).filter((l) => l !== 'CN').map((l) => [l, prev.CN || prev[l] || ''])) }))}>自动翻译</button>
+                <button type="button" className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setCfgAnswerAnalysisByLang((prev) => ({ ...prev, ...Object.fromEntries((['EN', 'ES', 'FR', 'PT', 'JA', 'KO', 'TH', 'VI', 'ID', 'MS', 'KM'] as const).map((l) => [l, prev.CN || prev[l] || ''])) }))}>自动翻译</button>
               </div>
               <textarea className="form-input" rows={3} value={cfgAnswerAnalysisByLang[cfgAnswerAnalysisLang] ?? ''} onChange={(e) => setCfgAnswerAnalysisByLang((prev) => ({ ...prev, [cfgAnswerAnalysisLang]: e.target.value }))} placeholder="答案解析（至少填写一种语言）" />
               {cfgErrors.answer && <div className="form-hint" style={{ color: 'var(--rose)', marginTop: 4 }}>{cfgErrors.answer}</div>}
