@@ -34,6 +34,29 @@ const LANGS: { key: LangKey; label: string }[] = [
 
 const DEFAULT_CATEGORY_OPTIONS = ['生活场景', '校园口语', '商务口语', '旅游口语', '文化口语', '考试口语', '自由模式', '实战模拟'];
 
+/** 主题分类多语言文案（全局，按分类内部键名存储，默认键名为中文） */
+const CATEGORY_I18N_STORAGE_KEY = 'nsk-ai-category-i18n';
+
+function loadCategoryLabelsFromStorage(): Record<string, Record<LangKey, string>> {
+  try {
+    const raw = localStorage.getItem(CATEGORY_I18N_STORAGE_KEY);
+    if (!raw) return {};
+    const p = JSON.parse(raw) as unknown;
+    if (typeof p !== 'object' || p === null || Array.isArray(p)) return {};
+    return p as Record<string, Record<LangKey, string>>;
+  } catch {
+    return {};
+  }
+}
+
+function saveCategoryLabelsToStorage(data: Record<string, Record<LangKey, string>>) {
+  try {
+    localStorage.setItem(CATEGORY_I18N_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    /* ignore */
+  }
+}
+
 const AVATAR_LIBRARY: { id: string; name: string; url: string }[] = [
   { id: 'avatar-1', name: '默认头像 1', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=1' },
   { id: 'avatar-2', name: '默认头像 2', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=2' },
@@ -50,6 +73,17 @@ function formatNow() {
 
 function emptyLang(): Record<LangKey, string> {
   return { CN: '', EN: '', ES: '', FR: '', PT: '', JA: '', KO: '', VI: '', TH: '', ID: '', MS: '', KM: '' };
+}
+
+function labelsForCategory(labels: Record<string, Record<LangKey, string>>, key: string): Record<LangKey, string> {
+  const found = labels[key];
+  if (found && typeof found === 'object') return { ...emptyLang(), ...found, CN: found.CN || key };
+  return { ...emptyLang(), CN: key };
+}
+
+function categoryLabelsSearchBlob(labels: Record<string, Record<LangKey, string>>, key: string): string {
+  const m = labelsForCategory(labels, key);
+  return [key, ...Object.values(m)].join(' ');
 }
 
 function emptyScoreDesc(): Record<ScoreDimension, Record<LangKey, string>> {
@@ -71,21 +105,27 @@ export function AiCapabilities() {
   const [roleTaskLang, setRoleTaskLang] = useState<LangKey>('CN');
   const [aiRoleOptions, setAiRoleOptions] = useState<AiRoleOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<string[]>(DEFAULT_CATEGORY_OPTIONS);
+  const [categoryLabels, setCategoryLabels] = useState<Record<string, Record<LangKey, string>>>(() => loadCategoryLabelsFromStorage());
+  const [categoryEditLang, setCategoryEditLang] = useState<LangKey>('CN');
   const [showCategoryManage, setShowCategoryManage] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [avatarPickerFor, setAvatarPickerFor] = useState<'A' | 'B' | null>(null);
   const [avatarKeyword, setAvatarKeyword] = useState('');
 
+  useEffect(() => {
+    saveCategoryLabelsToStorage(categoryLabels);
+  }, [categoryLabels]);
+
   const list = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
     if (!kw) return rows;
     return rows.filter((r) =>
-      [r.aiId, r.themeNameByLang.CN, r.themeNameByLang.EN, r.themeCategory, r.dialogBackground, r.unitId, r.status]
+      [r.aiId, r.themeNameByLang.CN, r.themeNameByLang.EN, r.themeCategory, categoryLabelsSearchBlob(categoryLabels, r.themeCategory), r.dialogBackground, r.unitId, r.status]
         .join(' ')
         .toLowerCase()
         .includes(kw),
     );
-  }, [rows, keyword]);
+  }, [rows, keyword, categoryLabels]);
 
   useEffect(() => {
     setAiRoleOptions(loadAiRoleOptions());
@@ -205,7 +245,7 @@ export function AiCapabilities() {
                 <td className="td-mono">{r.aiId}</td>
                 <td>{r.themeNameByLang.CN || r.themeNameByLang.EN || '—'}</td>
                 <td className="td-mono">{`Level ${r.levelId} / ${r.unitId}`}</td>
-                <td>{r.themeCategory || '—'}</td>
+                <td>{r.themeCategory ? labelsForCategory(categoryLabels, r.themeCategory).CN || r.themeCategory : '—'}</td>
                 <td>{scoreDimensionLabel(r.aiScoreDimension)}</td>
                 <td>{r.status === '启用' ? <span className="badge badge-teal">启用</span> : <span className="badge badge-muted">停用</span>}</td>
                 <td className="td-mono" style={{ fontSize: 12 }}>{r.updatedAt}</td>
@@ -261,24 +301,107 @@ export function AiCapabilities() {
                   <div className="form-group">
                     <label className="form-label">主题分类</label>
                     <select className="form-input form-select" value={editing.themeCategory} onChange={(e) => setEditing((p) => (p ? { ...p, themeCategory: e.target.value } : p))}>
-                      {categoryOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+                      {categoryOptions.map((v) => (
+                        <option key={v} value={v}>{labelsForCategory(categoryLabels, v).CN || v}</option>
+                      ))}
                       <option value="自定义">自定义</option>
                     </select>
                     {editing.themeCategory === '自定义' && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input className="form-input" style={{ flex: '1 1 120px', minWidth: 0 }} value={customCategoryInput} onChange={(e) => setCustomCategoryInput(e.target.value)} placeholder="输入新分类名" />
-                        <button type="button" className="btn btn-sm btn-primary" onClick={() => { if (customCategoryInput.trim()) { setCategoryOptions((prev) => (prev.includes(customCategoryInput.trim()) ? prev : [...prev, customCategoryInput.trim()])); setEditing((p) => (p ? { ...p, themeCategory: customCategoryInput.trim() } : p)); setCustomCategoryInput(''); } }}>添加</button>
+                        <input className="form-input" style={{ flex: '1 1 120px', minWidth: 0 }} value={customCategoryInput} onChange={(e) => setCustomCategoryInput(e.target.value)} placeholder="输入新分类名（内部键名，建议中文）" />
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          onClick={() => {
+                            const t = customCategoryInput.trim();
+                            if (!t) return;
+                            setCategoryOptions((prev) => (prev.includes(t) ? prev : [...prev, t]));
+                            setCategoryLabels((prev) => ({ ...prev, [t]: labelsForCategory(prev, t) }));
+                            setEditing((p) => (p ? { ...p, themeCategory: t } : p));
+                            setCustomCategoryInput('');
+                          }}
+                        >
+                          添加
+                        </button>
+                      </div>
+                    )}
+                    {editing.themeCategory && editing.themeCategory !== '自定义' && (
+                      <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--mist)' }}>
+                        <label className="form-label" style={{ marginBottom: 8 }}>分类名称（多语言）</label>
+                        <div className="form-hint" style={{ marginBottom: 8 }}>当前分类键：<span className="font-mono">{editing.themeCategory}</span> · 各语言展示文案可单独维护；切换上方下拉可编辑其他分类。</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {LANGS.map((o) => (
+                              <button key={o.key} type="button" className={`btn btn-sm ${categoryEditLang === o.key ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCategoryEditLang(o.key)} style={langBtnStyle(o.key, categoryEditLang === o.key)}>
+                                {o.key}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            style={{ marginLeft: 'auto' }}
+                            onClick={() => {
+                              const key = editing.themeCategory;
+                              setCategoryLabels((prev) => {
+                                const cur = labelsForCategory(prev, key);
+                                const nextLang: Record<LangKey, string> = {
+                                  ...cur,
+                                  ...Object.fromEntries(
+                                    LANGS.map((l) => l.key)
+                                      .filter((k) => k !== 'CN')
+                                      .map((k) => [k, (cur.CN || cur[k]) || '']),
+                                  ) as Record<LangKey, string>,
+                                };
+                                return { ...prev, [key]: nextLang };
+                              });
+                            }}
+                          >
+                            自动翻译
+                          </button>
+                        </div>
+                        <input
+                          className="form-input"
+                          value={labelsForCategory(categoryLabels, editing.themeCategory)[categoryEditLang] ?? ''}
+                          onChange={(e) => {
+                            const key = editing.themeCategory;
+                            setCategoryLabels((prev) => ({
+                              ...prev,
+                              [key]: { ...labelsForCategory(prev, key), [categoryEditLang]: e.target.value },
+                            }));
+                          }}
+                          placeholder={`${LANGS.find((l) => l.key === categoryEditLang)?.label ?? categoryEditLang}下的分类名称`}
+                        />
                       </div>
                     )}
                     <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6, borderColor: 'var(--stone-dark)', color: 'var(--ink)' }} onClick={() => setShowCategoryManage((b) => !b)}>{showCategoryManage ? '收起管理' : '管理分类'}</button>
                     {showCategoryManage && (
                       <div style={{ marginTop: 8, padding: 10, background: 'var(--mist)', borderRadius: 8, border: '1px solid var(--stone-dark)' }}>
-                        <div style={{ fontSize: 12, color: 'var(--ink-light)', marginBottom: 6 }}>点击「删除」可从列表中移除该分类；当前选中的分类被删时会自动切到剩余第一项</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-light)', marginBottom: 6 }}>点击「删除」可从列表中移除该分类；当前选中的分类被删时会自动切到剩余第一项；多语言文案在上方「分类名称（多语言）」中按当前选中项编辑。</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                           {categoryOptions.map((c) => (
                             <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: 'var(--white)', borderRadius: 6, border: '1px solid var(--stone-dark)', fontSize: 13 }}>
-                              {c}
-                              <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', minWidth: 0, color: 'var(--rose)', fontSize: 12 }} onClick={() => { setCategoryOptions((prev) => { const next = prev.filter((x) => x !== c); if (next.length === 0) return prev; if (editing?.themeCategory === c) setEditing((p) => (p ? { ...p, themeCategory: next[0] } : p)); return next; }); }}>删除</button>
+                              {labelsForCategory(categoryLabels, c).CN || c}
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: '2px 6px', minWidth: 0, color: 'var(--rose)', fontSize: 12 }}
+                                onClick={() => {
+                                  setCategoryLabels((prev) => {
+                                    const next = { ...prev };
+                                    delete next[c];
+                                    return next;
+                                  });
+                                  setCategoryOptions((prev) => {
+                                    const next = prev.filter((x) => x !== c);
+                                    if (next.length === 0) return prev;
+                                    if (editing?.themeCategory === c) setEditing((p) => (p ? { ...p, themeCategory: next[0] } : p));
+                                    return next;
+                                  });
+                                }}
+                              >
+                                删除
+                              </button>
                             </span>
                           ))}
                         </div>

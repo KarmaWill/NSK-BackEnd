@@ -18,23 +18,28 @@ npm run dev
 
 浏览器打开 http://localhost:5173
 
-### 局域网访问（手机/平板同 WiFi 访问后台）
+### 局域网版本（同 WiFi 下手机 / 平板访问）
+
+开发机与设备需在同一局域网；先执行一次 `npm install` 以安装 `cross-env`（Windows / Mac / Linux 通用）。
 
 ```bash
 npm run dev:lan
 ```
 
-启动后终端会显示 **Local** 与 **Network** 地址，例如：
+- 使用环境变量 **`LAN=1`**，Vite 监听 **`0.0.0.0`**（与仅本机的 `npm run dev` 区分）。
+- 终端会显示 **Local** 与 **Network**；本机用 `http://localhost:5173`，其它设备用 **`http://<本机局域网IP>:5173`**（端口以终端为准）。
 
-- 本机：http://localhost:5173  
-- 局域网：http://192.168.x.x:5173（以终端实际显示为准）
+预览构建产物也可用局域网：
 
-在手机或平板上用浏览器打开 **Network** 中的地址即可访问。
+```bash
+npm run build
+npm run preview:lan
+```
 
-若运行 `npm run dev:lan` 时出现报错（如 `uv_interface_addresses` 等），多为本机 Node 获取网卡信息失败，可：
+若启动仍报错（如 `uv_interface_addresses`），多为本机 Node 读取网卡失败，可：
 
-1. 先用 `npm run dev` 正常启动，在本机终端执行 `ifconfig`（Mac/Linux）或 `ipconfig`（Windows）查看本机 IP；
-2. 将 vite 改为监听局域网：在 `vite.config.ts` 里把 `server.host` 改为 `'0.0.0.0'`，再运行 `npm run dev`，然后用手机浏览器访问 `http://<你的本机IP>:5173`。
+1. 用 `npm run dev` 仅本机开发；
+2. 查本机 IP：`ifconfig`（Mac/Linux）或 `ipconfig`（Windows），若本机已用 `0.0.0.0` 监听，可直接在手机浏览器试 `http://<IP>:5173`。
 
 ## 构建
 

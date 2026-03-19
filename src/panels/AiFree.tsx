@@ -80,6 +80,36 @@ const createEmptyLangMap = (cn = '', en = ''): Record<LangKey, string> => ({
   CN: cn, EN: en, ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '',
 });
 
+/** 与「课程 AI 配置」共用 localStorage，分类多语言全局一致 */
+const DEFAULT_CATEGORY_OPTIONS = ['生活场景', '校园口语', '商务口语', '旅游口语', '文化口语', '考试口语', '自由模式', '实战模拟'];
+const CATEGORY_I18N_STORAGE_KEY = 'nsk-ai-category-i18n';
+
+function loadCategoryLabelsFromStorage(): Record<string, Record<LangKey, string>> {
+  try {
+    const raw = localStorage.getItem(CATEGORY_I18N_STORAGE_KEY);
+    if (!raw) return {};
+    const p = JSON.parse(raw) as unknown;
+    if (typeof p !== 'object' || p === null || Array.isArray(p)) return {};
+    return p as Record<string, Record<LangKey, string>>;
+  } catch {
+    return {};
+  }
+}
+
+function saveCategoryLabelsToStorage(data: Record<string, Record<LangKey, string>>) {
+  try {
+    localStorage.setItem(CATEGORY_I18N_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    /* ignore */
+  }
+}
+
+function labelsForCategory(labels: Record<string, Record<LangKey, string>>, key: string): Record<LangKey, string> {
+  const found = labels[key];
+  if (found && typeof found === 'object') return { ...createEmptyLangMap(), ...found, CN: found.CN || key };
+  return { ...createEmptyLangMap(), CN: key };
+}
+
 const createEmptyBandMap = (): Record<ScoreBand, Record<LangKey, string>> => ({
   low: createEmptyLangMap('继续加油，建议先练习发音与基础句式。', 'Keep practicing pronunciation and basic sentence patterns.'),
   mid: createEmptyLangMap('表现不错，可继续提升流利度与表达完整度。', 'Good progress, improve fluency and completeness.'),
@@ -209,6 +239,27 @@ export function AiFree() {
   const [aiRoleOptions, setAiRoleOptions] = useState<AiRoleOption[]>(() => loadAiRoleOptions());
   const [avatarPickerFor, setAvatarPickerFor] = useState<'A' | 'B' | null>(null);
   const [avatarKeyword, setAvatarKeyword] = useState('');
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(() => [...DEFAULT_CATEGORY_OPTIONS]);
+  const [categoryLabels, setCategoryLabels] = useState<Record<string, Record<LangKey, string>>>(() => loadCategoryLabelsFromStorage());
+  const [categoryEditLang, setCategoryEditLang] = useState<LangKey>('CN');
+  const [showCategoryManage, setShowCategoryManage] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
+
+  useEffect(() => {
+    saveCategoryLabelsToStorage(categoryLabels);
+  }, [categoryLabels]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    setCategoryOptions(() => {
+      const s = new Set<string>([...DEFAULT_CATEGORY_OPTIONS]);
+      rows.forEach((r) => {
+        if (r.themeCategory) s.add(r.themeCategory);
+      });
+      if (form.themeCategory && form.themeCategory !== '自定义') s.add(form.themeCategory);
+      return Array.from(s);
+    });
+  }, [modalOpen, rows, form.themeCategory]);
 
   useEffect(() => {
     setAiRoleOptions(loadAiRoleOptions());
@@ -234,6 +285,9 @@ export function AiFree() {
     setRoleLang('CN');
     setRoleTaskLang('CN');
     setFeedbackLang('CN');
+    setCategoryEditLang('CN');
+    setShowCategoryManage(false);
+    setCustomCategoryInput('');
     setForm({
       icon: '💬',
       aiName: '',
@@ -276,6 +330,9 @@ export function AiFree() {
     setRoleLang('CN');
     setRoleTaskLang('CN');
     setFeedbackLang('CN');
+    setCategoryEditLang('CN');
+    setShowCategoryManage(false);
+    setCustomCategoryInput('');
     const row = rows[idx];
     const topicDescByLang = row.topicDescByLang ?? createEmptyLangMap(row.topicDesc ?? '', '');
     const shortBackgroundDescByLang = row.shortBackgroundDescByLang ?? createEmptyLangMap(row.shortBackgroundDesc ?? '', '');
@@ -375,7 +432,7 @@ export function AiFree() {
                   <div style={{ fontWeight: 500, fontSize: 13 }}>{row.aiName || '—'}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink-light)', marginTop: 2 }}>{row.themeNameByLang.CN || '未配置主题'}</div>
                 </td>
-                <td><span className="badge badge-muted">{row.themeCategory}</span></td>
+                <td><span className="badge badge-muted">{labelsForCategory(categoryLabels, row.themeCategory).CN || row.themeCategory}</span></td>
                 <td style={{ fontSize: 12 }}>{row.roleA} / {row.roleB}</td>
                 <td><span className="td-mono" style={{ fontSize: 12 }}>{row.turnLimit} 轮</span></td>
                 <td><span className={`status-dot ${row.status === 'published' ? 'published' : 'draft'}`}>{row.status === 'published' ? '已上线' : '草稿'}</span></td>
@@ -425,6 +482,119 @@ export function AiFree() {
               </div>
               <input className="form-input" maxLength={10} value={form.themeNameByLang[themeLang]} onChange={(e) => setForm((p) => ({ ...p, themeNameByLang: { ...p.themeNameByLang, [themeLang]: e.target.value.slice(0, 10) } }))} placeholder="主题名称（如：咖啡厅闲谈）" />
               <div className="form-hint" style={{ marginTop: 4 }}>{(form.themeNameByLang[themeLang] ?? '').length}/10</div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">主题分类</label>
+                <select className="form-input form-select" value={form.themeCategory} onChange={(e) => setForm((p) => ({ ...p, themeCategory: e.target.value }))}>
+                  {categoryOptions.map((v) => (
+                    <option key={v} value={v}>{labelsForCategory(categoryLabels, v).CN || v}</option>
+                  ))}
+                  <option value="自定义">自定义</option>
+                </select>
+                {form.themeCategory === '自定义' && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input className="form-input" style={{ flex: '1 1 120px', minWidth: 0 }} value={customCategoryInput} onChange={(e) => setCustomCategoryInput(e.target.value)} placeholder="输入新分类名（内部键名，建议中文）" />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={() => {
+                        const t = customCategoryInput.trim();
+                        if (!t) return;
+                        setCategoryOptions((prev) => (prev.includes(t) ? prev : [...prev, t]));
+                        setCategoryLabels((prev) => ({ ...prev, [t]: labelsForCategory(prev, t) }));
+                        setForm((p) => ({ ...p, themeCategory: t }));
+                        setCustomCategoryInput('');
+                      }}
+                    >
+                      添加
+                    </button>
+                  </div>
+                )}
+                {form.themeCategory && form.themeCategory !== '自定义' && (
+                  <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--mist)' }}>
+                    <label className="form-label" style={{ marginBottom: 8 }}>分类名称（多语言）</label>
+                    <div className="form-hint" style={{ marginBottom: 8 }}>当前分类键：<span className="font-mono">{form.themeCategory}</span> · 各语言展示文案可单独维护；切换上方下拉可编辑其他分类。与「课程 AI 配置」共用资源库。</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {LANG_OPTIONS.map((o) => (
+                          <button key={o.key} type="button" className={`btn btn-sm ${categoryEditLang === o.key ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCategoryEditLang(o.key)} style={langBtnStyle(o.key, categoryEditLang === o.key)}>
+                            {o.key}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        style={{ marginLeft: 'auto' }}
+                        onClick={() => {
+                          const key = form.themeCategory;
+                          setCategoryLabels((prev) => {
+                            const cur = labelsForCategory(prev, key);
+                            const nextLang: Record<LangKey, string> = {
+                              ...cur,
+                              ...Object.fromEntries(
+                                LANG_OPTIONS.map((o) => o.key)
+                                  .filter((k) => k !== 'CN')
+                                  .map((k) => [k, (cur.CN || cur[k]) || '']),
+                              ) as Record<LangKey, string>,
+                            };
+                            return { ...prev, [key]: nextLang };
+                          });
+                        }}
+                      >
+                        自动翻译
+                      </button>
+                    </div>
+                    <input
+                      className="form-input"
+                      value={labelsForCategory(categoryLabels, form.themeCategory)[categoryEditLang] ?? ''}
+                      onChange={(e) => {
+                        const key = form.themeCategory;
+                        setCategoryLabels((prev) => ({
+                          ...prev,
+                          [key]: { ...labelsForCategory(prev, key), [categoryEditLang]: e.target.value },
+                        }));
+                      }}
+                      placeholder={`${LANG_OPTIONS.find((l) => l.key === categoryEditLang)?.label ?? categoryEditLang}下的分类名称`}
+                    />
+                  </div>
+                )}
+                <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6, borderColor: 'var(--stone-dark)', color: 'var(--ink)' }} onClick={() => setShowCategoryManage((b) => !b)}>{showCategoryManage ? '收起管理' : '管理分类'}</button>
+                {showCategoryManage && (
+                  <div style={{ marginTop: 8, padding: 10, background: 'var(--mist)', borderRadius: 8, border: '1px solid var(--stone-dark)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--ink-light)', marginBottom: 6 }}>点击「删除」可从列表中移除该分类；当前选中的分类被删时会自动切到剩余第一项；多语言文案在上方「分类名称（多语言）」中按当前选中项编辑。</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {categoryOptions.map((c) => (
+                        <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: 'var(--white)', borderRadius: 6, border: '1px solid var(--stone-dark)', fontSize: 13 }}>
+                          {labelsForCategory(categoryLabels, c).CN || c}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '2px 6px', minWidth: 0, color: 'var(--rose)', fontSize: 12 }}
+                            onClick={() => {
+                              setCategoryLabels((prev) => {
+                                const next = { ...prev };
+                                delete next[c];
+                                return next;
+                              });
+                              setCategoryOptions((prev) => {
+                                const next = prev.filter((x) => x !== c);
+                                if (next.length === 0) return prev;
+                                if (form.themeCategory === c) setForm((p) => ({ ...p, themeCategory: next[0] }));
+                                return next;
+                              });
+                            }}
+                          >
+                            删除
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="form-group">

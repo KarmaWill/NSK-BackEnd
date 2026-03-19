@@ -26,7 +26,7 @@ export type PanelId =
   | 'sysconfig'
   | 'vocab'; /* 保留，侧栏不展示 */
 
-/** 当前页标题（用于面包屑「NSK Horizon OS › 当前页」） */
+/** 当前页标题（用于面包屑「C-Lingo AIOS › 当前页」） */
 export const NAV_LABELS: Record<PanelId, string> = {
   dashboard: '数据仪表盘',
   'course-config': '课程库配置',

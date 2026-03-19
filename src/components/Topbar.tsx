@@ -9,7 +9,7 @@ export function Topbar({ panelId }: Props) {
   return (
     <header className="topbar">
       <div className="breadcrumb" id="breadcrumb">
-        <span>NSK Horizon OS</span>
+        <span>C-Lingo AIOS</span>
         <span className="breadcrumb-sep">›</span>
         <span className="breadcrumb-curr" id="bc-curr">{title}</span>
       </div>
