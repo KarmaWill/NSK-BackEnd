@@ -18,6 +18,47 @@ function createEmptyLangMap(cn = '', en = ''): Record<LangKey, string> {
   return { CN: cn, EN: en, ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' };
 }
 const REPORT_BANDS: ReportBand[] = ['0-40', '40-60', '60-80', '80-90', '90-100'];
+const REPORT_INTERPRET_PROMPT_TEMPLATE = `请根据以下对话生成解析，严格按上述JSON输出：
+【对话记录】
+{{对话内容}}
+角色3-深度解析
+你是专业的AI中文学习评估老师，负责在对话结束后生成客观、鼓励型、可落地的学习报告。
+
+输出规则：
+1. 只输出合法JSON，不输出任何多余文字。
+2. 严格按下面结构输出，每个字段含义已标注清楚。
+3. key_fixes 最多输出5条，只挑影响理解的错误。
+4. 评分基于真实对话，先讲优点再讲改进，不使用打击性语言。
+
+【固定输出JSON结构 + 字段说明】
+{
+  "overall_score": "综合评分（0-100数字）",
+  "star_rating": "星级（1-5数字）",
+  "study_duration_minutes": "学习时长，单位：分钟（数字）",
+  "conversation_rounds": "对话轮数（数字）",
+  "perfect_expression_count": "≥80分的完美表达句子数量（数字）",
+  "perfect_expression_comment": "根据数量输出：再接再厉/哎呦不错哦/太棒了",
+  "evaluation_dimensions": [
+    {
+      "dimension": "维度名称：流利度/准确度/完整度",
+      "score": "该项得分（数字）",
+      "comment": "简短评分依据，不超过30字"
+    }
+  ],
+  "ai_feedback": {
+    "summary": "AI导师鼓励性总结",
+    "focus": "本次重点改进方向（蓝色标签内容）"
+  },
+  "key_fixes": [
+    {
+      "error_sentence": "学习者原错误句子",
+      "error_reason": "错误原因简要说明",
+      "correct_sentence": "正确中文句子"
+    }
+  ],
+  "next_step_suggestion": "具体可执行的下一步学习建议",
+  "archive_tip": "报告保存与历史记录提示语"
+}`;
 function createReportBandMap(): Record<ReportBand, Record<LangKey, string>> {
   return {
     '0-40': createEmptyLangMap('本段表现较弱，建议多听多练本场景核心句型和词汇。', 'Performance in this band needs more practice on core patterns and vocabulary.'),
@@ -36,10 +77,12 @@ type DetailGranularity = 'overall' | 'sentence_char' | 'phoneme';
 
 type DifficultyLevelRow = {
   level: DifficultyLevelKey;
+  scoreWeight: ScoreWeight;
   pauseThresholdMs: number;
   minPhnScore: number;
   fluencyStrictness: FluencyStrictness;
   toneEnabled: boolean;
+  toneWeight: number;
   speedRequirement: SpeedRequirement;
 };
 
@@ -59,18 +102,11 @@ type FeedbackConfig = {
 
 const DEFAULT_SCORE_WEIGHT: ScoreWeight = { pronunciation: 35, fluency: 25, accuracy: 25, completion: 15 };
 const DEFAULT_TONE_WEIGHT = 30;
-const DEFAULT_CHAR_THRESHOLD = 60;
 const DEFAULT_DIFFICULTY_LEVELS: DifficultyLevelRow[] = [
-  { level: 'easy', pauseThresholdMs: 600, minPhnScore: 50, fluencyStrictness: 'loose', toneEnabled: false, speedRequirement: 'slow_ok' },
-  { level: 'mid', pauseThresholdMs: 400, minPhnScore: 65, fluencyStrictness: 'normal', toneEnabled: true, speedRequirement: 'normal' },
-  { level: 'hard', pauseThresholdMs: 300, minPhnScore: 75, fluencyStrictness: 'strict', toneEnabled: true, speedRequirement: 'normal' },
+  { level: 'easy', scoreWeight: DEFAULT_SCORE_WEIGHT, pauseThresholdMs: 600, minPhnScore: 50, fluencyStrictness: 'loose', toneEnabled: false, toneWeight: DEFAULT_TONE_WEIGHT, speedRequirement: 'slow_ok' },
+  { level: 'mid', scoreWeight: DEFAULT_SCORE_WEIGHT, pauseThresholdMs: 400, minPhnScore: 65, fluencyStrictness: 'normal', toneEnabled: true, toneWeight: DEFAULT_TONE_WEIGHT, speedRequirement: 'normal' },
+  { level: 'hard', scoreWeight: DEFAULT_SCORE_WEIGHT, pauseThresholdMs: 300, minPhnScore: 75, fluencyStrictness: 'strict', toneEnabled: true, toneWeight: DEFAULT_TONE_WEIGHT, speedRequirement: 'normal' },
 ];
-const DEFAULT_FEEDBACK: FeedbackConfig = {
-  showOverall: true, showAccuracy: true, showFluency: true, showWpm: false, showPause: false,
-  improvementsMax: 3, improvementsTriggerBelow: 70, highlightAbove: 85,
-  historyMaxCount: 100, retainAudioUrl: true, detailGranularity: 'sentence_char',
-};
-
 type AiRole = {
   id: string;
   name: string;
@@ -167,7 +203,7 @@ const EMPTY_FORM: AiRole = {
   avatarEnabled: true,
   status: 'draft',
   updatedAt: '',
-  features: { pronunciation: true, translation: true, promptDeepParse: '', promptReportInterpret: '' },
+  features: { pronunciation: true, translation: true, promptDeepParse: '', promptReportInterpret: REPORT_INTERPRET_PROMPT_TEMPLATE },
 };
 
 function formatNow() {
@@ -219,7 +255,22 @@ function migrateRole(r: AiRole & { summary?: string; summaryGoals?: string[]; ta
       scoreWeight: sw && [sw.pronunciation, sw.fluency, sw.accuracy, sw.completion].every((n) => typeof n === 'number') ? sw : undefined,
       toneWeight: typeof f?.toneWeight === 'number' ? f.toneWeight : undefined,
       charThreshold: typeof f?.charThreshold === 'number' ? f.charThreshold : undefined,
-      difficultyLevels: Array.isArray(dl) && dl.length === 3 ? dl : undefined,
+      difficultyLevels: Array.isArray(dl) && dl.length === 3
+        ? dl.map((row, idx) => ({
+            level: row.level,
+            scoreWeight: row.scoreWeight && typeof row.scoreWeight.pronunciation === 'number'
+              ? row.scoreWeight
+              : (f?.scoreWeight && typeof f.scoreWeight.pronunciation === 'number' ? f.scoreWeight : DEFAULT_DIFFICULTY_LEVELS[idx].scoreWeight),
+            pauseThresholdMs: row.pauseThresholdMs,
+            minPhnScore: row.minPhnScore,
+            fluencyStrictness: row.fluencyStrictness,
+            toneEnabled: row.toneEnabled,
+            toneWeight: typeof row.toneWeight === 'number'
+              ? row.toneWeight
+              : (typeof f?.toneWeight === 'number' ? f.toneWeight : DEFAULT_DIFFICULTY_LEVELS[idx].toneWeight),
+            speedRequirement: row.speedRequirement,
+          }))
+        : undefined,
       feedback: fb && typeof fb.showOverall === 'boolean' ? fb : undefined,
     },
   };
@@ -248,10 +299,8 @@ export function AiRoles() {
   const [form, setForm] = useState<AiRole>(EMPTY_FORM);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarKeyword, setAvatarKeyword] = useState('');
-  const [swmCollapsed, setSwmCollapsed] = useState(false);
   const [reportLang, setReportLang] = useState<LangKey>('CN');
   const [dmCollapsed, setDmCollapsed] = useState(false);
-  const [fbmCollapsed, setFbmCollapsed] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
@@ -316,15 +365,6 @@ export function AiRoles() {
         },
       },
     }));
-  };
-
-  const deleteRole = (id: string) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
-    if (selectedId === id) {
-      const fallback = rows.find((r) => r.id !== id);
-      setSelectedId(fallback?.id ?? '');
-    }
-    setModalOpen(false);
   };
 
   const reportLangBtnStyle = (key: LangKey, active: boolean) =>
@@ -492,94 +532,14 @@ export function AiRoles() {
               </>
             )}
             {roleFormTab === 'pronunciation' && (() => {
-              const sw = form.features.scoreWeight ?? DEFAULT_SCORE_WEIGHT;
-              const toneWeight = form.features.toneWeight ?? DEFAULT_TONE_WEIGHT;
-              const charThreshold = form.features.charThreshold ?? DEFAULT_CHAR_THRESHOLD;
               const levels = form.features.difficultyLevels ?? DEFAULT_DIFFICULTY_LEVELS;
-              const fb = form.features.feedback ?? DEFAULT_FEEDBACK;
-              const total = sw.pronunciation + sw.fluency + sw.accuracy + sw.completion;
-              const setSw = (next: ScoreWeight) => setForm((f) => ({ ...f, features: { ...f.features, scoreWeight: next } }));
               const setLevel = (idx: number, patch: Partial<DifficultyLevelRow>) => setForm((f) => {
                 const list = f.features.difficultyLevels ?? [...DEFAULT_DIFFICULTY_LEVELS];
                 const next = list.map((row, i) => i === idx ? { ...row, ...patch } : row);
                 return { ...f, features: { ...f.features, difficultyLevels: next } };
               });
-              const setFb = (patch: Partial<FeedbackConfig>) => setForm((f) => ({ ...f, features: { ...f.features, feedback: { ...(f.features.feedback ?? DEFAULT_FEEDBACK), ...patch } } }));
               return (
                 <>
-                  <div className="section-title" style={{ marginTop: 0 }}>功能开关</div>
-                  <div className="toggle-row">
-                    <div>
-                      <div className="toggle-label">翻译辅助</div>
-                      <div className="toggle-desc">提供中英文对照翻译</div>
-                    </div>
-                    <label className="toggle-wrap">
-                      <input type="checkbox" checked={form.features.translation} onChange={(e) => setForm((f) => ({ ...f, features: { ...f.features, translation: e.target.checked } }))} />
-                      <span className="toggle-track" />
-                      <span className="toggle-thumb" />
-                    </label>
-                  </div>
-
-                  <div className={`score-weight-module ${swmCollapsed ? 'collapsed' : ''}`}>
-                    <div className="swm-header" onClick={() => setSwmCollapsed((c) => !c)}>
-                      <div className="swm-icon" style={{ background: 'rgba(139,92,246,0.12)' }}>⚖️</div>
-                      <div>
-                        <div className="swm-title">评分维度权重</div>
-                        <div className="swm-desc">四维权重之和须等于 100，影响用户最终综合得分</div>
-                      </div>
-                      <span className="swm-chevron">▾</span>
-                    </div>
-                    <div className="swm-body">
-                      <div className="swm-grid">
-                        {[
-                          { key: 'pronunciation' as const, label: '🎯 发音准确度 (phn)', val: sw.pronunciation },
-                          { key: 'fluency' as const, label: '🌊 流利度 (fluency)', val: sw.fluency },
-                          { key: 'accuracy' as const, label: '💬 表达准确度', val: sw.accuracy },
-                          { key: 'completion' as const, label: '✅ 目标完成度', val: sw.completion },
-                        ].map(({ key, label, val }) => (
-                          <div key={key} className="swm-form-group">
-                            <label className="swm-label">{label}</label>
-                            <div className="swm-range-row">
-                              <input
-                                type="range"
-                                className="swm-range"
-                                min={0}
-                                max={100}
-                                value={val}
-                                onChange={(e) => setSw({ ...sw, [key]: Number(e.target.value) })}
-                              />
-                              <span className="swm-range-val">{val}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="swm-bar-wrap">
-                        <div className="swm-bar-seg swm-bar-accuracy" style={{ width: `${sw.pronunciation}%` }}>{sw.pronunciation > 8 ? `准确${sw.pronunciation}%` : ''}</div>
-                        <div className="swm-bar-seg swm-bar-fluency" style={{ width: `${sw.fluency}%` }}>{sw.fluency > 8 ? `流利${sw.fluency}%` : ''}</div>
-                        <div className="swm-bar-seg swm-bar-expression" style={{ width: `${sw.accuracy}%` }}>{sw.accuracy > 8 ? `表达${sw.accuracy}%` : ''}</div>
-                        <div className="swm-bar-seg swm-bar-completion" style={{ width: `${sw.completion}%` }}>{sw.completion > 8 ? `完成${sw.completion}%` : ''}</div>
-                      </div>
-                      <div className={`swm-total ${total === 100 ? 'ok' : 'warn'}`}>{total === 100 ? '总计: 100% ✓' : `总计: ${total}% △ (须等于100%)`}</div>
-                      <div className="swm-divider" />
-                      <div className="swm-grid2">
-                        <div className="swm-form-group">
-                          <label className="swm-label">声调评分权重 (toneScore in overall)</label>
-                          <div className="swm-range-row">
-                            <input type="range" className="swm-range" min={0} max={100} value={toneWeight} onChange={(e) => setForm((f) => ({ ...f, features: { ...f.features, toneWeight: Number(e.target.value) } }))} />
-                            <span className="swm-range-val">{toneWeight}%</span>
-                          </div>
-                        </div>
-                        <div className="swm-form-group" style={{ position: 'relative' }}>
-                          <label className="swm-label">字级准确度起效阈值</label>
-                          <div className="swm-input-unit" style={{ position: 'relative' }}>
-                            <input type="number" min={0} max={100} value={charThreshold} onChange={(e) => setForm((f) => ({ ...f, features: { ...f.features, charThreshold: Number(e.target.value) || 0 } }))} />
-                            <span className="swm-unit-label">分</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   <div className={`difficulty-module ${dmCollapsed ? 'collapsed' : ''}`}>
                     <div className="dm-header" onClick={() => setDmCollapsed((c) => !c)}>
                       <div className="dm-icon" style={{ background: 'rgba(245,158,11,0.12)' }}>🎚</div>
@@ -594,11 +554,8 @@ export function AiRoles() {
                         <thead>
                           <tr>
                             <th>难度</th>
-                            <th>停顿阈值 (MS)</th>
-                            <th>发音最低分</th>
-                            <th>流利度严格度</th>
-                            <th>声调评分启用</th>
-                            <th>语速要求</th>
+                            <th>评分维度权重</th>
+                            <th>声调评分权重</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -609,108 +566,64 @@ export function AiRoles() {
                                   {row.level === 'easy' ? '🟢 初级' : row.level === 'mid' ? '🔵 中级' : '🟣 高级'}
                                 </span>
                               </td>
-                              <td><input type="number" value={row.pauseThresholdMs} onChange={(e) => setLevel(idx, { pauseThresholdMs: Number(e.target.value) || 0 })} /></td>
-                              <td><input type="number" value={row.minPhnScore} onChange={(e) => setLevel(idx, { minPhnScore: Number(e.target.value) || 0 })} /></td>
                               <td>
-                                <select value={row.fluencyStrictness} onChange={(e) => setLevel(idx, { fluencyStrictness: e.target.value as FluencyStrictness })}>
-                                  <option value="loose">宽松</option>
-                                  <option value="normal">标准</option>
-                                  <option value="strict">严格</option>
-                                </select>
+                                <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 8, border: '1px solid var(--border)', borderRadius: 8, padding: 6, width: 'fit-content' }}>
+                                  {[
+                                    { key: 'pronunciation' as const, label: '发音权重', val: row.scoreWeight.pronunciation },
+                                    { key: 'fluency' as const, label: '流利度权重', val: row.scoreWeight.fluency },
+                                    { key: 'accuracy' as const, label: '准确度权重', val: row.scoreWeight.accuracy },
+                                    { key: 'completion' as const, label: '完成度权重', val: row.scoreWeight.completion },
+                                  ].map(({ key, label, val }) => (
+                                    <div key={key} style={{ minWidth: 0, width: 130, border: '1px solid var(--border)', borderRadius: 8, padding: 6 }}>
+                                      <label style={{ fontSize: 12, color: 'var(--ink-light)', display: 'block', marginBottom: 4, lineHeight: '16px' }}>{label}</label>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={val}
+                                        onChange={(e) =>
+                                          setLevel(idx, {
+                                            scoreWeight: {
+                                              ...row.scoreWeight,
+                                              [key]: Number(e.target.value) || 0,
+                                            },
+                                          })
+                                        }
+                                        style={{ width: 76 }}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                                <div
+                                  className={`swm-total ${row.scoreWeight.pronunciation + row.scoreWeight.fluency + row.scoreWeight.accuracy + row.scoreWeight.completion === 100 ? 'ok' : 'warn'}`}
+                                  style={{ marginTop: 8, display: 'inline-block' }}
+                                >
+                                  {row.scoreWeight.pronunciation + row.scoreWeight.fluency + row.scoreWeight.accuracy + row.scoreWeight.completion === 100
+                                    ? '总计: 100% ✓'
+                                    : `总计: ${row.scoreWeight.pronunciation + row.scoreWeight.fluency + row.scoreWeight.accuracy + row.scoreWeight.completion}% △`}
+                                </div>
                               </td>
-                              <td><input type="checkbox" checked={row.toneEnabled} onChange={(e) => setLevel(idx, { toneEnabled: e.target.checked })} /></td>
                               <td>
-                                <select value={row.speedRequirement} onChange={(e) => setLevel(idx, { speedRequirement: e.target.value as SpeedRequirement })}>
-                                  <option value="slow_ok">慢速可接受</option>
-                                  <option value="normal">正常</option>
-                                </select>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <label style={{ fontSize: 12, color: 'var(--ink-light)', display: 'block', marginBottom: 0, whiteSpace: 'nowrap' }}>声调评分权重</label>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <input type="checkbox" checked={row.toneEnabled} onChange={(e) => setLevel(idx, { toneEnabled: e.target.checked })} />
+                                    <span style={{ fontSize: 12, color: 'var(--ink-light)', whiteSpace: 'nowrap' }}>启用</span>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={row.toneWeight}
+                                    onChange={(e) => setLevel(idx, { toneWeight: Number(e.target.value) || 0 })}
+                                    style={{ width: 70 }}
+                                  />
+                                </div>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                  </div>
-
-                  <div className={`feedback-module ${fbmCollapsed ? 'collapsed' : ''}`}>
-                    <div className="fbm-header" onClick={() => setFbmCollapsed((c) => !c)}>
-                      <div className="fbm-icon">📋</div>
-                      <div>
-                        <div className="fbm-title">FeedbackScreenView 报告配置</div>
-                        <div className="fbm-desc">控制会话结束后反馈报告的展示维度和内容</div>
-                      </div>
-                      <span className="fbm-chevron">▾</span>
-                    </div>
-                    <div className="fbm-body">
-                      <div className="fbm-grid2">
-                        <div>
-                          <div className="fbm-sub-title">ScoreCardView 展示项</div>
-                          <div className="fbm-toggle-list">
-                            {[
-                              { k: 'showOverall' as const, label: 'overall（综合总分）' },
-                              { k: 'showAccuracy' as const, label: 'accuracy（准确度分）' },
-                              { k: 'showFluency' as const, label: 'fluency.overall（流利度分）' },
-                              { k: 'showWpm' as const, label: 'wpm（语速：字/分钟）' },
-                              { k: 'showPause' as const, label: 'fluency.pause（停顿次数）' },
-                            ].map(({ k, label }) => (
-                              <div key={k} className={`fbm-toggle-row ${fb[k] ? 'fbm-enabled' : ''}`} onClick={() => setFb({ [k]: !fb[k] })}>
-                                <div className={`fbm-switch ${fb[k] ? 'on' : ''}`} />
-                                <span className="fbm-toggle-label">{label}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="fbm-sub-title">ImprovementsCardView 建议策略</div>
-                          <div className="fbm-form-group">
-                            <label className="fbm-label">最多展示改进建议条数</label>
-                            <div className="fbm-input-unit" style={{ position: 'relative' }}>
-                              <input type="number" min={1} max={10} value={fb.improvementsMax} onChange={(e) => setFb({ improvementsMax: Number(e.target.value) || 1 })} />
-                              <span className="fbm-unit">条</span>
-                            </div>
-                          </div>
-                          <div className="fbm-form-group">
-                            <label className="fbm-label">触发改进提示的字分阈值</label>
-                            <div className="fbm-input-unit" style={{ position: 'relative' }}>
-                              <input type="number" min={0} max={100} value={fb.improvementsTriggerBelow} onChange={(e) => setFb({ improvementsTriggerBelow: Number(e.target.value) || 0 })} />
-                              <span className="fbm-unit">分以下</span>
-                            </div>
-                          </div>
-                          <div className="fbm-form-group">
-                            <label className="fbm-label">优秀表现高亮阈值</label>
-                            <div className="fbm-input-unit" style={{ position: 'relative' }}>
-                              <input type="number" min={0} max={100} value={fb.highlightAbove} onChange={(e) => setFb({ highlightAbove: Number(e.target.value) || 0 })} />
-                              <span className="fbm-unit">分以上</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="fbm-divider" />
-                      <div className="fbm-sub-title">会话数据保存规则（HistoryDetailScreenView）</div>
-                      <div className="fbm-grid3">
-                        <div className="fbm-form-group">
-                          <label className="fbm-label">历史记录最大保存条数</label>
-                          <div className="fbm-input-unit" style={{ position: 'relative' }}>
-                            <input type="number" value={fb.historyMaxCount} onChange={(e) => setFb({ historyMaxCount: Number(e.target.value) || 0 })} />
-                            <span className="fbm-unit">条</span>
-                          </div>
-                        </div>
-                        <div className="fbm-form-group">
-                          <label className="fbm-label">单条历史音频URL保留</label>
-                          <select className="fbm-select" value={fb.retainAudioUrl ? 'yes' : 'no'} onChange={(e) => setFb({ retainAudioUrl: e.target.value === 'yes' })}>
-                            <option value="yes">保留（audioUrl=true）</option>
-                            <option value="no">不保留</option>
-                          </select>
-                        </div>
-                        <div className="fbm-form-group">
-                          <label className="fbm-label">评测详情保留粒度</label>
-                          <select className="fbm-select" value={fb.detailGranularity} onChange={(e) => setFb({ detailGranularity: e.target.value as DetailGranularity })}>
-                            <option value="overall">仅综合分</option>
-                            <option value="sentence_char">句级 + 字级</option>
-                            <option value="phoneme">声韵母级（最详细）</option>
-                          </select>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </>
@@ -732,7 +645,7 @@ export function AiRoles() {
             {roleFormTab === 'report' && (
               <>
                 <div className="section-title" style={{ marginTop: 0 }}>学习报告 AI 解读（Prompt 文案）</div>
-                <p className="form-hint" style={{ marginBottom: 10 }}>深度解析词汇在不同语境下用法差异的 prompt 配置</p>
+                <p className="form-hint" style={{ marginBottom: 10 }}>学习报告解读的 prompt 配置</p>
                 <textarea
                   className="form-input"
                   style={{ minHeight: 200 }}
@@ -767,7 +680,6 @@ export function AiRoles() {
           <div className="card-footer" style={{ borderTop: '1px solid var(--border)', padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" className="btn btn-primary" onClick={() => saveForm(false)}>💾 保存配置</button>
             <button type="button" className="btn btn-secondary" onClick={() => saveForm(true)}>发布更新</button>
-            {editingId && <button type="button" className="btn btn-danger ml-auto" onClick={() => deleteRole(editingId)}>删除角色</button>}
           </div>
         </div>
 
