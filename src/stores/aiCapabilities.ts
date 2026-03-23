@@ -28,6 +28,7 @@ export type AiCapability = {
   aiScoreDimension: ScoreDimension;
   aiScoreDescByDimension: Record<ScoreDimension, Record<LangKey, string>>;
   status: '启用' | '停用';
+  createdAt?: string;
   updatedAt: string;
 };
 
@@ -80,6 +81,7 @@ export const DEFAULT_AI_CAPABILITIES: AiCapability[] = [
       pronunciation: { ...EMPTY_LANG_MAP, CN: '重点给出声调、音节准确度建议', EN: 'Focus on tones and syllable accuracy.' },
     },
     status: '启用',
+    createdAt: '2026-03-05 10:20',
     updatedAt: '2026-03-05 10:20',
   },
   {
@@ -103,6 +105,7 @@ export const DEFAULT_AI_CAPABILITIES: AiCapability[] = [
       fluency: { ...EMPTY_LANG_MAP, CN: '重点反馈停顿、语流和连贯度', EN: 'Focus on pauses, speech flow and coherence.' },
     },
     status: '启用',
+    createdAt: '2026-03-05 10:20',
     updatedAt: '2026-03-05 10:20',
   },
   {
@@ -126,6 +129,7 @@ export const DEFAULT_AI_CAPABILITIES: AiCapability[] = [
       accuracy: { ...EMPTY_LANG_MAP, CN: '重点反馈词法和句法准确性', EN: 'Focus on lexical and grammatical accuracy.' },
     },
     status: '停用',
+    createdAt: '2026-03-05 10:20',
     updatedAt: '2026-03-05 10:20',
   },
 ];
@@ -194,7 +198,8 @@ function normalizeAiCapability(input: unknown): AiCapability | null {
     aiScoreDimension: scoreDimension,
     aiScoreDescByDimension: scoreMap,
     status: row.status === '停用' ? '停用' : '启用',
-    updatedAt: row.updatedAt ?? '',
+    createdAt: row.createdAt ?? row.updatedAt ?? '',
+    updatedAt: row.updatedAt ?? row.createdAt ?? '',
   };
 }
 

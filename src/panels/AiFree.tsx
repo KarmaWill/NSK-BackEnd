@@ -26,6 +26,7 @@ type FreeConfig = {
   /** 选中的 AI 角色 ID（来自 AI 角色配置） */
   aiRoleId?: string;
   usageScene: string;
+  level: '初级' | '中级' | '高级';
   themeNameByLang: Record<LangKey, string>;
   themeCategory: string;
   topicBackground: string;
@@ -58,6 +59,7 @@ type FreeConfig = {
   scoreFeedbackByBand: Record<ScoreBand, Record<LangKey, string>>;
   finalEvalPrompt: string;
   status: 'published' | 'draft';
+  createdAt?: string;
   updated: string;
 };
 
@@ -121,6 +123,7 @@ const seedConfigs: FreeConfig[] = [
     icon: '💬',
     aiName: 'AI 自由对话老师 Lin',
     usageScene: '自由对话训练',
+    level: '初级',
     themeNameByLang: createEmptyLangMap('日常自由对话', 'Daily Free Talk'),
     themeCategory: '生活口语',
     topicBackground: '日常沟通',
@@ -145,12 +148,14 @@ const seedConfigs: FreeConfig[] = [
     scoreFeedbackByBand: createEmptyBandMap(),
     finalEvalPrompt: '基于整段对话，按维度给出总评、分数和改进建议，输出支持多语言。',
     status: 'published',
+    createdAt: '2026-03-01',
     updated: '2026-03-01',
   },
   {
     icon: '🧑‍💼',
     aiName: 'AI 商务会话教练',
     usageScene: '商务场景自由对话',
+    level: '中级',
     themeNameByLang: createEmptyLangMap('职场沟通进阶', 'Business Conversation'),
     themeCategory: '商务口语',
     topicBackground: '面试与会议',
@@ -175,12 +180,14 @@ const seedConfigs: FreeConfig[] = [
     scoreFeedbackByBand: createEmptyBandMap(),
     finalEvalPrompt: '综合评估用户在商务表达中的逻辑、礼貌和准确性，并输出下一步训练建议。',
     status: 'published',
+    createdAt: '2026-02-18',
     updated: '2026-02-18',
   },
   {
     icon: '🌍',
     aiName: 'AI 文化交流助手',
     usageScene: '文化主题自由对话',
+    level: '高级',
     themeNameByLang: createEmptyLangMap('文化交流对话', 'Culture Talk'),
     themeCategory: '文化口语',
     topicBackground: '节日与习俗',
@@ -205,6 +212,7 @@ const seedConfigs: FreeConfig[] = [
     scoreFeedbackByBand: createEmptyBandMap(),
     finalEvalPrompt: '从跨文化理解与表达清晰度角度做总评，并给出后续可练习话题。',
     status: 'draft',
+    createdAt: '2026-02-28',
     updated: '2026-02-28',
   },
 ];
@@ -293,6 +301,7 @@ export function AiFree() {
       aiName: '',
       aiRoleId: '',
       usageScene: '',
+      level: '初级',
       themeNameByLang: createEmptyLangMap(),
       themeCategory: '生活口语',
       topicBackground: '日常沟通',
@@ -317,6 +326,7 @@ export function AiFree() {
       scoreFeedbackByBand: createEmptyBandMap(),
       finalEvalPrompt: '',
       status: 'draft',
+      createdAt: '',
       updated: '',
     });
     setModalOpen(true);
@@ -352,7 +362,8 @@ export function AiFree() {
     const roleA = (form.roleAByLang?.CN ?? form.roleA).trim() || form.roleA;
     const roleB = (form.roleBByLang?.CN ?? form.roleB).trim() || form.roleB;
       const shortBackgroundDesc = ((form.shortBackgroundDescByLang?.CN ?? form.shortBackgroundDesc ?? '').trim() || form.shortBackgroundDesc) ?? '';
-    const payload = { ...form, aiName: name, topicDesc: form.topicDescByLang?.CN ?? form.topicDesc ?? '', roleA, roleB, shortBackgroundDesc, updated: formatDate() };
+    const now = formatDate();
+    const payload = { ...form, aiName: name, topicDesc: form.topicDescByLang?.CN ?? form.topicDesc ?? '', roleA, roleB, shortBackgroundDesc, createdAt: form.createdAt || now, updated: now };
     if (editingIndex === null) {
       setRows((prev) => [payload, ...prev]);
     } else {
@@ -418,8 +429,10 @@ export function AiFree() {
               <th>AI 名称 / 主题</th>
               <th>主题分类</th>
               <th>人物关系</th>
+              <th>难度</th>
               <th>轮数限制</th>
               <th>状态</th>
+              <th>创建时间</th>
               <th>最后更新</th>
               <th>操作</th>
             </tr>
@@ -434,8 +447,10 @@ export function AiFree() {
                 </td>
                 <td><span className="badge badge-muted">{labelsForCategory(categoryLabels, row.themeCategory).CN || row.themeCategory}</span></td>
                 <td style={{ fontSize: 12 }}>{row.roleA} / {row.roleB}</td>
+                <td><span className="badge">{row.level}</span></td>
                 <td><span className="td-mono" style={{ fontSize: 12 }}>{row.turnLimit} 轮</span></td>
                 <td><span className={`status-dot ${row.status === 'published' ? 'published' : 'draft'}`}>{row.status === 'published' ? '已上线' : '草稿'}</span></td>
+                <td className="td-mono" style={{ fontSize: 11 }}>{row.createdAt || row.updated || '—'}</td>
                 <td className="td-mono" style={{ fontSize: 11 }}>{row.updated}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -470,6 +485,22 @@ export function AiFree() {
               </div>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">难度选择（用于语音测评连调）</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                {(['初级', '中级', '高级'] as const).map((lv) => (
+                  <button
+                    key={lv}
+                    type="button"
+                    className={`btn btn-sm ${form.level === lv ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setForm((p) => ({ ...p, level: lv }))}
+                  >
+                    {lv}
+                  </button>
+                ))}
+              </div>
+              <div className="form-hint" style={{ marginBottom: 2 }}>当前难度：{form.level}</div>
+            </div>
             <div className="form-group">
               <label className="form-label">主题名称（多语言，≤10 字）</label>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>

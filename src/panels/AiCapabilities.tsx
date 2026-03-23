@@ -99,6 +99,7 @@ export function AiCapabilities() {
   const [rows, setRows] = useState<AiCapability[]>(() => loadAiCapabilities());
   const [keyword, setKeyword] = useState('');
   const [editing, setEditing] = useState<AiCapability | null>(null);
+  const [editingOriginAiId, setEditingOriginAiId] = useState<string | null>(null);
   const [themeLangTab, setThemeLangTab] = useState<LangKey>('CN');
   const [shortDescLang, setShortDescLang] = useState<LangKey>('CN');
   const [roleLang, setRoleLang] = useState<LangKey>('CN');
@@ -150,8 +151,10 @@ export function AiCapabilities() {
     key === 'CN' ? (active ? { background: '#8a1c2b', borderColor: '#8a1c2b', color: '#fff' } : { background: '#fff5f5', borderColor: '#8a1c2b', color: '#8a1c2b' }) : undefined;
 
   const openNew = () => {
+    const suggestedAiId = `AI-${Date.now()}`;
+    setEditingOriginAiId(null);
     setEditing({
-      aiId: `AI-${Date.now()}`,
+      aiId: suggestedAiId,
       levelId: '1',
       unitId: 'N10100',
       aiRoleId: '',
@@ -177,6 +180,7 @@ export function AiCapabilities() {
       aiScoreDimension: 'pronunciation',
       aiScoreDescByDimension: emptyScoreDesc(),
       status: '启用',
+      createdAt: formatNow(),
       updatedAt: formatNow(),
     });
     setCategoryOptions(DEFAULT_CATEGORY_OPTIONS);
@@ -190,12 +194,26 @@ export function AiCapabilities() {
     if (!editing || !editing.aiId.trim() || !(editing.themeNameByLang.CN || editing.themeNameByLang.EN).trim()) return;
     const roleA = editing.roleAByLang?.CN ?? editing.roleA;
     const roleB = editing.roleBByLang?.CN ?? editing.roleB;
-    const toSave = { ...editing, updatedAt: formatNow(), shortBackgroundDesc: editing.shortBackgroundDescByLang?.CN ?? editing.shortBackgroundDesc, roleA, roleB };
-    const next = rows.some((r) => r.aiId === editing.aiId)
-      ? rows.map((r) => (r.aiId === editing.aiId ? toSave : r))
-      : [toSave, ...rows];
+    const nextAiId = editing.aiId.trim();
+    const now = formatNow();
+    const toSave = {
+      ...editing,
+      aiId: nextAiId,
+      createdAt: editing.createdAt || now,
+      updatedAt: now,
+      shortBackgroundDesc: editing.shortBackgroundDescByLang?.CN ?? editing.shortBackgroundDesc,
+      roleA,
+      roleB,
+    };
+    const hasOrigin = !!editingOriginAiId && rows.some((r) => r.aiId === editingOriginAiId);
+    const next = hasOrigin
+      ? rows.map((r) => (r.aiId === editingOriginAiId ? toSave : r))
+      : rows.some((r) => r.aiId === nextAiId)
+        ? rows.map((r) => (r.aiId === nextAiId ? toSave : r))
+        : [toSave, ...rows];
     setRows(next);
     saveAiCapabilities(next);
+    setEditingOriginAiId(null);
     setEditing(null);
   };
 
@@ -231,10 +249,10 @@ export function AiCapabilities() {
             <tr>
               <th>AI资源ID</th>
               <th>主题（中文）</th>
-              <th>Level/Unit</th>
               <th>主题分类</th>
-              <th>评分维度</th>
+              <th>难度</th>
               <th>状态</th>
+              <th>创建时间</th>
               <th>更新时间</th>
               <th>操作</th>
             </tr>
@@ -244,13 +262,13 @@ export function AiCapabilities() {
               <tr key={r.aiId}>
                 <td className="td-mono">{r.aiId}</td>
                 <td>{r.themeNameByLang.CN || r.themeNameByLang.EN || '—'}</td>
-                <td className="td-mono">{`Level ${r.levelId} / ${r.unitId}`}</td>
                 <td>{r.themeCategory ? labelsForCategory(categoryLabels, r.themeCategory).CN || r.themeCategory : '—'}</td>
-                <td>{scoreDimensionLabel(r.aiScoreDimension)}</td>
+                <td>{r.levelId === '1' ? '初级' : r.levelId === '2' ? '中级' : '高级'}</td>
                 <td>{r.status === '启用' ? <span className="badge badge-teal">启用</span> : <span className="badge badge-muted">停用</span>}</td>
+                <td className="td-mono" style={{ fontSize: 12 }}>{r.createdAt || r.updatedAt || '—'}</td>
                 <td className="td-mono" style={{ fontSize: 12 }}>{r.updatedAt}</td>
                 <td>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(r)}>编辑</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEditingOriginAiId(r.aiId); setEditing(r); }}>编辑</button>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => removeOne(r.aiId)}>删除</button>
                 </td>
               </tr>
@@ -264,11 +282,11 @@ export function AiCapabilities() {
         </table>
       </div>
 
-      <div className={`modal-overlay ${editing ? 'open' : ''}`} onClick={() => setEditing(null)} role="dialog" aria-modal="true" aria-label="课程AI配置编辑">
+      <div className={`modal-overlay ${editing ? 'open' : ''}`} onClick={() => { setEditingOriginAiId(null); setEditing(null); }} role="dialog" aria-modal="true" aria-label="课程AI配置编辑">
         <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1040 }}>
           <div className="modal-header">
             <div className="modal-title">课程AI配置</div>
-            <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="关闭">✕</button>
+            <button type="button" className="modal-close" onClick={() => { setEditingOriginAiId(null); setEditing(null); }} aria-label="关闭">✕</button>
           </div>
           {editing && (
             <>
@@ -276,6 +294,9 @@ export function AiCapabilities() {
                 <div className="section-title">基础信息</div>
                 <div className="form-row">
                   <div className="form-group">
+                    <label className="form-label">AI资源ID</label>
+                    <input className="form-input td-mono" value={editing.aiId} onChange={(e) => setEditing((p) => (p ? { ...p, aiId: e.target.value } : p))} placeholder="建议格式：AI-时间戳 或 AI-课程-场景-序号" style={{ marginBottom: 4 }} />
+                    <div className="form-hint" style={{ marginBottom: 10 }}>可手动编辑；新建时已提供推荐ID</div>
                     <label className="form-label">AI 选型</label>
                     <select className="form-input form-select" value={editing.aiRoleId ?? ''} onChange={(e) => setEditing((p) => (p ? { ...p, aiRoleId: e.target.value || undefined } : p))}>
                       <option value="">请选择已配置的 AI 角色</option>
@@ -283,6 +304,27 @@ export function AiCapabilities() {
                     </select>
                     <div className="form-hint" style={{ marginTop: 4 }}>来自「AI 角色配置」中新建的角色</div>
                   </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">难度选择（用于语音测评连调）</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                    {[
+                      { key: '1', label: '初级' },
+                      { key: '2', label: '中级' },
+                      { key: '3', label: '高级' },
+                    ].map((o) => (
+                      <button
+                        key={o.key}
+                        type="button"
+                        className={`btn btn-sm ${editing.levelId === o.key ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setEditing((p) => (p ? { ...p, levelId: o.key } : p))}
+                        style={editing.levelId === o.key && o.key === '1' ? { background: '#8a1c2b', borderColor: '#8a1c2b', color: '#fff' } : undefined}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="form-hint" style={{ marginBottom: 2 }}>当前难度：{editing.levelId === '1' ? '初级' : editing.levelId === '2' ? '中级' : '高级'}</div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">主题名称（多语言，≤10 字）</label>
@@ -536,7 +578,7 @@ export function AiCapabilities() {
 
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)}>取消</button>
+                <button type="button" className="btn btn-ghost" onClick={() => { setEditingOriginAiId(null); setEditing(null); }}>取消</button>
                 <button type="button" className="btn btn-primary" onClick={saveOne}>保存</button>
               </div>
             </>
@@ -569,12 +611,5 @@ export function AiCapabilities() {
       </div>
     </>
   );
-}
-
-function scoreDimensionLabel(dim: ScoreDimension) {
-  if (dim === 'fluency') return '流利度';
-  if (dim === 'accuracy') return '表达准确度';
-  if (dim === 'completeness') return '目标完成度';
-  return '发音准确度';
 }
 

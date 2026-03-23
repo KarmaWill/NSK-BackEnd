@@ -66,6 +66,7 @@ type SceneConfig = {
   scoreFeedbackByBand: Record<ScoreBand, Record<LangKey, string>>;
   finalEvalPrompt: string;
   status: 'published' | 'draft';
+  createdAt?: string;
   updated: string;
 };
 
@@ -163,12 +164,14 @@ const buildFromTemplate = (tpl: SceneTemplate): SceneConfig => ({
   scoreFeedbackByBand: createEmptyBandMap(),
   finalEvalPrompt: '请基于本次场景训练输出总评、分项评分、错误要点和复练建议。',
   status: 'published',
+  createdAt: '2026-03-01',
   updated: '2026-03-01',
 });
 
 const seedRows: SceneConfig[] = SCENE_TEMPLATES.map((tpl, idx) => ({
   ...buildFromTemplate(tpl),
   status: idx === 1 ? 'draft' : 'published',
+  createdAt: idx === 0 ? '2026-03-01' : idx === 1 ? '2026-02-20' : '2026-02-15',
   updated: idx === 0 ? '2026-03-01' : idx === 1 ? '2026-02-20' : '2026-02-15',
 }));
 
@@ -221,7 +224,7 @@ export function AiScene() {
     setShortDescLang('CN');
     setRoleLang('CN');
     setRoleTaskLang('CN');
-    setForm({ ...base, status: 'draft', updated: '' });
+    setForm({ ...base, status: 'draft', createdAt: '', updated: '' });
     setModalOpen(true);
   };
 
@@ -247,7 +250,8 @@ export function AiScene() {
     if ((!form.aiRoleId && !form.aiName.trim()) || !form.themeNameByLang.CN.trim()) return;
     const roleA = (form.roleAByLang?.CN ?? form.roleA).trim() || form.roleA;
     const roleB = (form.roleBByLang?.CN ?? form.roleB).trim() || form.roleB;
-    const payload = { ...form, aiName: form.aiRoleId ? name : form.aiName, roleA, roleB, updated: formatDate() };
+    const now = formatDate();
+    const payload = { ...form, aiName: form.aiRoleId ? name : form.aiName, roleA, roleB, createdAt: form.createdAt || now, updated: now };
     if (editingIndex === null) setRows((prev) => [payload, ...prev]);
     else setRows((prev) => prev.map((r, i) => (i === editingIndex ? payload : r)));
     setModalOpen(false);
@@ -315,7 +319,7 @@ export function AiScene() {
             </div>
             <div className="scene-meta"><span>👤 {(row.roleAByLang?.CN ?? row.roleA) || 'A'} vs {(row.roleBByLang?.CN ?? row.roleB) || 'B'}</span><span>🔄 {row.turnLimit}轮</span></div>
             <div className="scene-footer">
-              <span className="td-mono" style={{ fontSize: 10.5 }}>更新 {row.updated}</span>
+              <span className="td-mono" style={{ fontSize: 10.5 }}>创建 {row.createdAt || row.updated} · 更新 {row.updated}</span>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); openEdit(idx); }}>编辑配置 →</button>
                 {row.status === 'published'
@@ -346,6 +350,22 @@ export function AiScene() {
               </div>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">难度选择（用于语音测评连调）</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                {(['初级', '中级', '高级'] as const).map((lv) => (
+                  <button
+                    key={lv}
+                    type="button"
+                    className={`btn btn-sm ${form.level === lv ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setForm((p) => ({ ...p, level: lv }))}
+                  >
+                    {lv}
+                  </button>
+                ))}
+              </div>
+              <div className="form-hint" style={{ marginBottom: 2 }}>当前难度：{form.level}</div>
+            </div>
             <div className="form-group">
               <label className="form-label">主题名称（多语言，≤10 字）</label>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>

@@ -149,7 +149,6 @@ export function Questions() {
   const [rows, setRows] = useState<QuestionRow[]>(() => applyQuestionListOverrides(defaultRows));
   const [refreshing, setRefreshing] = useState(false);
   const [toastText, setToastText] = useState('');
-  const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<QuestionRow | null>(null);
@@ -225,8 +224,25 @@ export function Questions() {
   };
 
   const openAdd = () => {
-    setEditingQuestion(null);
-    setQuestionModalOpen(true);
+    const now = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    const nowText = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
+    setEditingQuestion({
+      no: String(rows.length + 1).padStart(3, '0'),
+      dirId: cfgLessonId || 'N10101',
+      typeName: '听音选图',
+      typeCode: 'T00_LISTEN_SELECT_IMAGE',
+      resId: `M0${String(300000 + rows.length + 1)}`,
+      diff: '★',
+      knowledge: '',
+      enabled: true,
+      createdAt: nowText,
+      updatedAt: nowText,
+    });
+    setPreviewType('T00');
+    setCfgEnabled(true);
+    setCfgErrors({});
+    setConfigModalOpen(true);
   };
   const openConfig = (row: QuestionRow) => {
     setEditingQuestion(row);
@@ -445,71 +461,6 @@ export function Questions() {
           <button type="button" className="page-btn">‹</button>
           <button type="button" className="page-btn active">1</button>
           <button type="button" className="page-btn">›</button>
-        </div>
-      </div>
-
-      {/* 新增/编辑题目 — 按副本 modal-add-question */}
-      <div className={`modal-overlay ${questionModalOpen ? 'open' : ''}`} onClick={() => setQuestionModalOpen(false)} role="dialog" aria-modal="true" aria-label={editingQuestion ? '编辑题目' : '新增题目'}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <div className="modal-title">{editingQuestion ? '编辑题目' : '新增题目'}</div>
-            <button type="button" className="modal-close" onClick={() => setQuestionModalOpen(false)} aria-label="关闭">✕</button>
-          </div>
-          <div className="modal-body">
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">所属目录 <span>*</span></label>
-                <select className="form-input form-select" defaultValue={editingQuestion?.dirId}>
-                  <option>N10101 · 米饭</option>
-                  <option>N10102 · 饺子</option>
-                  <option>N10201 · 水</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">资源ID</label>
-                <input className="form-input" placeholder="M0300xxx" defaultValue={editingQuestion?.resId} style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }} />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">选择题型 <span>*</span></label>
-              <div className="q-type-grid">
-                <div className="q-type-card selected"><div className="q-type-code">T00</div><div className="q-type-name">听音选图</div><div className="q-type-stars">★</div></div>
-                <div className="q-type-card"><div className="q-type-code">T01</div><div className="q-type-name">汉字填空</div><div className="q-type-stars">★</div></div>
-                <div className="q-type-card"><div className="q-type-code">T02</div><div className="q-type-name">词意选择1</div><div className="q-type-stars">★★</div></div>
-                <div className="q-type-card"><div className="q-type-code">T03</div><div className="q-type-name">听力选择</div><div className="q-type-stars">★★</div></div>
-                <div className="q-type-card"><div className="q-type-code">T05</div><div className="q-type-name">语义选择</div><div className="q-type-stars">★★</div></div>
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">音频文件（题干）</label>
-              <div style={{ display: 'flex', gap: 7 }}>
-                <input className="form-input" placeholder="T100001.mp3" style={{ fontFamily: 'JetBrains Mono', fontSize: 12, flex: 1 }} />
-                <button type="button" className="btn btn-secondary btn-sm">上传</button>
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">难度</label>
-                <select className="form-input form-select" defaultValue={editingQuestion?.diff || '★'}>
-                  <option>★ 一星</option>
-                  <option>★★ 二星</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">知识点</label>
-                <input className="form-input" defaultValue={editingQuestion?.knowledge ?? '米饭'} />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">解析（选填）</label>
-              <textarea className="form-input" defaultValue="音频播放的是&quot;米饭&quot;(mǐfàn)，米饭是煮熟的大米。" />
-            </div>
-          </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-ghost" onClick={() => { setQuestionModalOpen(false); setConfigModalOpen(true); }}>平板预览</button>
-            <button type="button" className="btn btn-ghost" onClick={() => setQuestionModalOpen(false)}>取消</button>
-            <button type="button" className="btn btn-primary" onClick={() => setQuestionModalOpen(false)}>保存草稿</button>
-          </div>
         </div>
       </div>
 

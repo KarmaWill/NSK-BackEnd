@@ -385,7 +385,6 @@ export function Resources() {
         <div className="table-top">
           <span className="table-count">共 {filteredResources.length} 条</span>
           <span style={{ flex: 1 }} />
-          <button type="button" className="btn btn-secondary btn-sm">导出</button>
         </div>
         <table>
           <thead>

@@ -210,7 +210,6 @@ export function MediaLib() {
             刷新
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => uploadInputRef.current?.click()}>上传文件</button>
-          <button type="button" className="btn btn-primary" onClick={() => uploadInputRef.current?.click()}>新建文件夹</button>
         </div>
       </div>
 
