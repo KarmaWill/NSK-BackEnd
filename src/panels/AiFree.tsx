@@ -440,7 +440,16 @@ export function AiFree() {
           <tbody>
             {rows.map((row, idx) => (
               <tr key={`${row.aiName}-${idx}`} style={row.status === 'draft' ? { opacity: 0.72 } : undefined}>
-                <td style={{ textAlign: 'center', fontSize: 18 }}>{row.icon}</td>
+                <td style={{ textAlign: 'center', fontSize: 18 }}>
+                  {((row.userPickRole === 'A' ? row.roleBAvatarUrl : row.roleAAvatarUrl) ? (
+                    <img
+                      src={(row.userPickRole === 'A' ? row.roleBAvatarUrl : row.roleAAvatarUrl) as string}
+                      alt=""
+                      style={{ width: 28, height: 28, borderRadius: 8, objectFit: 'cover', display: 'inline-block' }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  ) : row.icon)}
+                </td>
                 <td>
                   <div style={{ fontWeight: 500, fontSize: 13 }}>{row.aiName || '—'}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink-light)', marginTop: 2 }}>{row.themeNameByLang.CN || '未配置主题'}</div>
@@ -482,6 +491,36 @@ export function AiFree() {
                   {aiRoleOptions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
                 <div className="form-hint" style={{ marginTop: 4 }}>来自「AI 角色配置」中新建的角色</div>
+              </div>
+              <div style={{ border: '1px solid var(--stone-dark)', borderRadius: 12, background: 'var(--white)', padding: 14, minWidth: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>头像配置</div>
+                <p className="form-hint" style={{ marginTop: 0, marginBottom: 10 }}>从资源库选择头像图片；点击更换可重新选择</p>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ width: 64, height: 64, background: 'var(--mist)', borderRadius: 10, border: '1px solid var(--stone-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {(form.userPickRole === 'A' ? form.roleBAvatarUrl : form.roleAAvatarUrl) ? (
+                      <img
+                        src={(form.userPickRole === 'A' ? form.roleBAvatarUrl : form.roleAAvatarUrl) as string}
+                        alt=""
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: '1.5rem' }}>{form.icon}</span>
+                    )}
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { setAvatarPickerFor(form.userPickRole === 'A' ? 'B' : 'A'); setAvatarKeyword(''); }}
+                    >
+                      更换
+                    </button>
+                    <div className="form-hint" style={{ marginTop: 4 }}>
+                      前端展示Emoji标签
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
