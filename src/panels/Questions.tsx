@@ -441,7 +441,7 @@ export function Questions() {
                 <td className="td-mono" style={{ fontSize: 12 }}>{row.createdAt}</td>
                 <td className="td-mono" style={{ fontSize: 12 }}>{row.updatedAt}</td>
                 <td>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => openConfig(row)}>配置</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => openConfig(row)}>编辑</button>
                   {' '}
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleteConfirmIndex(rows.findIndex((r) => r.resId === row.resId))} style={{ color: 'var(--rose)' }}>删除</button>
                 </td>

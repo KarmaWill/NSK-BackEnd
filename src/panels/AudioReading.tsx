@@ -327,7 +327,7 @@ export function AudioReading() {
             <span className={`spin-icon ${refreshing ? 'spinning' : ''}`}>↻</span>
             刷新
           </button>
-          <button type="button" className="btn btn-secondary">导入配置</button>
+          <button type="button" className="btn btn-secondary">导入</button>
           <button type="button" className="btn btn-primary" onClick={addLine}>+ 新增文章</button>
         </div>
       </div>
@@ -356,8 +356,7 @@ export function AudioReading() {
               <th>级别</th>
               <th>单元名称</th>
               <th>名称(中文)</th>
-              <th>名称(英语)</th>
-              <th>句子音频映射</th>
+              <th>句子音频映射（包含句子数量）</th>
               <th>状态</th>
               <th>创建时间</th>
               <th>更新时间</th>
@@ -372,13 +371,12 @@ export function AudioReading() {
                 <td>{r.level}</td>
                 <td>{r.unitName}</td>
                 <td>{r.nameByLang.CN ?? '—'}</td>
-                <td>{r.nameByLang.EN ?? '—'}</td>
                 <td className="td-mono">{r.segments.filter((s) => s.audioId).length}/{r.segments.length}</td>
                 <td>{r.enabled ? '已启用' : '已停用'}</td>
                 <td className="td-mono">{r.createdAt}</td>
                 <td className="td-mono">{r.updatedAt}</td>
                 <td>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingId(r.id)}>配置</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingId(r.id)}>编辑</button>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => deleteRow(r.id)}>删除</button>
                 </td>
               </tr>
@@ -390,7 +388,7 @@ export function AudioReading() {
       <div className={`modal-overlay ${editing ? 'open' : ''}`} onClick={() => setEditingId(null)} role="dialog" aria-modal="true" aria-label="配置有声阅读">
         <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
           <div className="modal-header">
-            <div className="modal-title">配置有声阅读文章</div>
+            <div className="modal-title">编辑有声阅读文章</div>
             <button type="button" className="modal-close" onClick={() => setEditingId(null)} aria-label="关闭">✕</button>
           </div>
           {editing && (
