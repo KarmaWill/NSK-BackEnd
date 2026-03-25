@@ -39,6 +39,8 @@ type SceneConfig = {
   aiRoleId?: string;
   usageScene: string;
   level: '初级' | '中级' | '高级';
+  /** 补充展示文案（多语言），每语言最长 80 字，用于语音测评连调等 */
+  copyTextByLang?: Record<LangKey, string>;
   themeNameByLang: Record<LangKey, string>;
   themeCategory: string;
   topicBackground: string;
@@ -79,6 +81,8 @@ const LANG_OPTIONS: Array<{ key: LangKey; label: string }> = [
 const createEmptyLangMap = (cn = '', en = ''): Record<LangKey, string> => ({
   CN: cn, EN: en, ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '',
 });
+
+const COPY_TEXT_MAX_LEN = 80;
 
 const createEmptyBandMap = (): Record<ScoreBand, Record<LangKey, string>> => ({
   low: createEmptyLangMap('基础待加强，请先稳定句型与发音。', 'Need stronger basics in pronunciation and sentence patterns.'),
@@ -140,6 +144,7 @@ const buildFromTemplate = (tpl: SceneTemplate): SceneConfig => ({
   aiRoleId: '',
   usageScene: '场景训练（可控性训练）',
   level: tpl.level,
+  copyTextByLang: createEmptyLangMap(),
   themeNameByLang: createEmptyLangMap(tpl.cn, tpl.en),
   themeCategory: tpl.category,
   topicBackground: tpl.background,
@@ -188,6 +193,7 @@ export function AiScene() {
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
   const [themeLang, setThemeLang] = useState<LangKey>('CN');
   const [shortDescLang, setShortDescLang] = useState<LangKey>('CN');
+  const [copyTextLang, setCopyTextLang] = useState<LangKey>('CN');
   const [roleLang, setRoleLang] = useState<LangKey>('CN');
   const [roleTaskLang, setRoleTaskLang] = useState<LangKey>('CN');
   const [form, setForm] = useState<SceneConfig>(seedRows[0]);
@@ -222,6 +228,7 @@ export function AiScene() {
     setEditingIndex(null);
     setThemeLang('CN');
     setShortDescLang('CN');
+    setCopyTextLang('CN');
     setRoleLang('CN');
     setRoleTaskLang('CN');
     setForm({ ...base, status: 'draft', createdAt: '', updated: '' });
@@ -232,6 +239,7 @@ export function AiScene() {
     setEditingIndex(idx);
     setThemeLang('CN');
     setShortDescLang('CN');
+    setCopyTextLang('CN');
     setRoleLang('CN');
     setRoleTaskLang('CN');
     const row = rows[idx];
@@ -241,7 +249,8 @@ export function AiScene() {
     const roleBByLang = row.roleBByLang ?? createEmptyLangMap(row.roleB ?? '', '');
     const roleATaskByLang = row.roleATaskByLang ?? createEmptyLangMap();
     const roleBTaskByLang = row.roleBTaskByLang ?? createEmptyLangMap();
-    setForm({ ...row, topicDescByLang, shortBackgroundDescByLang, roleAByLang, roleBByLang, roleATaskByLang, roleBTaskByLang });
+    const copyTextByLang = row.copyTextByLang ?? createEmptyLangMap();
+    setForm({ ...row, copyTextByLang, topicDescByLang, shortBackgroundDescByLang, roleAByLang, roleBByLang, roleATaskByLang, roleBTaskByLang });
     setModalOpen(true);
   };
 
@@ -393,6 +402,54 @@ export function AiScene() {
                 ))}
               </div>
               <div className="form-hint" style={{ marginBottom: 2 }}>当前难度：{form.level}</div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">补充文案（多语言，≤{COPY_TEXT_MAX_LEN} 字，语音测评连调/展示用）</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {LANG_OPTIONS.map((o) => (
+                    <button key={o.key} type="button" className={`btn btn-sm ${copyTextLang === o.key ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCopyTextLang(o.key)} style={langBtnStyle(o.key, copyTextLang === o.key)}>{o.key}</button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() =>
+                    setForm((p) => {
+                      const cur = p.copyTextByLang ?? createEmptyLangMap();
+                      return {
+                        ...p,
+                        copyTextByLang: {
+                          ...cur,
+                          ...Object.fromEntries(
+                            LANG_OPTIONS.map((o) => o.key)
+                              .filter((k) => k !== 'CN')
+                              .map((k) => [k, (cur.CN || cur[k]) || '']),
+                          ) as Record<LangKey, string>,
+                        },
+                      };
+                    })
+                  }
+                >
+                  自动翻译
+                </button>
+              </div>
+              <textarea
+                className="form-input"
+                rows={3}
+                maxLength={COPY_TEXT_MAX_LEN}
+                value={(form.copyTextByLang ?? createEmptyLangMap())[copyTextLang]}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    copyTextByLang: { ...(p.copyTextByLang ?? createEmptyLangMap()), [copyTextLang]: e.target.value.slice(0, COPY_TEXT_MAX_LEN) },
+                  }))
+                }
+                placeholder="按当前语言填写展示或连调说明（如测评提示、场景导语等）"
+                style={{ resize: 'vertical', minHeight: 72 }}
+              />
+              <div className="form-hint" style={{ marginTop: 4 }}>{((form.copyTextByLang ?? createEmptyLangMap())[copyTextLang] ?? '').length}/{COPY_TEXT_MAX_LEN}</div>
             </div>
             <div className="form-group">
               <label className="form-label">主题名称（多语言，≤10 字）</label>

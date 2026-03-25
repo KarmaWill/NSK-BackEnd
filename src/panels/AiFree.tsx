@@ -27,6 +27,8 @@ type FreeConfig = {
   aiRoleId?: string;
   usageScene: string;
   level: '初级' | '中级' | '高级';
+  /** 补充展示文案（多语言），每语言最长 80 字，用于语音测评连调等 */
+  copyTextByLang?: Record<LangKey, string>;
   themeNameByLang: Record<LangKey, string>;
   themeCategory: string;
   topicBackground: string;
@@ -78,6 +80,8 @@ const LANG_OPTIONS: Array<{ key: LangKey; label: string }> = [
   { key: 'KM', label: '高棉语' },
 ];
 
+const COPY_TEXT_MAX_LEN = 80;
+
 const createEmptyLangMap = (cn = '', en = ''): Record<LangKey, string> => ({
   CN: cn, EN: en, ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '',
 });
@@ -124,6 +128,7 @@ const seedConfigs: FreeConfig[] = [
     aiName: 'AI 自由对话老师 Lin',
     usageScene: '自由对话训练',
     level: '初级',
+    copyTextByLang: createEmptyLangMap(),
     themeNameByLang: createEmptyLangMap('日常自由对话', 'Daily Free Talk'),
     themeCategory: '生活口语',
     topicBackground: '日常沟通',
@@ -156,6 +161,7 @@ const seedConfigs: FreeConfig[] = [
     aiName: 'AI 商务会话教练',
     usageScene: '商务场景自由对话',
     level: '中级',
+    copyTextByLang: createEmptyLangMap(),
     themeNameByLang: createEmptyLangMap('职场沟通进阶', 'Business Conversation'),
     themeCategory: '商务口语',
     topicBackground: '面试与会议',
@@ -188,6 +194,7 @@ const seedConfigs: FreeConfig[] = [
     aiName: 'AI 文化交流助手',
     usageScene: '文化主题自由对话',
     level: '高级',
+    copyTextByLang: createEmptyLangMap(),
     themeNameByLang: createEmptyLangMap('文化交流对话', 'Culture Talk'),
     themeCategory: '文化口语',
     topicBackground: '节日与习俗',
@@ -240,6 +247,7 @@ export function AiFree() {
   const [themeLang, setThemeLang] = useState<LangKey>('CN');
   const [, setTopicDescLang] = useState<LangKey>('CN');
   const [shortDescLang, setShortDescLang] = useState<LangKey>('CN');
+  const [copyTextLang, setCopyTextLang] = useState<LangKey>('CN');
   const [roleLang, setRoleLang] = useState<LangKey>('CN');
   const [roleTaskLang, setRoleTaskLang] = useState<LangKey>('CN');
   const [, setFeedbackLang] = useState<LangKey>('CN');
@@ -290,6 +298,7 @@ export function AiFree() {
     setThemeLang('CN');
     setTopicDescLang('CN');
     setShortDescLang('CN');
+    setCopyTextLang('CN');
     setRoleLang('CN');
     setRoleTaskLang('CN');
     setFeedbackLang('CN');
@@ -302,6 +311,7 @@ export function AiFree() {
       aiRoleId: '',
       usageScene: '',
       level: '初级',
+      copyTextByLang: createEmptyLangMap(),
       themeNameByLang: createEmptyLangMap(),
       themeCategory: '生活口语',
       topicBackground: '日常沟通',
@@ -337,6 +347,7 @@ export function AiFree() {
     setThemeLang('CN');
     setTopicDescLang('CN');
     setShortDescLang('CN');
+    setCopyTextLang('CN');
     setRoleLang('CN');
     setRoleTaskLang('CN');
     setFeedbackLang('CN');
@@ -352,7 +363,8 @@ export function AiFree() {
     const roleBTaskByLang = row.roleBTaskByLang ?? createEmptyLangMap();
     const roles = loadAiRoleOptions();
     const matchedRole = row.aiRoleId ? roles.find((r) => r.id === row.aiRoleId) : roles.find((r) => r.name === row.aiName);
-    setForm({ ...row, topicDescByLang, shortBackgroundDescByLang, roleAByLang, roleBByLang, roleATaskByLang, roleBTaskByLang, aiRoleId: matchedRole?.id ?? row.aiRoleId ?? '' });
+    const copyTextByLang = row.copyTextByLang ?? createEmptyLangMap();
+    setForm({ ...row, copyTextByLang, topicDescByLang, shortBackgroundDescByLang, roleAByLang, roleBByLang, roleATaskByLang, roleBTaskByLang, aiRoleId: matchedRole?.id ?? row.aiRoleId ?? '' });
     setModalOpen(true);
   };
 
@@ -539,6 +551,54 @@ export function AiFree() {
                 ))}
               </div>
               <div className="form-hint" style={{ marginBottom: 2 }}>当前难度：{form.level}</div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">补充文案（多语言，≤{COPY_TEXT_MAX_LEN} 字，语音测评连调/展示用）</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {LANG_OPTIONS.map((o) => (
+                    <button key={o.key} type="button" className={`btn btn-sm ${copyTextLang === o.key ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCopyTextLang(o.key)} style={langBtnStyle(o.key, copyTextLang === o.key)}>{o.key}</button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() =>
+                    setForm((p) => {
+                      const cur = p.copyTextByLang ?? createEmptyLangMap();
+                      return {
+                        ...p,
+                        copyTextByLang: {
+                          ...cur,
+                          ...Object.fromEntries(
+                            LANG_OPTIONS.map((o) => o.key)
+                              .filter((k) => k !== 'CN')
+                              .map((k) => [k, (cur.CN || cur[k]) || '']),
+                          ) as Record<LangKey, string>,
+                        },
+                      };
+                    })
+                  }
+                >
+                  自动翻译
+                </button>
+              </div>
+              <textarea
+                className="form-input"
+                rows={3}
+                maxLength={COPY_TEXT_MAX_LEN}
+                value={(form.copyTextByLang ?? createEmptyLangMap())[copyTextLang]}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    copyTextByLang: { ...(p.copyTextByLang ?? createEmptyLangMap()), [copyTextLang]: e.target.value.slice(0, COPY_TEXT_MAX_LEN) },
+                  }))
+                }
+                placeholder="按当前语言填写展示或连调说明（如测评提示、场景导语等）"
+                style={{ resize: 'vertical', minHeight: 72 }}
+              />
+              <div className="form-hint" style={{ marginTop: 4 }}>{((form.copyTextByLang ?? createEmptyLangMap())[copyTextLang] ?? '').length}/{COPY_TEXT_MAX_LEN}</div>
             </div>
             <div className="form-group">
               <label className="form-label">主题名称（多语言，≤10 字）</label>
