@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { type AiCapability, type ScoreDimension, loadAiCapabilities, saveAiCapabilities } from '../stores/aiCapabilities';
+import { AI_CAP_STORAGE_KEY, DEFAULT_AI_CAPABILITIES, type AiCapability, type ScoreDimension, loadAiCapabilities, saveAiCapabilities } from '../stores/aiCapabilities';
 
 const AI_ROLES_STORAGE_KEY = 'nsk-ai-roles-v2';
 type LangKey = 'EN' | 'CN' | 'ES' | 'FR' | 'PT' | 'JA' | 'KO' | 'VI' | 'TH' | 'ID' | 'MS' | 'KM';
@@ -223,6 +223,16 @@ export function AiCapabilities() {
     saveAiCapabilities(next);
   };
 
+  const resetAll = () => {
+    if (!window.confirm('确认重置课程AI配置？将清空当前修改并恢复默认数据。')) return;
+    localStorage.removeItem(AI_CAP_STORAGE_KEY);
+    const resetRows = DEFAULT_AI_CAPABILITIES.map((r) => structuredClone(r));
+    setRows(resetRows);
+    saveAiCapabilities(resetRows);
+    setEditingOriginAiId(null);
+    setEditing(null);
+  };
+
   return (
     <>
       <div className="page-header">
@@ -232,6 +242,7 @@ export function AiCapabilities() {
         </div>
         <div className="page-actions">
           <button type="button" className="btn btn-secondary" onClick={() => setRows(loadAiCapabilities())}>↻ 刷新</button>
+          <button type="button" className="btn btn-secondary" onClick={resetAll}>重置</button>
           <button type="button" className="btn btn-primary" onClick={openNew}>+ 新增课程AI配置</button>
         </div>
       </div>

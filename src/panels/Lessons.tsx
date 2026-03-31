@@ -1173,6 +1173,18 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
                     <div className="form-group full">
                       <label>名称（多语言）</label>
                       <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--mist)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              const seed = (draftNameByLang.CN ?? draftNameByLang[nameLang] ?? '').trim();
+                              setDraftNameByLang((prev) => ({ ...prev, ...autoTranslateByLang(seed) }));
+                            }}
+                          >
+                            自动翻译
+                          </button>
+                        </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
                           {LANG_OPTIONS.map((o) => (
                             <button
@@ -1192,6 +1204,18 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
                     <div className="form-group full">
                       <label>学习目标（多语言）</label>
                       <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--mist)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              const seed = (draftTargetByLang.CN ?? draftTargetByLang[targetLang] ?? '').trim();
+                              setDraftTargetByLang((prev) => ({ ...prev, ...autoTranslateByLang(seed) }));
+                            }}
+                          >
+                            自动翻译
+                          </button>
+                        </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
                           {LANG_OPTIONS.map((o) => (
                             <button

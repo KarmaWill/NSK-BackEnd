@@ -439,7 +439,13 @@ export function AiRoles() {
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">角色ID</label>
-                    <input type="text" value={form.id} readOnly />
+                    <input
+                      type="text"
+                      className="form-input td-mono"
+                      value={form.id}
+                      onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
+                      placeholder="如：AR-0003"
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">角色名称</label>
