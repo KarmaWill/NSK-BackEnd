@@ -148,6 +148,37 @@ const MOCK_RESOURCES = [
   { resId: 'V0100002', dirId: 'N10202', text: '茶文化入门视频', type: '视频' },
 ];
 
+/** DEEP LEARNING 模块：有声阅读 / AI导师 / 视频，多选 1～3 */
+type DeepModuleKind = 'audio' | 'ai' | 'video';
+
+const DEEP_MODULE_ORDER: DeepModuleKind[] = ['audio', 'ai', 'video'];
+
+const DEEP_MODULE_LABEL: Record<DeepModuleKind, string> = {
+  audio: '有声阅读',
+  ai: 'AI 导师',
+  video: '视频',
+};
+
+/** 资源库已上传图片（演示数据，可对接 MediaLib） */
+const DEEP_COVER_IMAGE_LIBRARY: { id: string; name: string; url: string }[] = [
+  { id: 'deep-cover-1', name: '课程封面 A', url: 'https://picsum.photos/seed/nskdeep1/900/600' },
+  { id: 'deep-cover-2', name: '课程封面 B', url: 'https://picsum.photos/seed/nskdeep2/900/600' },
+  { id: 'deep-cover-3', name: '插画素材 C', url: 'https://picsum.photos/seed/nskdeep3/800/520' },
+  { id: 'deep-cover-4', name: '插画素材 D', url: 'https://picsum.photos/seed/nskdeep4/700/460' },
+];
+
+function emptyDeepRes(): Record<DeepModuleKind, string> {
+  return { audio: '', ai: '', video: '' };
+}
+
+function emptyDeepCover(): Record<DeepModuleKind, { libId: string; url: string; cropApplied?: boolean }> {
+  return {
+    audio: { libId: '', url: '' },
+    ai: { libId: '', url: '' },
+    video: { libId: '', url: '' },
+  };
+}
+
 const isLearningCardResource = (resId: string) =>
   MOCK_RESOURCES.some((r) => r.resId === resId && r.type === '学习卡片');
 
@@ -294,6 +325,86 @@ function UnitModuleCard({ title, hint, children }: { title: string; hint?: strin
   );
 }
 
+function DeepLearningCoverSlot({
+  width,
+  height,
+  cover,
+  onPickLibrary,
+  onCrop,
+}: {
+  width: number;
+  height: number;
+  cover: { libId: string; url: string; cropApplied?: boolean };
+  onPickLibrary: () => void;
+  onCrop: () => void;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        maxWidth: '100%',
+        height,
+        boxSizing: 'border-box',
+        border: '1px solid var(--stone-dark)',
+        borderRadius: 10,
+        overflow: 'hidden',
+        background: 'var(--mist)',
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {cover.url ? (
+        <img alt="" src={cover.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        <span className="form-hint" style={{ fontSize: 12, textAlign: 'center', padding: 8 }}>
+          封面 {width}×{height}
+          <br />
+          <span style={{ fontSize: 11 }}>从资源库选择，可裁剪</span>
+        </span>
+      )}
+      {cover.cropApplied && (
+        <span
+          style={{
+            position: 'absolute',
+            top: 6,
+            left: 6,
+            fontSize: 10,
+            background: 'rgba(0,0,0,0.55)',
+            color: '#fff',
+            padding: '2px 6px',
+            borderRadius: 4,
+          }}
+        >
+          已裁剪
+        </span>
+      )}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 6,
+          right: 6,
+          left: 6,
+          display: 'flex',
+          gap: 6,
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onPickLibrary}>
+          选择封面
+        </button>
+        {cover.url ? (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onCrop}>
+            裁剪
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 type LessonsProps = {
   onNavigate?: (id: import('../types').PanelId) => void;
   activeCourseLibId?: string;
@@ -329,9 +440,16 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
 
   const [unitBonusType, setUnitBonusType] = useState<'audio' | 'video' | ''>('');
   const [unitBonusResId, setUnitBonusResId] = useState('');
-  const [unitDeepTypes, setUnitDeepTypes] = useState<('audio' | 'ai' | 'video')[]>([]);
-  const [unitDeepResIds, setUnitDeepResIds] = useState(['', '']);
-  const [unitResPicker, setUnitResPicker] = useState<{ open: boolean; target: 'bonus' | 'deep0' | 'deep1' | null }>({ open: false, target: null });
+  const [unitDeepTypes, setUnitDeepTypes] = useState<DeepModuleKind[]>([]);
+  const [unitDeepRes, setUnitDeepRes] = useState(emptyDeepRes);
+  const [unitDeepCover, setUnitDeepCover] = useState(emptyDeepCover);
+  const [unitResPicker, setUnitResPicker] = useState<{
+    open: boolean;
+    target: 'bonus' | null;
+    deepModule: DeepModuleKind | null;
+  }>({ open: false, target: null, deepModule: null });
+  const [unitCoverPicker, setUnitCoverPicker] = useState<{ open: boolean; module: DeepModuleKind | null }>({ open: false, module: null });
+  const [deepCropModal, setDeepCropModal] = useState<{ open: boolean; module: DeepModuleKind | null }>({ open: false, module: null });
   const [unitResKeyword, setUnitResKeyword] = useState('');
   const MOCK_CHARS = ['米', '饭', '吃', '水', '茶', '我', '你', '是', '不'];
   const MOCK_WORDS = ['米饭', '饺子', '包子', '喝水', '喝茶', '牛奶'];
@@ -364,10 +482,9 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
   const defaultAiResId = enabledAiCaps[0]?.aiId ?? '';
   const pickerExpectedType = useMemo(() => {
     if (unitResPicker.target === 'bonus') return unitBonusType;
-    if (unitResPicker.target === 'deep0') return unitDeepTypes[0] ?? '';
-    if (unitResPicker.target === 'deep1') return unitDeepTypes[1] ?? '';
+    if (unitResPicker.deepModule) return unitResPicker.deepModule;
     return '';
-  }, [unitResPicker.target, unitBonusType, unitDeepTypes]);
+  }, [unitResPicker.target, unitResPicker.deepModule, unitBonusType]);
   const unitResOptions = useMemo(() => {
     const aiRows = aiCaps.map((a) => ({
       resId: a.aiId,
@@ -389,40 +506,93 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
   }, [aiCaps, pickerExpectedType, unitResKeyword]);
   const pickUnitRes = (resId: string) => {
     if (unitResPicker.target === 'bonus') setUnitBonusResId(resId);
-    if (unitResPicker.target === 'deep0') setUnitDeepResIds((p) => [resId, p[1]]);
-    if (unitResPicker.target === 'deep1') setUnitDeepResIds((p) => [p[0], resId]);
-    setUnitResPicker({ open: false, target: null });
+    else if (unitResPicker.deepModule) {
+      const m = unitResPicker.deepModule;
+      setUnitDeepRes((p) => ({ ...p, [m]: resId }));
+    }
+    setUnitResPicker({ open: false, target: null, deepModule: null });
     setUnitResKeyword('');
   };
 
-  const toggleDeepType = (t: 'audio' | 'ai' | 'video') => {
+  const toggleDeepType = (t: DeepModuleKind) => {
     setUnitDeepTypes((prev) => {
-      if (prev.includes(t)) return prev.filter((x) => x !== t);
-      if (prev.length >= 2) return prev;
+      if (prev.includes(t)) {
+        setUnitDeepRes((r) => ({ ...r, [t]: '' }));
+        setUnitDeepCover((c) => ({ ...c, [t]: { libId: '', url: '' } }));
+        return prev.filter((x) => x !== t);
+      }
       return [...prev, t];
     });
   };
 
   useEffect(() => {
-    setUnitDeepResIds((prev) => {
-      const next: [string, string] = [prev[0], prev[1]];
-      let changed = false;
-      [0, 1].forEach((idx) => {
-        const t = unitDeepTypes[idx];
-        const isAiId = aiCaps.some((a) => a.aiId === next[idx]);
-        if (t === 'ai') {
-          if (!next[idx] && defaultAiResId) {
-            next[idx] = defaultAiResId;
-            changed = true;
-          }
-        } else if (isAiId) {
-          next[idx] = '';
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
+    if (!unitDeepTypes.includes('ai')) return;
+    setUnitDeepRes((prev) => {
+      if (prev.ai) return prev;
+      if (!defaultAiResId) return prev;
+      return { ...prev, ai: defaultAiResId };
     });
-  }, [unitDeepTypes, aiCaps, defaultAiResId]);
+  }, [unitDeepTypes, defaultAiResId]);
+
+  const orderedDeepModules = useMemo(() => DEEP_MODULE_ORDER.filter((m) => unitDeepTypes.includes(m)), [unitDeepTypes]);
+
+  const renderDeepResourceRow = (mod: DeepModuleKind) => {
+    if (mod === 'ai') {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            minHeight: 41,
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '0 10px',
+            background: 'var(--mist)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={!!unitDeepRes.ai}
+              onChange={(e) => {
+                if (e.target.checked && defaultAiResId) setUnitDeepRes((p) => ({ ...p, ai: defaultAiResId }));
+                else setUnitDeepRes((p) => ({ ...p, ai: '' }));
+              }}
+              disabled={!defaultAiResId}
+            />
+            启用 AI 导师
+          </label>
+          {unitDeepRes.ai && (
+            <>
+              <span className="badge badge-teal">已启动</span>
+              <span className="font-mono">{unitDeepRes.ai}</span>
+            </>
+          )}
+          {!defaultAiResId && <span className="form-hint">未找到启用中的课程AI配置</span>}
+        </div>
+      );
+    }
+    const labelHint = MOCK_RESOURCES.find((r) => r.resId === unitDeepRes[mod])?.text;
+    return (
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setUnitResPicker({ open: true, target: null, deepModule: mod })}>
+          {unitDeepRes[mod] ? '更改' : '配置'}
+        </button>
+        {unitDeepRes[mod] && (
+          <>
+            <span className="badge badge-teal">已配置</span>
+            <span className="font-mono">{unitDeepRes[mod]}</span>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => setUnitDeepRes((p) => ({ ...p, [mod]: '' }))}>
+              删除
+            </button>
+          </>
+        )}
+        {labelHint && <span className="form-hint">{labelHint}</span>}
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
@@ -835,7 +1005,7 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
                           <option value="audio">有声阅读</option>
                           <option value="video">视频</option>
                         </select>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setUnitResPicker({ open: true, target: 'bonus' })}>{unitBonusResId ? '更改' : '配置'}</button>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setUnitResPicker({ open: true, target: 'bonus', deepModule: null })}>{unitBonusResId ? '更改' : '配置'}</button>
                         {unitBonusResId && (
                           <>
                             <span className="badge badge-teal">已配置</span>
@@ -848,9 +1018,9 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
                     </UnitModuleCard>
                     <UnitModuleCard
                       title="DEEP LEARNING"
-                      hint="有声阅读、AI导师、视频 三选二；有声阅读/视频通过配置调取，AI导师通过开关启用自动回挂"
+                      hint="有声阅读、AI 导师、视频 多选（可选 1～3 项）；资源从资源库匹配，封面从资源库图片选择并支持裁剪。3 选 1 时封面区 700×460；3 选 2 时每块 330×460；3 选 3 时 AI 导师 330×460，有声阅读与视频封面各 330×210。"
                     >
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <input type="checkbox" checked={unitDeepTypes.includes('audio')} onChange={() => toggleDeepType('audio')} />
                           有声阅读
@@ -863,74 +1033,75 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
                           <input type="checkbox" checked={unitDeepTypes.includes('video')} onChange={() => toggleDeepType('video')} />
                           视频
                         </label>
+                        <span className="badge badge-muted">已选 {unitDeepTypes.length} 项</span>
                       </div>
-                      {unitDeepTypes.length === 2 && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                          <div>
-                            {unitDeepTypes[0] === 'ai' ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 41, border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', background: 'var(--mist)' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={!!unitDeepResIds[0]}
-                                    onChange={(e) => setUnitDeepResIds((p) => [e.target.checked ? defaultAiResId : '', p[1]])}
-                                    disabled={!defaultAiResId}
-                                  />
-                                  启用AI导师
-                                </label>
-                                {unitDeepResIds[0] && (
-                                  <>
-                                    <span className="badge badge-teal">已启动</span>
-                                    <span className="font-mono">{unitDeepResIds[0]}</span>
-                                  </>
-                                )}
-                                {!defaultAiResId && <span className="form-hint">未找到启用中的课程AI配置</span>}
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setUnitResPicker({ open: true, target: 'deep0' })}>{unitDeepResIds[0] ? '更改' : '配置'}</button>
-                                {unitDeepResIds[0] && (
-                                  <>
-                                    <span className="badge badge-teal">已配置</span>
-                                    <span className="font-mono">{unitDeepResIds[0]}</span>
-                                    <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => setUnitDeepResIds((p) => ['', p[1]])}>删除</button>
-                                  </>
-                                )}
-                              </div>
-                            )}
+                      {orderedDeepModules.length === 0 && <p className="form-hint" style={{ marginBottom: 0 }}>请勾选至少一项（支持 3 选 1、3 选 2、3 选 3）</p>}
+                      {orderedDeepModules.length === 1 && (
+                        <div style={{ maxWidth: 700 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--ink)' }}>{DEEP_MODULE_LABEL[orderedDeepModules[0]]}</div>
+                          <div style={{ marginBottom: 10 }}>{renderDeepResourceRow(orderedDeepModules[0])}</div>
+                          <DeepLearningCoverSlot
+                            width={700}
+                            height={460}
+                            cover={unitDeepCover[orderedDeepModules[0]]}
+                            onPickLibrary={() => setUnitCoverPicker({ open: true, module: orderedDeepModules[0] })}
+                            onCrop={() => setDeepCropModal({ open: true, module: orderedDeepModules[0] })}
+                          />
+                        </div>
+                      )}
+                      {orderedDeepModules.length === 2 && (
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                          {orderedDeepModules.map((mod) => (
+                            <div key={mod} style={{ width: 330, maxWidth: '100%', flex: '0 0 auto' }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--ink)' }}>{DEEP_MODULE_LABEL[mod]}</div>
+                              <div style={{ marginBottom: 10 }}>{renderDeepResourceRow(mod)}</div>
+                              <DeepLearningCoverSlot
+                                width={330}
+                                height={460}
+                                cover={unitDeepCover[mod]}
+                                onPickLibrary={() => setUnitCoverPicker({ open: true, module: mod })}
+                                onCrop={() => setDeepCropModal({ open: true, module: mod })}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {orderedDeepModules.length === 3 && (
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                          <div style={{ width: 330, maxWidth: '100%', flex: '0 0 auto' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--ink)' }}>{DEEP_MODULE_LABEL.ai}</div>
+                            <div style={{ marginBottom: 10 }}>{renderDeepResourceRow('ai')}</div>
+                            <DeepLearningCoverSlot
+                              width={330}
+                              height={460}
+                              cover={unitDeepCover.ai}
+                              onPickLibrary={() => setUnitCoverPicker({ open: true, module: 'ai' })}
+                              onCrop={() => setDeepCropModal({ open: true, module: 'ai' })}
+                            />
                           </div>
-                          <div>
-                            {unitDeepTypes[1] === 'ai' ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 41, border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', background: 'var(--mist)' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={!!unitDeepResIds[1]}
-                                    onChange={(e) => setUnitDeepResIds((p) => [p[0], e.target.checked ? defaultAiResId : ''])}
-                                    disabled={!defaultAiResId}
-                                  />
-                                  启用AI导师
-                                </label>
-                                {unitDeepResIds[1] && (
-                                  <>
-                                    <span className="badge badge-teal">已启动</span>
-                                    <span className="font-mono">{unitDeepResIds[1]}</span>
-                                  </>
-                                )}
-                                {!defaultAiResId && <span className="form-hint">未找到启用中的课程AI配置</span>}
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setUnitResPicker({ open: true, target: 'deep1' })}>{unitDeepResIds[1] ? '更改' : '配置'}</button>
-                                {unitDeepResIds[1] && (
-                                  <>
-                                    <span className="badge badge-teal">已配置</span>
-                                    <span className="font-mono">{unitDeepResIds[1]}</span>
-                                    <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => setUnitDeepResIds((p) => [p[0], ''])}>删除</button>
-                                  </>
-                                )}
-                              </div>
-                            )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <div style={{ width: 330, maxWidth: '100%' }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--ink)' }}>{DEEP_MODULE_LABEL.audio}</div>
+                              <div style={{ marginBottom: 10 }}>{renderDeepResourceRow('audio')}</div>
+                              <DeepLearningCoverSlot
+                                width={330}
+                                height={210}
+                                cover={unitDeepCover.audio}
+                                onPickLibrary={() => setUnitCoverPicker({ open: true, module: 'audio' })}
+                                onCrop={() => setDeepCropModal({ open: true, module: 'audio' })}
+                              />
+                            </div>
+                            <div style={{ width: 330, maxWidth: '100%' }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--ink)' }}>{DEEP_MODULE_LABEL.video}</div>
+                              <div style={{ marginBottom: 10 }}>{renderDeepResourceRow('video')}</div>
+                              <DeepLearningCoverSlot
+                                width={330}
+                                height={210}
+                                cover={unitDeepCover.video}
+                                onPickLibrary={() => setUnitCoverPicker({ open: true, module: 'video' })}
+                                onCrop={() => setDeepCropModal({ open: true, module: 'video' })}
+                              />
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1249,14 +1420,14 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
       )}
 
       {unitResPicker.open && (
-        <div className="modal-overlay open" onClick={() => { setUnitResPicker({ open: false, target: null }); setUnitResKeyword(''); }} role="dialog" aria-modal="true" aria-label="资源库选择">
+        <div className="modal-overlay open" onClick={() => { setUnitResPicker({ open: false, target: null, deepModule: null }); setUnitResKeyword(''); }} role="dialog" aria-modal="true" aria-label="资源库选择">
           <div className="modal" style={{ maxWidth: 760 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title">
                 资源库选择
                 {pickerExpectedType === 'audio' ? ' · 有声阅读' : pickerExpectedType === 'video' ? ' · 视频' : pickerExpectedType === 'ai' ? ' · AI导师' : ''}
               </div>
-              <button type="button" className="modal-close" onClick={() => { setUnitResPicker({ open: false, target: null }); setUnitResKeyword(''); }} aria-label="关闭">✕</button>
+              <button type="button" className="modal-close" onClick={() => { setUnitResPicker({ open: false, target: null, deepModule: null }); setUnitResKeyword(''); }} aria-label="关闭">✕</button>
             </div>
             <div className="modal-body">
               {pickerExpectedType === 'ai' && <div className="form-hint" style={{ marginBottom: 10 }}>数据来源：AI配置 → NSK体系课AI能力。</div>}
@@ -1288,7 +1459,145 @@ export function Lessons({ activeCourseLibId = '', onActiveCourseLibChange }: Les
               </div>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-ghost" onClick={() => { setUnitResPicker({ open: false, target: null }); setUnitResKeyword(''); }}>取消</button>
+              <button type="button" className="btn btn-ghost" onClick={() => { setUnitResPicker({ open: false, target: null, deepModule: null }); setUnitResKeyword(''); }}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {unitCoverPicker.open && unitCoverPicker.module && (
+        <div
+          className="modal-overlay open"
+          onClick={() => setUnitCoverPicker({ open: false, module: null })}
+          role="dialog"
+          aria-modal="true"
+          aria-label="资源库选择封面图"
+        >
+          <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">
+                资源库 · 封面图片 · {DEEP_MODULE_LABEL[unitCoverPicker.module]}
+              </div>
+              <button type="button" className="modal-close" onClick={() => setUnitCoverPicker({ open: false, module: null })} aria-label="关闭">
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="form-hint" style={{ marginBottom: 10 }}>
+                调用资源库已上传图片；选择后可在封面区进行裁剪确认。
+              </p>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 360, overflowY: 'auto' }}>
+                {DEEP_COVER_IMAGE_LIBRARY.map((img) => (
+                  <div
+                    key={img.id}
+                    style={{
+                      padding: '10px 12px',
+                      borderBottom: '1px solid var(--mist)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 56,
+                        height: 40,
+                        borderRadius: 6,
+                        overflow: 'hidden',
+                        border: '1px solid var(--border)',
+                        flexShrink: 0,
+                        background: 'var(--mist)',
+                      }}
+                    >
+                      <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <span className="font-mono" style={{ fontSize: 12 }}>
+                      {img.id}
+                    </span>
+                    <span style={{ flex: 1 }}>{img.name}</span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        const m = unitCoverPicker.module;
+                        if (!m) return;
+                        setUnitDeepCover((prev) => ({
+                          ...prev,
+                          [m]: { libId: img.id, url: img.url, cropApplied: false },
+                        }));
+                        setUnitCoverPicker({ open: false, module: null });
+                      }}
+                    >
+                      使用
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={() => setUnitCoverPicker({ open: false, module: null })}>
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deepCropModal.open && deepCropModal.module && unitDeepCover[deepCropModal.module].url && (
+        <div
+          className="modal-overlay open"
+          onClick={() => setDeepCropModal({ open: false, module: null })}
+          role="dialog"
+          aria-modal="true"
+          aria-label="裁剪封面"
+        >
+          <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">裁剪封面 · {DEEP_MODULE_LABEL[deepCropModal.module]}</div>
+              <button type="button" className="modal-close" onClick={() => setDeepCropModal({ open: false, module: null })} aria-label="关闭">
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="form-hint" style={{ marginBottom: 10 }}>
+                预览按当前模块在课程中的输出比例居中裁切；确认后标记为已裁剪，正式环境可由服务端按同一比例生成切片。
+              </p>
+              <div
+                style={{
+                  width: '100%',
+                  maxHeight: 280,
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  border: '1px solid var(--stone-dark)',
+                  background: 'var(--mist)',
+                }}
+              >
+                <img
+                  src={unitDeepCover[deepCropModal.module].url}
+                  alt=""
+                  style={{ width: '100%', height: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={() => setDeepCropModal({ open: false, module: null })}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  const m = deepCropModal.module;
+                  if (!m) return;
+                  setUnitDeepCover((prev) => ({
+                    ...prev,
+                    [m]: { ...prev[m], cropApplied: true },
+                  }));
+                  setDeepCropModal({ open: false, module: null });
+                }}
+              >
+                确认裁剪
+              </button>
             </div>
           </div>
         </div>
