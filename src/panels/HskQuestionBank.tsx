@@ -101,10 +101,6 @@ export function HskQuestionBank() {
     }
   };
 
-  const getProgressPercent = (current: number, total: number) => {
-    return total > 0 ? Math.round((current / total) * 100) : 0;
-  };
-
   return (
     <>
       <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -12,7 +12,6 @@ import { Lessons } from './Lessons';
 import { Resources } from './Resources';
 import { AudioReading } from './AudioReading';
 import { Questions } from './Questions';
-import { Multilang } from './Multilang';
 import { Vocab } from './Vocab';
 import { Hsk } from './Hsk';
 import { HskExam } from './HskExam';
