@@ -14,6 +14,7 @@ const ICONS: Record<string, JSX.Element> = {
   catalog: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M3 6h18M3 12h18M3 18h18"/><rect x="3" y="3" width="3" height="18" rx="1" fill="currentColor" stroke="none" opacity={0.3}/></svg>),
   resources: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6M3 15h6"/></svg>),
   'audio-reading': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>),
+  'audio-reading-mgmt': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>),
   questions: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M9 12h6M9 16h6M7 8h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>),
   multilang: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>),
   medialib: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/><polygon points="10 12 15 15 15 9 10 12"/></svg>),
@@ -29,6 +30,8 @@ const ICONS: Record<string, JSX.Element> = {
   users: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>),
   premium: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>),
   notify: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>),
+  feedback: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/><path d="M9 10h6M9 14h3"/></svg>),
+  database: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>),
   qtype: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><rect x="2" y="2" width="9" height="9" rx="1.5"/><rect x="13" y="2" width="9" height="9" rx="1.5"/><rect x="2" y="13" width="9" height="9" rx="1.5"/><path d="M17.5 13v9M13 17.5h9"/></svg>),
   logs: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>),
   sysconfig: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>),
@@ -37,6 +40,7 @@ const ICONS: Record<string, JSX.Element> = {
 export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCourseLibChange }: Props) {
   const [role, setRole] = useState<'admin' | 'editor'>('admin');
   const [courseLibs, setCourseLibs] = useState<CourseLibRow[]>(() => loadCourseLibs());
+  const [hskExpanded, setHskExpanded] = useState(false);
   const isAdmin = role === 'admin';
   useEffect(() => {
     const sync = () => {
@@ -97,13 +101,23 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
         <div className="nav-section">
           <div className="nav-label">概览</div>
           {nav('dashboard', '数据仪表盘')}
-          {nav('course-config', '课程库配置')}
+        </div>
+
+        <div className="nav-section">
+          <div className="nav-label">资源库</div>
+          {nav('medialib', '资源库')}
+        </div>
+
+        <div className="nav-section">
+          <div className="nav-label">数据库</div>
+          {nav('database', '数据库管理')}
         </div>
 
         <div className="nav-section">
           <div className="nav-label nav-label-row">
             <span>课程库</span>
           </div>
+          {nav('course-config', '课程库配置')}
           <div className="course-lib-list course-tree">
             {courseLibs.map((lib) => (
               <div key={lib.id} className="course-tree-node">
@@ -111,8 +125,8 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
                   className={`course-lib-item ${activeCourseLibId === lib.id ? 'active' : ''}`}
                   role="button"
                   tabIndex={0}
-                  onClick={() => onActiveCourseLibChange(lib.id)}
-                  onKeyDown={(e) => e.key === 'Enter' && onActiveCourseLibChange(lib.id)}
+                  onClick={() => onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
                 >
                   <span className="course-lib-dot">{activeCourseLibId === lib.id ? '▼' : '▶'}</span>
                   <span className="course-lib-name">{lib.name}</span>
@@ -123,7 +137,6 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
                     {lib.modules.resources && nav('resources', '学习资源', { text: '77' }, 'course-child-item')}
                     {lib.modules['audio-reading'] && nav('audio-reading', '有声阅读配置', undefined, 'course-child-item')}
                     {lib.modules.questions && nav('questions', '题库管理', { text: '54' }, 'course-child-item')}
-                    {lib.modules.medialib && nav('medialib', '资源库', undefined, 'course-child-item')}
                     {lib.modules['ai-capabilities'] && nav('ai-capabilities', '课程AI配置', undefined, 'course-child-item')}
                   </div>
                 )}
@@ -140,15 +153,38 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
         </div>
 
         <div className="nav-section">
-          <div className="nav-label">内容运营</div>
-          {nav('culture', '文化内容')}
-          {nav('library', '图书馆管理')}
-          {nav('hsk', 'HSK 考试配置')}
+          <div className="nav-label">专业内容管理</div>
+          {nav('audio-reading-mgmt', '有声阅读管理')}
+          {nav('library', '书籍教材管理')}
+          <div className="course-tree">
+            <div className="course-tree-node">
+              <div
+                className={`nav-item ${activePanel === 'hsk' || activePanel === 'hsk-question-bank' || activePanel === 'hsk-paper' || activePanel === 'hsk-exam' ? 'active' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => setHskExpanded(!hskExpanded)}
+                onKeyDown={(e) => e.key === 'Enter' && setHskExpanded(!hskExpanded)}
+              >
+                <span className="course-lib-dot">{hskExpanded ? '▼' : '▶'}</span>
+                {ICONS['hsk']}
+                HSK考试管理
+              </div>
+              {hskExpanded && (
+                <div className="course-lib-children">
+                  {nav('hsk-question-bank', '题库管理', undefined, 'course-child-item')}
+                  {nav('hsk-paper', '试卷管理', undefined, 'course-child-item')}
+                  {nav('hsk-exam', '考试管理', undefined, 'course-child-item')}
+                </div>
+              )}
+            </div>
+          </div>
+          {nav('culture', '文化视频管理')}
         </div>
 
         <div className="nav-section">
           <div className="nav-label">用户 & 运营</div>
           {nav('users', '用户管理', { text: '2.4k', className: 'ok' })}
+          {nav('feedback', '用户反馈池')}
           {nav('premium', 'Premium 管理')}
           {nav('notify', '通知推送', { text: '3', className: 'warn' })}
         </div>

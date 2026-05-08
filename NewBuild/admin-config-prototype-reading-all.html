@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>阅读题型后台配置 - R01-R07</title>
+<style>
+:root {
+  --color-primary: #0F6E56;
+  --color-primary-light: #E1F5EE;
+  --color-primary-dark: #0A5341;
+  --color-success: #0F6E56;
+  --color-success-light: #E1F5EE;
+  --color-error: #991B1B;
+  --color-error-light: #FCEBEB;
+  --color-warning: #854F0B;
+  --color-warning-light: #FAEEDA;
+  --color-background: #F5F5F7;
+  --color-surface: #FFFFFF;
+  --color-text-primary: #1A1A1C;
+  --color-text-secondary: #6B6B76;
+  --color-text-tertiary: #9999A5;
+  --color-border: #E5E5EC;
+  --color-border-light: #EBEBEF;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", Monaco, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #1D9E75;
+    --color-primary-light: #04342C;
+    --color-primary-dark: #5DCAA5;
+    --color-success: #1D9E75;
+    --color-success-light: #04342C;
+    --color-error: #E25555;
+    --color-error-light: #4A1B0C;
+    --color-warning: #C88B3A;
+    --color-warning-light: #412402;
+    --color-background: #1A1A1C;
+    --color-surface: #252528;
+    --color-text-primary: #F2F2F4;
+    --color-text-secondary: #A1A1A8;
+    --color-text-tertiary: #6B6B76;
+    --color-border: #3A3A42;
+    --color-border-light: #2E2E32;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); background: var(--color-background); color: var(--color-text-primary); line-height: 1.5; }
+
+.app-container { display: flex; height: 100vh; overflow: hidden; }
+
+/* ===== 左侧配置面板 ===== */
+.config-panel {
+  width: 55%; min-width: 500px; max-width: 700px;
+  background: var(--color-surface); border-right: 1px solid var(--color-border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.config-header {
+  padding: 12px 20px; border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.config-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.config-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+.type-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.type-tab {
+  padding: 4px 10px; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+  background: var(--color-surface); font-size: 12px; cursor: pointer; transition: all 0.2s;
+}
+.type-tab:hover { border-color: var(--color-primary); }
+.type-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+.type-tab .badge {
+  font-size: 10px; padding: 1px 4px; border-radius: 3px;
+  background: var(--color-primary-light); color: var(--color-primary-dark); margin-left: 4px;
+}
+.type-tab.active .badge { background: rgba(255,255,255,0.3); color: white; }
+
+.config-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+.config-section { margin-bottom: 24px; }
+.section-title {
+  font-size: 13px; font-weight: 600; color: var(--color-text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.section-title svg { width: 16px; height: 16px; }
+
+.form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+.form-group { flex: 1; margin-bottom: 12px; }
+.form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 4px; }
+.form-group label .required { color: var(--color-error); margin-left: 2px; }
+.form-group label .optional { color: var(--color-text-tertiary); margin-left: 2px; font-weight: 400; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  font-size: 13px; font-family: inherit; background: var(--color-surface); color: var(--color-text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+.form-group textarea { resize: vertical; min-height: 60px; }
+.form-group input::placeholder, .form-group textarea::placeholder { color: var(--color-text-tertiary); }
+
+/* 资源选择器 */
+.resource-selector {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); cursor: pointer; transition: all 0.2s;
+}
+.resource-selector:hover { border-color: var(--color-primary); }
+.resource-selector.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
+.resource-selector .resource-icon { width: 20px; height: 20px; color: var(--color-text-tertiary); }
+.resource-selector .resource-name { flex: 1; font-size: 13px; color: var(--color-text-primary); }
+.resource-selector .resource-name.empty { color: var(--color-text-tertiary); }
+.resource-selector .resource-action { font-size: 12px; color: var(--color-primary); }
+
+/* 选项卡片 */
+.option-card {
+  background: var(--color-background); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  padding: 16px; margin-bottom: 12px;
+}
+.option-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.option-key {
+  width: 28px; height: 28px; border-radius: 4px; background: var(--color-primary); color: white;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;
+}
+
+.image-preview {
+  width: 100%; height: 80px; border: 1px dashed var(--color-border); border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; color: var(--color-text-tertiary);
+  font-size: 12px; margin-bottom: 8px; background: var(--color-surface); overflow: hidden;
+}
+
+/* 子题目 */
+.sub-question {
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  padding: 16px; margin-bottom: 12px; position: relative;
+}
+.sub-question-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--color-border-light);
+}
+.sub-question-num {
+  width: 24px; height: 24px; border-radius: 4px; background: var(--color-primary-light);
+  color: var(--color-primary-dark); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+}
+.sub-question-title { font-size: 13px; font-weight: 500; flex: 1; }
+.sub-question-delete {
+  width: 28px; height: 28px; border-radius: var(--radius-sm); border: 1px solid var(--color-border);
+  background: var(--color-surface); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-tertiary); transition: all 0.2s;
+}
+.sub-question-delete:hover { border-color: var(--color-error); color: var(--color-error); background: var(--color-error-light); }
+
+/* 添加按钮 */
+.add-sub-btn {
+  width: 100%; padding: 12px; border: 2px dashed var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface); cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 6px; font-size: 13px; color: var(--color-text-tertiary); transition: all 0.2s;
+}
+.add-sub-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
+
+/* 拼音字段 */
+.pinyin-field { display: none; }
+.pinyin-field.visible { display: block; }
+
+/* 匹配关系 */
+.match-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px 12px;
+  background: var(--color-background); border-radius: var(--radius-md); border: 1px solid var(--color-border-light);
+}
+.match-row select { flex: 1; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 12px; background: var(--color-surface); color: var(--color-text-primary); }
+.match-arrow { color: var(--color-primary); font-weight: 600; font-size: 14px; flex-shrink: 0; }
+
+/* R04 排序槽位 */
+.sort-slots { display: flex; align-items: center; gap: 4px; margin-top: 12px; flex-wrap: wrap; }
+.sort-slot {
+  width: 48px; height: 48px; border: 2px dashed var(--color-border); border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600;
+  color: var(--color-text-tertiary); background: var(--color-surface); transition: all 0.2s;
+}
+.sort-slot.filled { border-style: solid; border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
+.sort-arrow { color: var(--color-text-tertiary); font-size: 16px; flex-shrink: 0; }
+
+/* 完形填空选项组 */
+.blank-option-group { margin-bottom: 12px; }
+.blank-option-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.blank-num {
+  width: 24px; height: 24px; border-radius: 4px; background: var(--color-primary-light);
+  color: var(--color-primary-dark); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; flex-shrink: 0;
+}
+
+/* 资源库弹窗 */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: var(--color-surface); border-radius: var(--radius-lg); width: 90%; max-width: 600px;
+  max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-header h3 { font-size: 16px; font-weight: 600; }
+.modal-close { width: 32px; height: 32px; border-radius: var(--radius-md); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary); }
+.modal-close:hover { background: var(--color-background); }
+.modal-body { flex: 1; overflow-y: auto; padding: 16px; }
+.modal-footer { padding: 12px 20px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px; }
+
+.resource-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.resource-tab {
+  padding: 6px 14px; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+  background: var(--color-surface); font-size: 13px; cursor: pointer; color: var(--color-text-primary);
+}
+.resource-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+.resource-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.resource-item {
+  aspect-ratio: 1; border: 2px solid var(--color-border); border-radius: var(--radius-md);
+  padding: 8px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+}
+.resource-item:hover { border-color: var(--color-primary-light); }
+.resource-item.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
+.resource-item .item-thumb { width: 100%; height: 60%; background: var(--color-background); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--color-text-tertiary); }
+.resource-item .item-name { font-size: 11px; color: var(--color-text-secondary); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+
+/* ===== 右侧预览面板 ===== */
+.preview-panel { flex: 1; background: #E8E8EC; display: flex; flex-direction: column; overflow: hidden; }
+@media (prefers-color-scheme: dark) { .preview-panel { background: #1A1A1C; } }
+.preview-header {
+  padding: 12px 20px; background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.preview-header h2 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); display: flex; align-items: center; gap: 6px; }
+.device-info { font-size: 11px; color: var(--color-text-tertiary); display: flex; align-items: center; gap: 6px; }
+.preview-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+.tablet-frame {
+  width: 100%; max-width: 900px; aspect-ratio: 16/10; background: var(--color-surface);
+  border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.tablet-content { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; background: var(--color-background); overflow-y: auto; }
+
+.preview-question-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.preview-q-num { font-size: 13px; font-weight: 500; }
+
+.preview-prompt { font-size: 14px; color: var(--color-text-secondary); text-align: center; margin-bottom: 16px; padding: 8px; background: var(--color-surface); border-radius: var(--radius-md); }
+
+/* 预览 - R01 图文匹配 - 新格式：左图右句 */
+.preview-r01-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; }
+.preview-r01-images { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.preview-r01-img-slot {
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-md); aspect-ratio: 4/3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s; position: relative; background: var(--color-surface);
+}
+.preview-r01-img-slot:hover { border-color: var(--color-text-tertiary); }
+.preview-r01-img-slot.selected { border-color: #0F6E56; border-width: 2px; background: #E1F5EE; }
+.preview-r01-img-slot .match-badge {
+  position: absolute; top: 5px; right: 5px; padding: 1px 7px; border-radius: 10px;
+  font-size: 10px; font-weight: 500; background: #1D9E75; color: #E1F5EE;
+}
+.preview-r01-sentences { display: flex; flex-direction: column; gap: 8px; }
+.preview-r01-txt-opt {
+  border: 0.5px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 12px;
+  cursor: pointer; transition: all 0.15s; font-size: 13px; color: var(--color-text-primary);
+  display: flex; align-items: center; gap: 8px; background: var(--color-surface);
+}
+.preview-r01-txt-opt:hover { border-color: var(--color-text-tertiary); background: var(--color-background); }
+.preview-r01-txt-opt.active-txt { border-color: #0F6E56; border-width: 1.5px; background: #E1F5EE; color: #085041; }
+.preview-r01-txt-opt.used { opacity: 0.45; pointer-events: none; }
+
+/* 预览 - R02 问答匹配 - 左问题右回答 */
+.preview-r02-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
+.preview-r02-column-header { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); margin-bottom: 10px; letter-spacing: 0.04em; }
+.preview-r02-questions { display: flex; flex-direction: column; gap: 10px; }
+.preview-r02-answers { display: flex; flex-direction: column; gap: 10px; }
+.preview-r02-item {
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 12px;
+  font-size: 13px; color: var(--color-text-primary); background: var(--color-surface);
+  display: flex; align-items: center; gap: 8px;
+}
+.preview-r02-item .item-badge {
+  width: 22px; height: 22px; border-radius: 4px; background: var(--color-primary-light);
+  color: var(--color-primary-dark); display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; flex-shrink: 0;
+}
+
+/* 预览 - R03 选词填空 */
+.preview-fill-list { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.preview-fill-item { padding: 10px 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 13px; line-height: 1.8; }
+.preview-fill-blank { display: inline-block; min-width: 60px; border-bottom: 2px solid var(--color-primary); color: var(--color-primary); font-weight: 500; text-align: center; margin: 0 2px; padding: 0 4px; }
+.preview-word-bank { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 12px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.preview-word-chip {
+  padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 4px;
+  font-size: 13px; cursor: pointer; transition: all 0.2s; background: var(--color-surface);
+}
+.preview-word-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.preview-word-chip.used { opacity: 0.4; text-decoration: line-through; }
+
+/* 预览 - R04 句子排序 */
+.preview-sort-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.preview-sort-card {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); cursor: grab; transition: all 0.2s; user-select: none;
+}
+.preview-sort-card:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
+.preview-sort-card .letter-badge {
+  width: 28px; height: 28px; border-radius: 4px; background: var(--color-primary-light);
+  color: var(--color-primary-dark); display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; flex-shrink: 0;
+}
+.preview-sort-card .card-text { font-size: 13px; flex: 1; }
+
+.preview-sort-slots { display: flex; align-items: center; gap: 4px; justify-content: center; padding: 12px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.preview-sort-slot {
+  width: 44px; height: 44px; border: 2px dashed var(--color-border); border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600;
+  color: var(--color-text-tertiary); background: var(--color-background); transition: all 0.2s;
+}
+.preview-sort-slot.filled { border-style: solid; border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
+.preview-sort-arrow { color: var(--color-text-tertiary); font-size: 14px; }
+
+/* 预览 - R05 段落填空 - 新格式 */
+.preview-passage { font-size: 14px; line-height: 2; margin-bottom: 16px; padding: 16px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.preview-passage-blank {
+  display: inline-flex; min-width: 48px; height: 32px; padding: 0 10px;
+  border-radius: var(--radius-md); border: 2px dashed var(--color-border);
+  background: transparent; cursor: pointer; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; color: var(--color-text-tertiary);
+  transition: all 0.2s; vertical-align: middle; margin: 0 2px;
+}
+.preview-passage-blank:hover { border-color: var(--color-primary); background: var(--color-primary-light); color: var(--color-primary-dark); }
+.preview-passage-blank.filled { border-style: solid; border-color: var(--color-primary); background: var(--color-primary-light); color: var(--color-primary-dark); }
+.preview-option-cards { display: flex; flex-direction: column; gap: 10px; }
+.preview-option-card {
+  padding: 12px 16px; border-radius: var(--radius-md); border: 2px solid var(--color-border);
+  background: var(--color-surface); font-size: 14px; cursor: pointer; transition: all 0.2s;
+  color: var(--color-text-primary); display: flex; align-items: flex-start; gap: 10px; line-height: 1.6;
+}
+.preview-option-card:hover { border-color: var(--color-primary); background: var(--color-primary-light); transform: translateY(-1px); }
+.preview-option-card.selected { border-color: var(--color-primary); background: var(--color-primary-light); color: var(--color-primary-dark); }
+.preview-option-card .option-key {
+  width: 26px; height: 26px; border-radius: 4px; border: 1.5px solid var(--color-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: var(--color-text-secondary); flex-shrink: 0;
+  background: var(--color-surface);
+}
+.preview-option-card.selected .option-key { border-color: var(--color-primary); background: var(--color-primary); color: white; }
+
+/* 预览 - 完形填空 */
+.preview-cloze-passage { font-size: 14px; line-height: 2; margin-bottom: 16px; padding: 16px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.preview-cloze-blank { display: inline-block; min-width: 50px; border-bottom: 2px solid var(--color-primary); color: var(--color-primary); font-weight: 500; text-align: center; margin: 0 2px; padding: 0 4px; cursor: pointer; }
+.preview-cloze-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; padding: 8px; background: var(--color-background); border-radius: var(--radius-sm); }
+.preview-cloze-opt { padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.2s; background: var(--color-surface); }
+.preview-cloze-opt:hover { border-color: var(--color-primary); }
+.preview-cloze-opt.selected { border-color: var(--color-primary); background: var(--color-primary-light); color: var(--color-primary-dark); }
+
+/* 预览 - R07 阅读理解 */
+.preview-article { font-size: 14px; line-height: 1.8; margin-bottom: 16px; padding: 16px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); flex: 1; overflow-y: auto; }
+.preview-sub-questions { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow-y: auto; }
+.preview-sub-q { background: var(--color-surface); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--color-border); }
+.preview-sub-q-title { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+.preview-sub-q-options { display: flex; flex-direction: column; gap: 6px; }
+.preview-sub-q-opt {
+  padding: 8px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;
+}
+.preview-sub-q-opt:hover { border-color: var(--color-primary-light); }
+.preview-sub-q-opt.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
+
+.preview-submit { display: flex; justify-content: flex-end; margin-top: 12px; }
+.preview-submit-btn {
+  padding: 8px 24px; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-text-tertiary); font-size: 13px; cursor: not-allowed;
+}
+
+/* 底部 */
+.config-footer {
+  padding: 12px 20px; border-top: 1px solid var(--color-border); background: var(--color-surface);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.btn {
+  padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-text-primary);
+}
+.btn:hover { background: var(--color-background); }
+.btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+
+.json-preview {
+  margin-top: 16px; padding: 12px; background: #1E1E1E; border-radius: var(--radius-md);
+  font-family: var(--font-mono); font-size: 11px; color: #D4D4D4; overflow-x: auto; max-height: 200px;
+}
+@media (prefers-color-scheme: dark) { .json-preview { background: #0D0D0D; } }
+
+/* 部分标题配置 */
+.section-header-input {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--color-background);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+/* R01 配置 - 双列布局 */
+.r01-config-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.r01-config-column-header { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border); }
+.r01-img-card { background: var(--color-background); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px; }
+.r01-img-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.r01-img-card-label { width: 24px; height: 24px; border-radius: 4px; background: var(--color-primary-light); color: var(--color-primary-dark); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.r01-sent-card { background: var(--color-background); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px; }
+.r01-sent-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.r01-sent-card-label { width: 24px; height: 24px; border-radius: 4px; background: var(--color-primary-light); color: var(--color-primary-dark); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+
+/* 题号设置 */
+.question-number-config { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px; background: var(--color-background); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.question-number-config .form-group { margin-bottom: 0; flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- 左侧配置面板 -->
+  <div class="config-panel">
+    <div class="config-header">
+      <div class="config-header-top">
+        <h1>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          阅读题型配置
+        </h1>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="resetForm()">重置</button>
+          <button class="btn" onclick="toggleJsonPreview()">查看JSON</button>
+        </div>
+      </div>
+    </div>
+    <div class="config-body" id="config_body"></div>
+    <div class="config-footer">
+      <span style="font-size:12px;color:var(--color-text-tertiary)">* 必填字段</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn">保存草稿</button>
+        <button class="btn btn-primary" onclick="publishQuestion()">发布</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧预览面板 -->
+  <div class="preview-panel">
+    <div class="preview-header">
+      <h2>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        前端渲染预览
+      </h2>
+      <div class="device-info">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+        平板横屏 1024x768
+      </div>
+    </div>
+    <div class="preview-body">
+      <div class="tablet-frame">
+        <div class="tablet-content" id="preview_content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 资源库弹窗 -->
+<div class="modal-overlay" id="resource_modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal_title">选择图片资源</h3>
+      <button class="modal-close" onclick="closeResourceModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="resource-tabs">
+        <button class="resource-tab active" onclick="switchResourceTab(this,'all')">全部</button>
+        <button class="resource-tab" onclick="switchResourceTab(this,'recent')">最近使用</button>
+        <button class="resource-tab" onclick="switchResourceTab(this,'fav')">收藏</button>
+      </div>
+      <div class="resource-grid" id="resource_grid"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeResourceModal()">取消</button>
+      <button class="btn btn-primary" onclick="confirmResourceSelection()">确认选择</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== 数据定义 ====== */
+const typeConfigs = {
+  R01: { name: '图文匹配', defaultImages: 4, defaultSentences: 4 },
+  R02: { name: '问答匹配', defaultQ: 4, defaultA: 6 },
+  R03: { name: '选词填空', defaultBlanks: 5, defaultWords: 5 },
+  R04: { name: '句子排序', defaultSentences: 5 },
+  R05: { name: '段落填空', defaultBlanks: 4, defaultOptions: 5 },
+  R06: { name: '完形填空', defaultBlanks: 5, defaultOptions: 4 },
+  R07: { name: '阅读理解', defaultSubs: 2 },
+  R08: { name: '图片判断', hasImage: true, isJudgment: true },
+  R09: { name: '图片选词填空', hasImage: true, defaultQuestions: 2, defaultOptions: 6 }
+};
+
+const resourceLibrary = {
+  image: [
+    { id: 'img_apple', name: '三个红苹果.jpg' },
+    { id: 'img_bike', name: '自行车.jpg' },
+    { id: 'img_book', name: '书本.jpg' },
+    { id: 'img_dog', name: '小狗.jpg' },
+    { id: 'img_cat', name: '小猫.jpg' },
+    { id: 'img_car', name: '汽车.jpg' },
+    { id: 'img_flower', name: '花朵.jpg' },
+    { id: 'img_tree', name: '树木.jpg' },
+    { id: 'img_house', name: '房子.jpg' },
+    { id: 'img_water', name: '水杯.jpg' },
+    { id: 'img_phone', name: '手机.jpg' },
+    { id: 'img_food', name: '米饭.jpg' }
+  ]
+};
+
+const mockPinyinMap = {
+  '苹果': 'píng guǒ', '书': 'shū', '自行车': 'zì xíng chē', '猫': 'māo',
+  '狗': 'gǒu', '汽车': 'qì chē', '花': 'huā', '树': 'shù',
+  '明天': 'míng tiān', '北京': 'běi jīng', '上海': 'shàng hǎi', '你好': 'nǐ hǎo',
+  '谢谢': 'xiè xie', '再见': 'zài jiàn', '吃饭': 'chī fàn', '喝水': 'hē shuǐ',
+  '房子': 'fáng zi', '水杯': 'shuǐ bēi', '手机': 'shǒu jī', '米饭': 'mǐ fàn'
+};
+
+let currentType = 'R01';
+let state = {
+  selectedResourceId: null, currentResourceType: null, currentTargetKey: null,
+  // R01 图文匹配
+  r01ImageCount: 4, r01SentCount: 4, r01Images: {}, r01Sentences: {}, r01Pinyin: {}, r01Match: {}, r01StartNum: 31,
+  // R02 问答匹配
+  r02QCount: 4, r02ACount: 6, r02QTexts: {}, r02ATexts: {}, r02QPinyin: {}, r02APinyin: {}, r02Match: {}, r02StartNum: 36,
+  // R03 选词填空
+  r03Blanks: 5, r03Words: 5, r03Sentences: {}, r03WordList: {}, r03Answers: {}, r03StartNum: 41,
+  // R04 句子排序
+  r04Sentences: 5, r04Texts: {}, r04Order: {}, r04StartNum: 51,
+  // R05 段落填空
+  r05Blanks: 4, r05Options: 5, r05Passage: '', r05BlankTexts: {}, r05Answer: {}, r05StartNum: 56,
+  // R06 完形填空
+  r06Blanks: 5, r06Options: 4, r06Passage: '', r06BlankOpts: {}, r06BlankAnswers: {}, r06StartNum: 61,
+  // R07 阅读理解
+  r07Subs: 2, r07Article: '', r07SubQs: {}, r07StartNum: 66,
+  // R08 图片判断
+  r08Text: '', r08Image: '', r08Answer: 'correct', r08StartNum: 71,
+  // R09 图片选词填空
+  r09Questions: 2, r09Options: 6, r09Qs: {}, r09Opts: {}, r09StartNum: 31
+};
+
+/* ====== 切换题型 ====== */
+function switchType(type) {
+  currentType = type;
+  renderConfig();
+  renderPreview();
+}
+
+/* ====== 生成拼音（模拟） ====== */
+function generateMockPinyin(text) {
+  if (!text || !text.trim()) return '';
+  text = text.trim();
+  if (mockPinyinMap[text]) return mockPinyinMap[text];
+  let result = [];
+  let i = 0;
+  while (i < text.length) {
+    let matched = false;
+    for (let len = 4; len >= 2; len--) {
+      if (i + len <= text.length) {
+        const sub = text.substring(i, i + len);
+        if (mockPinyinMap[sub]) {
+          result.push(mockPinyinMap[sub]);
+          i += len;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (!matched) {
+      const ch = text[i];
+      if (/[\u4e00-\u9fa5]/.test(ch)) {
+        result.push(mockPinyinMap[ch] || ch.toLowerCase());
+      } else {
+        result.push(ch);
+      }
+      i++;
+    }
+  }
+  return result.join(' ');
+}
+
+/* ====== 拼音显示控制 ====== */
+function shouldShowPinyin() {
+  const el = document.getElementById('hsk_levels');
+  if (!el) return false;
+  return Array.from(el.selectedOptions).some(o => o.value === '1' || o.value === '2');
+}
+
+function togglePinyinDisplay() {
+  const show = shouldShowPinyin();
+  document.querySelectorAll('.pinyin-field').forEach(el => {
+    el.classList.toggle('visible', show);
+  });
+}
+
+/* ====== 渲染配置面板 ====== */
+function renderConfig() {
+  const cfg = typeConfigs[currentType];
+  const body = document.getElementById('config_body');
+  let h = '';
+  h += renderMetadataSection(cfg);
+  switch (currentType) {
+    case 'R01': h += renderR01Config(); break;
+    case 'R02': h += renderR02Config(); break;
+    case 'R03': h += renderR03Config(); break;
+    case 'R04': h += renderR04Config(); break;
+    case 'R05': h += renderR05Config(); break;
+    case 'R06': h += renderR06Config(); break;
+    case 'R07': h += renderR07Config(); break;
+    case 'R08': h += renderR08Config(); break;
+    case 'R09': h += renderR09Config(); break;
+  }
+  h += renderScoringSection(cfg);
+  h += `<div class="json-preview" id="json_preview" style="display:none"><pre id="json_output"></pre></div>`;
+  body.innerHTML = h;
+  setTimeout(() => togglePinyinDisplay(), 0);
+}
+
+function renderMetadataSection(cfg) {
+  return `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>元数据</div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:0"><label>题目ID <span class="required">*</span></label><input type="text" id="question_id" value="${currentType}-HSK3-001"></div>
+      <div class="form-group" style="margin-bottom:0"><label>题型 <span class="required">*</span></label><select id="type_selector" onchange="switchType(this.value)">
+        <option value="R01" ${currentType==='R01'?'selected':''}>R01 - 图文匹配</option>
+        <option value="R02" ${currentType==='R02'?'selected':''}>R02 - 问答匹配</option>
+        <option value="R03" ${currentType==='R03'?'selected':''}>R03 - 选词填空</option>
+        <option value="R04" ${currentType==='R04'?'selected':''}>R04 - 句子排序</option>
+        <option value="R05" ${currentType==='R05'?'selected':''}>R05 - 段落填空</option>
+        <option value="R06" ${currentType==='R06'?'selected':''}>R06 - 完形填空</option>
+        <option value="R07" ${currentType==='R07'?'selected':''}>R07 - 阅读理解</option>
+        <option value="R08" ${currentType==='R08'?'selected':''}>R08 - 图片判断</option>
+        <option value="R09" ${currentType==='R09'?'selected':''}>R09 - 图片选词填空</option>
+      </select></div>
+    </div>
+    <div class="form-group"><label>HSK级别 <span class="required">*</span></label><select id="hsk_levels" onchange="togglePinyinDisplay()"><option value="1">HSK 1</option><option value="2">HSK 2</option><option value="3" selected>HSK 3</option><option value="4">HSK 4</option><option value="5">HSK 5</option><option value="6">HSK 6</option></select></div>
+  </div>`;
+}
+
+function renderScoringSection(cfg) {
+  const defaultScore = { R01:'1', R02:'1', R03:'1', R04:'1', R05:'1', R06:'1', R07:'2' }[currentType] || '1';
+  return `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>评分参数</div>
+    <div class="form-group"><label>分值 <span class="required">*</span></label><input type="number" id="score" value="${defaultScore}" min="1"></div>
+    <div class="form-group"><label>解析文本</label><textarea id="explanation" placeholder="答案解析..."></textarea></div>
+  </div>`;
+}
+
+/* ====== R01 图文匹配配置 - 双列布局（独立图片和句子列表） ====== */
+function renderR01Config() {
+  const imgCount = state.r01ImageCount;
+  const sentCount = state.r01SentCount;
+  const startNum = state.r01StartNum;
+  let h = '';
+  
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r01_start_num" value="${startNum}" min="1" onchange="state.r01StartNum=parseInt(this.value)||31; renderPreview()"></div>
+  </div>`;
+  
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>图片-句子配对</div>
+    <div class="r01-config-container">
+      <!-- 图片列 -->
+      <div>
+        <div class="r01-config-column-header">图片列表（${imgCount}个）</div>`;
+  
+  for (let i = 1; i <= imgCount; i++) {
+    const imgName = state.r01Images[i] || '';
+    h += `<div class="r01-img-card">
+      <div class="r01-img-card-header">
+        <span class="r01-img-card-label">${String.fromCharCode(64 + i)}</span>
+        <button class="sub-question-delete" onclick="removeR01Image(${i})" title="删除" style="width:22px;height:22px;margin-left:auto">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <div class="resource-selector ${imgName ? 'selected' : ''}" onclick="openResourceModal('image','r01_img_${i}')">
+          <svg class="resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span class="resource-name ${imgName ? '' : 'empty'}" id="r01_img_name_${i}">${imgName || '选择图片'}</span>
+          <span class="resource-action">选择</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  
+  h += `<button class="add-sub-btn" onclick="addR01Image()" style="margin-top:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      添加图片
+    </button>
+  </div>
+      <!-- 句子列 -->
+      <div>
+        <div class="r01-config-column-header">句子列表（${sentCount}个）</div>`;
+  
+  for (let i = 1; i <= sentCount; i++) {
+    const sentText = state.r01Sentences[i] || '';
+    const pinyin = state.r01Pinyin[i] || '';
+    h += `<div class="r01-sent-card">
+      <div class="r01-sent-card-header">
+        <span class="r01-sent-card-label">${startNum + i - 1}</span>
+        <span style="font-size:11px;color:var(--color-text-tertiary);flex:1" id="r01_sent_preview_${i}">${sentText || '句子 ' + i + '...'}</span>
+        <button class="sub-question-delete" onclick="removeR01Sentence(${i})" title="删除" style="width:22px;height:22px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <input type="text" id="r01_sent_${i}" value="${sentText}" placeholder="输入句子..." oninput="onR01SentChange(${i}, this.value)">
+      </div>
+      <div class="form-group pinyin-field" style="margin-bottom:0">
+        <input type="text" id="r01_pinyin_${i}" value="${pinyin}" placeholder="拼音..." oninput="state.r01Pinyin[${i}]=this.value; renderPreview()">
+      </div>
+    </div>`;
+  }
+  
+  h += `<button class="add-sub-btn" onclick="addR01Sentence()" style="margin-top:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      添加句子
+    </button>
+  </div>
+    </div>
+  </div>`;
+
+  // 正确匹配关系
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>正确匹配关系</div>`;
+  for (let i = 1; i <= imgCount; i++) {
+    h += `<div class="match-row">
+      <span style="font-size:12px;font-weight:600;min-width:60px">图片 ${String.fromCharCode(64 + i)}</span>
+      <span class="match-arrow">&rarr;</span>
+      <select id="r01_match_${i}" onchange="state.r01Match[${i}]=this.value; renderPreview()">
+        <option value="">-- 选择匹配句子 --</option>`;
+    for (let j = 1; j <= sentCount; j++) {
+      h += `<option value="${String.fromCharCode(64 + j)}" ${state.r01Match[i] === String.fromCharCode(64 + j) ? 'selected' : ''}>句子 ${String.fromCharCode(64 + j)}</option>`;
+    }
+    h += `</select></div>`;
+  }
+  h += `</div>`;
+
+  return h;
+}
+
+function onR01SentChange(idx, val) {
+  state.r01Sentences[idx] = val;
+  const pinyin = generateMockPinyin(val);
+  state.r01Pinyin[idx] = pinyin;
+  const pinyinEl = document.getElementById(`r01_pinyin_${idx}`);
+  if (pinyinEl) pinyinEl.value = pinyin;
+  const previewEl = document.getElementById(`r01_sent_preview_${idx}`);
+  if (previewEl) previewEl.textContent = val || '句子 ' + idx + '...';
+  renderPreview();
+}
+
+function addR01Image() { state.r01ImageCount++; renderConfig(); renderPreview(); }
+function removeR01Image(idx) { if (state.r01ImageCount <= 2) return; state.r01ImageCount--; renderConfig(); renderPreview(); }
+function addR01Sentence() { state.r01SentCount++; renderConfig(); renderPreview(); }
+function removeR01Sentence(idx) { if (state.r01SentCount <= 2) return; state.r01SentCount--; renderConfig(); renderPreview(); }
+
+/* ====== R02 问答匹配配置 ====== */
+function renderR02Config() {
+  const qCount = state.r02QCount;
+  const aCount = state.r02ACount;
+  const startNum = state.r02StartNum;
+  let h = '';
+  
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r02_start_num" value="${startNum}" min="1" onchange="state.r02StartNum=parseInt(this.value)||36; renderPreview()"></div>
+  </div>`;
+
+  // 问题列表
+  h += `<div class="config-section" id="r02_questions_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>问题列表（${qCount}个）</div>`;
+  for (let i = 1; i <= qCount; i++) {
+    const txt = state.r02QTexts[i] || '';
+    const py = state.r02QPinyin[i] || '';
+    h += `<div class="sub-question" id="r02_q_block_${i}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${startNum + i - 1}.</span>
+        <span class="sub-question-title">问题 ${i}</span>
+        <button class="sub-question-delete" onclick="removeR02Question(${i})" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group"><label>问题文本 <span class="required">*</span></label><input type="text" id="r02_q_${i}" value="${txt}" placeholder="输入问题..." oninput="onR02QChange(${i}, this.value)"></div>
+      <div class="form-group pinyin-field"><label style="font-size:11px;color:var(--color-text-tertiary)">拼音</label><input type="text" id="r02_q_py_${i}" value="${py}" placeholder="拼音..."></div>
+    </div>`;
+  }
+  h += `<button class="add-sub-btn" onclick="addR02Question()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加问题
+  </button></div>`;
+
+  // 回答列表
+  h += `<div class="config-section" id="r02_answers_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>回答列表（${aCount}个，含干扰项）</div>`;
+  for (let i = 1; i <= aCount; i++) {
+    const txt = state.r02ATexts[i] || '';
+    const py = state.r02APinyin[i] || '';
+    h += `<div class="sub-question" id="r02_a_block_${i}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${String.fromCharCode(64 + i)}</span>
+        <span class="sub-question-title">回答 ${i}</span>
+        <button class="sub-question-delete" onclick="removeR02Answer(${i})" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group"><label>回答文本 <span class="required">*</span></label><input type="text" id="r02_a_${i}" value="${txt}" placeholder="输入回答..." oninput="onR02AChange(${i}, this.value)"></div>
+      <div class="form-group pinyin-field"><label style="font-size:11px;color:var(--color-text-tertiary)">拼音</label><input type="text" id="r02_a_py_${i}" value="${py}" placeholder="拼音..."></div>
+    </div>`;
+  }
+  h += `<button class="add-sub-btn" onclick="addR02Answer()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加回答
+  </button></div>`;
+
+  // 正确匹配关系
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>正确匹配关系</div>`;
+  for (let i = 1; i <= qCount; i++) {
+    h += `<div class="match-row">
+      <span style="font-size:12px;font-weight:600;min-width:60px">${startNum + i - 1}.</span>
+      <span class="match-arrow">&rarr;</span>
+      <select id="r02_match_${i}" onchange="state.r02Match[${i}]=this.value; renderPreview()">
+        <option value="">-- 选择匹配回答 --</option>`;
+    for (let j = 1; j <= aCount; j++) {
+      h += `<option value="${String.fromCharCode(64 + j)}" ${state.r02Match[i] === String.fromCharCode(64 + j) ? 'selected' : ''}>回答 ${String.fromCharCode(64 + j)}</option>`;
+    }
+    h += `</select></div>`;
+  }
+  h += `</div>`;
+
+  return h;
+}
+
+function onR02QChange(idx, val) {
+  state.r02QTexts[idx] = val;
+  state.r02QPinyin[idx] = generateMockPinyin(val);
+  const pyEl = document.getElementById(`r02_q_py_${idx}`);
+  if (pyEl) pyEl.value = state.r02QPinyin[idx];
+  renderPreview();
+}
+
+function onR02AChange(idx, val) {
+  state.r02ATexts[idx] = val;
+  state.r02APinyin[idx] = generateMockPinyin(val);
+  const pyEl = document.getElementById(`r02_a_py_${idx}`);
+  if (pyEl) pyEl.value = state.r02APinyin[idx];
+  renderPreview();
+}
+
+function addR02Question() { state.r02QCount++; renderConfig(); renderPreview(); }
+function removeR02Question(idx) { if (state.r02QCount <= 2) return; state.r02QCount--; renderConfig(); renderPreview(); }
+function addR02Answer() { state.r02ACount++; renderConfig(); renderPreview(); }
+function removeR02Answer(idx) { if (state.r02ACount <= 3) return; state.r02ACount--; renderConfig(); renderPreview(); }
+
+/* ====== R03 选词填空配置 ====== */
+function renderR03Config() {
+  const blankCount = state.r03Blanks;
+  const wordCount = state.r03Words;
+  const startNum = state.r03StartNum;
+  let h = '';
+  
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r03_start_num" value="${startNum}" min="1" onchange="state.r03StartNum=parseInt(this.value)||41; renderPreview()"></div>
+  </div>`;
+
+  // 挖空句子
+  h += `<div class="config-section" id="r03_blanks_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>挖空句子（${blankCount}个）</div>
+    <p style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px">用 ___ 标记空白位置，例如：他每天早上___去学校。</p>`;
+  for (let i = 1; i <= blankCount; i++) {
+    const txt = state.r03Sentences[i] || '';
+    h += `<div class="sub-question" id="r03_blank_${i}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${startNum + i - 1}.</span>
+        <span class="sub-question-title">句子/对话 ${i}</span>
+        <button class="sub-question-delete" onclick="removeR03Blank(${i})" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group"><label>文本 <span class="required">*</span></label><input type="text" id="r03_sent_${i}" value="${txt}" placeholder="用___标记空白..." oninput="state.r03Sentences[${i}]=this.value; renderPreview()"></div>
+      <div class="form-group"><label>选择正确答案</label><select id="r03_ans_${i}" onchange="state.r03Answers[${i}]=this.value; renderPreview()">
+        <option value="">-- 选择正确词语 --</option>`;
+    for (let j = 1; j <= wordCount; j++) {
+      const w = state.r03WordList[j] || `词语${j}`;
+      h += `<option value="${j}" ${state.r03Answers[i] == j ? 'selected' : ''}>${String.fromCharCode(64 + j)}. ${w}</option>`;
+    }
+    h += `</select></div></div>`;
+  }
+  h += `<button class="add-sub-btn" onclick="addR03Blank()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加挖空
+  </button></div>`;
+
+  // 选项词语
+  h += `<div class="config-section" id="r03_words_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>选项词语（${wordCount}个）</div>
+    <div class="form-row">`;
+  for (let i = 1; i <= wordCount; i++) {
+    const w = state.r03WordList[i] || '';
+    const canDelete = wordCount > 2;
+    h += `<div class="form-group" style="margin-bottom:0">
+      <label>${String.fromCharCode(64 + i)}.</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="r03_word_${i}" value="${w}" placeholder="词语${i}" oninput="state.r03WordList[${i}]=this.value; renderConfig(); renderPreview()" style="flex:1">
+        ${canDelete ? `<button class="sub-question-delete" onclick="removeR03Word(${i})" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+      </div>
+    </div>`;
+  }
+  h += `</div>
+    <button class="add-sub-btn" onclick="addR03Word()" style="margin-top:12px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      添加词语
+    </button>
+  </div>`;
+
+  return h;
+}
+
+function addR03Blank() { state.r03Blanks++; renderConfig(); renderPreview(); }
+function removeR03Blank(idx) { if (state.r03Blanks <= 1) return; state.r03Blanks--; renderConfig(); renderPreview(); }
+function addR03Word() { state.r03Words++; renderConfig(); renderPreview(); }
+function removeR03Word(idx) { if (state.r03Words <= 2) return; state.r03Words--; renderConfig(); renderPreview(); }
+
+/* ====== R04 句子排序配置 ====== */
+function renderR04Config() {
+  const count = state.r04Sentences;
+  const letters = 'ABCDE'.split('');
+  const startNum = state.r04StartNum;
+  let h = '';
+
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r04_start_num" value="${startNum}" min="1" onchange="state.r04StartNum=parseInt(this.value)||51; renderPreview()"></div>
+  </div>`;
+
+  h += `<div class="config-section" id="r04_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>打乱段落/句子（${count}个）</div>
+    <p style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px">每个段落对应一个字母标签（A-E），考生需将它们排列成正确顺序。</p>`;
+
+  for (let i = 0; i < count; i++) {
+    const letter = letters[i] || String.fromCharCode(65 + i);
+    const txt = state.r04Texts[letter] || '';
+    h += `<div class="sub-question" id="r04_block_${letter}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${letter}</span>
+        <span class="sub-question-title">段落 ${letter}</span>
+        <button class="sub-question-delete" onclick="removeR04Sentence('${letter}')" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group"><label>文本 <span class="required">*</span></label><textarea id="r04_text_${letter}" rows="2" placeholder="输入段落内容..." oninput="state.r04Texts['${letter}']=this.value; renderPreview()">${txt}</textarea></div>
+    </div>`;
+  }
+
+  h += `<button class="add-sub-btn" onclick="addR04Sentence()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加段落
+  </button></div>`;
+
+  // 正确顺序设置
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>正确顺序设置</div>
+    <p style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px">为每个子题设置正确答案字母。</p>`;
+
+  for (let i = 0; i < count; i++) {
+    const qNum = startNum + i;
+    const currentVal = state.r04Order[qNum] || '';
+    h += `<div class="match-row">
+      <span style="font-size:12px;font-weight:600;min-width:60px">${qNum}.</span>
+      <span class="match-arrow">&rarr;</span>
+      <select id="r04_order_${qNum}" onchange="state.r04Order[${qNum}]=this.value; renderPreview()">
+        <option value="">-- 选择字母 --</option>`;
+    for (let j = 0; j < count; j++) {
+      const letter = letters[j] || String.fromCharCode(65 + j);
+      h += `<option value="${letter}" ${currentVal === letter ? 'selected' : ''}>${letter}</option>`;
+    }
+    h += `</select></div>`;
+  }
+
+  // 可视化槽位
+  h += `<div style="margin-top:16px">
+    <label style="font-size:12px;font-weight:500;color:var(--color-text-secondary);display:block;margin-bottom:8px">顺序预览</label>
+    <div class="sort-slots">`;
+  for (let i = 0; i < count; i++) {
+    const qNum = startNum + i;
+    const val = state.r04Order[qNum] || '';
+    if (i > 0) h += `<span class="sort-arrow">&rarr;</span>`;
+    h += `<div class="sort-slot ${val ? 'filled' : ''}" id="r04_slot_${qNum}">${val || '?'}</div>`;
+  }
+  h += `</div></div></div>`;
+
+  return h;
+}
+
+function addR04Sentence() { state.r04Sentences++; renderConfig(); renderPreview(); }
+function removeR04Sentence(letter) { if (state.r04Sentences <= 2) return; state.r04Sentences--; delete state.r04Texts[letter]; renderConfig(); renderPreview(); }
+
+/* ====== R05 段落填空配置（新格式） ====== */
+function renderR05Config() {
+  const blankCount = state.r05Blanks;
+  const optCount = state.r05Options;
+  const startNum = state.r05StartNum;
+  let h = '';
+
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r05_start_num" value="${startNum}" min="1" onchange="state.r05StartNum=parseInt(this.value)||56; renderPreview()"></div>
+  </div>`;
+
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>短文内容</div>
+    <div class="form-group"><label>文章内容 <span class="required">*</span></label><textarea id="r05_passage" rows="6" placeholder="输入短文内容，用 ___ 标记空白位置..." oninput="state.r05Passage=this.value; updateR05BlankCount(); renderConfig(); renderPreview()">${state.r05Passage}</textarea></div>
+    <p style="font-size:11px;color:var(--color-text-tertiary)">用 ___ 标记需要挖空的位置，每个 ___ 对应一个空白。</p>
+  </div>`;
+
+  // 空白位置配置
+  h += `<div class="config-section" id="r05_blanks_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>选项配置（${optCount}个选项）</div>`;
+
+  for (let i = 1; i <= optCount; i++) {
+    const txt = state.r05BlankTexts[i] || '';
+    const ans = state.r05Answer[i] || '';
+    const optLabels = 'ABCDEFGHIJ';
+    h += `<div class="sub-question" id="r05_opt_${i}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${optLabels[i-1]}</span>
+        <span class="sub-question-title">选项 ${optLabels[i-1]}</span>
+        <button class="sub-question-delete" onclick="removeR05Option(${i})" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group"><label>选项文本 <span class="required">*</span></label><input type="text" id="r05_opt_text_${i}" value="${txt}" placeholder="输入选项句子..." oninput="state.r05BlankTexts[${i}]=this.value; renderPreview()"></div>
+      <div class="form-group"><label>选择正确答案</label><select id="r05_opt_blank_${i}" onchange="state.r05Answer[${i}]=this.value; renderPreview()">
+        <option value="">-- 不对应任何空白 --</option>`;
+    for (let j = 1; j <= blankCount; j++) {
+      h += `<option value="${j}" ${ans == j ? 'selected' : ''}>空白 ${j}</option>`;
+    }
+    h += `</select></div></div>`;
+  }
+
+  h += `<button class="add-sub-btn" onclick="addR05Option()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加选项
+  </button></div>`;
+
+  return h;
+}
+
+function updateR05BlankCount() {
+  const passage = state.r05Passage || '';
+  const matches = passage.match(/___/g);
+  const count = matches ? matches.length : 0;
+  if (count > 0) {
+    state.r05Blanks = count;
+  }
+}
+
+function addR05Option() { state.r05Options++; renderConfig(); renderPreview(); }
+function removeR05Option(idx) { if (state.r05Options <= 3) return; state.r05Options--; delete state.r05BlankTexts[idx]; delete state.r05Answer[idx]; renderConfig(); renderPreview(); }
+
+/* ====== R06 完形填空配置 ====== */
+function renderR06Config() {
+  const blankCount = state.r06Blanks;
+  const optCount = state.r06Options;
+  const startNum = state.r06StartNum;
+  let h = '';
+
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r06_start_num" value="${startNum}" min="1" onchange="state.r06StartNum=parseInt(this.value)||61; renderPreview()"></div>
+  </div>`;
+
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>短文内容</div>
+    <div class="form-group"><label>文章内容 <span class="required">*</span></label><textarea id="r06_passage" rows="5" placeholder="输入短文内容，用 ___ 标记空白位置..." oninput="state.r06Passage=this.value; renderPreview()">${state.r06Passage}</textarea></div>
+    <p style="font-size:11px;color:var(--color-text-tertiary)">用 ___ 标记需要挖空的位置，每个 ___ 对应一个空白。</p>
+  </div>`;
+
+  // 空白位置配置
+  h += `<div class="config-section" id="r06_blanks_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>空白位置（${blankCount}个）</div>`;
+
+  for (let i = 1; i <= blankCount; i++) {
+    if (!state.r06BlankOpts[i]) state.r06BlankOpts[i] = ['', '', '', ''];
+    const opts = state.r06BlankOpts[i];
+    const ans = state.r06BlankAnswers[i] || '';
+
+    h += `<div class="blank-option-group" id="r06_blank_group_${i}">
+      <div class="blank-option-group-header">
+        <span class="blank-num">${startNum + i - 1}.</span>
+        <span style="font-size:13px;font-weight:500">空白 ${i}</span>
+        <div style="flex:1"></div>
+        <button class="sub-question-delete" onclick="removeR06Blank(${i})" title="删除" style="width:24px;height:24px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-row">`;
+    for (let j = 0; j < optCount; j++) {
+      const optLabels = 'ABCD';
+      h += `<div class="form-group" style="margin-bottom:0"><label>${optLabels[j]}.</label><input type="text" id="r06_b${i}_opt${j}" value="${opts[j] || ''}" placeholder="选项${optLabels[j]}" oninput="state.r06BlankOpts[${i}][${j}]=this.value; renderPreview()"></div>`;
+    }
+    h += `</div>
+      <div class="form-group"><label>选择正确答案</label><select id="r06_b${i}_ans" onchange="state.r06BlankAnswers[${i}]=this.value; renderPreview()">
+        <option value="">-- 选择 --</option>`;
+    for (let j = 0; j < optCount; j++) {
+      const optLabels = 'ABCD';
+      h += `<option value="${optLabels[j]}" ${ans === optLabels[j] ? 'selected' : ''}>${optLabels[j]}</option>`;
+    }
+    h += `</select></div></div>`;
+  }
+
+  h += `<button class="add-sub-btn" onclick="addR06Blank()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加空白
+  </button></div>`;
+
+  return h;
+}
+
+function addR06Blank() { state.r06Blanks++; state.r06BlankOpts[state.r06Blanks] = ['', '', '', '']; renderConfig(); renderPreview(); }
+function removeR06Blank(idx) { if (state.r06Blanks <= 1) return; state.r06Blanks--; delete state.r06BlankOpts[idx]; delete state.r06BlankAnswers[idx]; renderConfig(); renderPreview(); }
+
+/* ====== R07 阅读理解配置 ====== */
+function renderR07Config() {
+  const subCount = state.r07Subs;
+  const startNum = state.r07StartNum;
+  let h = '';
+
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r07_start_num" value="${startNum}" min="1" onchange="state.r07StartNum=parseInt(this.value)||66; renderPreview()"></div>
+  </div>`;
+
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>文章内容</div>
+    <div class="form-group"><label>文章 <span class="required">*</span></label><textarea id="r07_article" rows="6" placeholder="输入文章内容..." oninput="state.r07Article=this.value; renderPreview()">${state.r07Article}</textarea></div>
+  </div>`;
+
+  h += `<div class="config-section" id="r07_subs_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>子题目（${subCount}道）</div>`;
+
+  for (let i = 1; i <= subCount; i++) {
+    if (!state.r07SubQs[i]) state.r07SubQs[i] = { question: '', a: '', b: '', c: '', d: '', answer: 'C' };
+    const sq = state.r07SubQs[i];
+
+    h += `<div class="sub-question" id="r07_sub_${i}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${startNum + i - 1}.</span>
+        <span class="sub-question-title">${startNum + i - 1}.</span>
+        <button class="sub-question-delete" onclick="removeR07Sub(${i})" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-group"><label>问题 <span class="required">*</span></label><input type="text" id="r07_q${i}" value="${sq.question}" placeholder="问题内容..." oninput="state.r07SubQs[${i}].question=this.value; renderPreview()"></div>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0"><label>A.</label><input type="text" id="r07_${i}_a" value="${sq.a}" placeholder="选项A" oninput="state.r07SubQs[${i}].a=this.value; renderPreview()"></div>
+        <div class="form-group" style="margin-bottom:0"><label>B.</label><input type="text" id="r07_${i}_b" value="${sq.b}" placeholder="选项B" oninput="state.r07SubQs[${i}].b=this.value; renderPreview()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0"><label>C.</label><input type="text" id="r07_${i}_c" value="${sq.c}" placeholder="选项C" oninput="state.r07SubQs[${i}].c=this.value; renderPreview()"></div>
+        <div class="form-group" style="margin-bottom:0"><label>D.</label><input type="text" id="r07_${i}_d" value="${sq.d}" placeholder="选项D" oninput="state.r07SubQs[${i}].d=this.value; renderPreview()"></div>
+      </div>
+      <div class="form-group"><label>选择正确答案</label><select id="r07_${i}_ans" onchange="state.r07SubQs[${i}].answer=this.value; renderPreview()">
+        <option value="A" ${sq.answer==='A'?'selected':''}>A</option>
+        <option value="B" ${sq.answer==='B'?'selected':''}>B</option>
+        <option value="C" ${sq.answer==='C'?'selected':''}>C</option>
+        <option value="D" ${sq.answer==='D'?'selected':''}>D</option>
+      </select></div>
+    </div>`;
+  }
+
+  h += `<button class="add-sub-btn" onclick="addR07Sub()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加子题目
+  </button></div>`;
+
+  return h;
+}
+
+function addR07Sub() { state.r07Subs++; state.r07SubQs[state.r07Subs] = { question: '', a: '', b: '', c: '', d: '', answer: 'C' }; renderConfig(); renderPreview(); }
+function removeR07Sub(idx) { if (state.r07Subs <= 1) return; state.r07Subs--; delete state.r07SubQs[idx]; renderConfig(); renderPreview(); }
+
+/* ====== R08 图片判断配置 ====== */
+function renderR08Config() {
+  const startNum = state.r08StartNum || 71;
+  let h = '';
+
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r08_start_num" value="${startNum}" min="1" onchange="state.r08StartNum=parseInt(this.value)||71; renderPreview()"></div>
+  </div>`;
+
+  // 题干文本
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>题干文本</div>
+    <div class="form-group"><label>文本内容 <span class="required">*</span></label><textarea id="r08_text" rows="3" placeholder="输入题干文本..." oninput="state.r08Text=this.value; renderPreview()">${state.r08Text || ''}</textarea></div>
+  </div>`;
+
+  // 题目图片
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>题目图片</div>
+    <div class="form-group"><label>图片资源 <span class="required">*</span></label>
+      <div class="resource-selector" onclick="openResourceModal('image','r08')">
+        <svg class="resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span class="resource-name ${state.r08Image ? '' : 'empty'}" id="r08_img_name">${state.r08Image || '点击选择图片资源'}</span>
+        <span class="resource-action">选择</span>
+      </div>
+    </div>
+  </div>`;
+
+  // 判断选项
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>判断选项</div>
+    <div class="form-row" style="gap:20px">
+      <label class="checkbox-label" style="flex:1;justify-content:center;padding:12px;border:1px solid var(--color-border);border-radius:var(--radius-md)">
+        <span style="font-size:24px">&#x2714;</span>
+        <input type="radio" name="r08_answer" value="correct" ${state.r08Answer !== 'wrong' ? 'checked' : ''} onchange="state.r08Answer='correct'; renderPreview()">
+      </label>
+      <label class="checkbox-label" style="flex:1;justify-content:center;padding:12px;border:1px solid var(--color-border);border-radius:var(--radius-md)">
+        <span style="font-size:24px">&#x2718;</span>
+        <input type="radio" name="r08_answer" value="wrong" ${state.r08Answer === 'wrong' ? 'checked' : ''} onchange="state.r08Answer='wrong'; renderPreview()">
+      </label>
+    </div>
+    <div class="form-group" style="margin-top:12px"><label>正确答案</label><select id="r08_correct" onchange="state.r08Answer=this.value; renderPreview()">
+      <option value="correct" ${state.r08Answer !== 'wrong' ? 'selected' : ''}>&#x2714; 对</option>
+      <option value="wrong" ${state.r08Answer === 'wrong' ? 'selected' : ''}>&#x2718; 错</option>
+    </select></div>
+  </div>`;
+
+  return h;
+}
+
+/* ====== R09 图片选词填空配置 ====== */
+function renderR09Config() {
+  const qCount = state.r09Questions || 2;
+  const optCount = state.r09Options || 6;
+  const startNum = state.r09StartNum || 31;
+  let h = '';
+
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="r09_start_num" value="${startNum}" min="1" onchange="state.r09StartNum=parseInt(this.value)||31; renderPreview()"></div>
+  </div>`;
+
+  // 选项列表（上方，A.叫格式）
+  h += `<div class="config-section" id="r09_options_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>选项列表（${optCount}个）</div>
+    <p style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px">用 ___ 标记挖空位置，例如：A: 这个___小吗？</p>
+    <div class="form-row">`;
+
+  for (let i = 1; i <= optCount; i++) {
+    if (!state.r09Opts[i]) state.r09Opts[i] = { text: i === 1 ? '叫' : i === 2 ? '不客气' : i === 3 ? '没有' : i === 4 ? '房间' : i === 5 ? '也' : '只' };
+    const opt = state.r09Opts[i];
+    const canDelete = optCount > 2;
+    h += `<div class="form-group" style="margin-bottom:0">
+      <label>${String.fromCharCode(64 + i)}.</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="r09_opt_${i}" value="${opt.text}" placeholder="词语..." oninput="state.r09Opts[${i}].text=this.value; renderPreview()" style="flex:1">
+        ${canDelete ? `<button class="sub-question-delete" onclick="removeR09Option(${i})" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+      </div>
+    </div>`;
+  }
+  h += `</div>`;
+  h += `<button class="add-sub-btn" onclick="addR09Option()" style="margin-top:12px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加选项
+  </button></div>`;
+
+  // 题目列表（每道题有图片和对话，用___标记挖空）
+  h += `<div class="config-section" id="r09_questions_section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>题目列表（${qCount}道）</div>`;
+
+  for (let i = 1; i <= qCount; i++) {
+    if (!state.r09Qs[i]) state.r09Qs[i] = { 
+      image: '', 
+      dialogue: 'A: 这个___小吗？\nB: 不___。',
+      answer: '' 
+    };
+    const q = state.r09Qs[i];
+    const canDelete = qCount > 1;
+    h += `<div class="sub-question" id="r09_q_${i}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${startNum + i - 1}.</span>
+        <span class="sub-question-title">第 ${startNum + i - 1} 题</span>
+        ${canDelete ? `<button class="sub-question-delete" onclick="removeR09Question(${i})" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+      </div>
+      <div class="form-group"><label>图片资源 <span class="required">*</span></label>
+        <div class="resource-selector" onclick="openResourceModal('image','r09_img_${i}')">
+          <svg class="resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span class="resource-name ${q.image ? '' : 'empty'}" id="r09_img_name_${i}">${q.image || '点击选择图片资源'}</span>
+          <span class="resource-action">选择</span>
+        </div>
+      </div>
+      <div class="form-group"><label>对话内容 <span class="required">*</span></label>
+        <textarea id="r09_${i}_dialogue" rows="3" placeholder="用___标记挖空，例如：&#10;A: 这个___小吗？&#10;B: 不___。" oninput="state.r09Qs[${i}].dialogue=this.value; renderPreview()">${q.dialogue || ''}</textarea>
+      </div>
+      <div class="form-group" style="margin-top:12px;margin-bottom:0"><label>正确答案</label><select id="r09_${i}_answer" onchange="state.r09Qs[${i}].answer=this.value; renderPreview()">
+        <option value="">-- 选择答案 --</option>
+        ${Array.from({length: optCount}, (_, j) => `<option value="${String.fromCharCode(65 + j)}" ${q.answer === String.fromCharCode(65 + j) ? 'selected' : ''}>${String.fromCharCode(65 + j)}</option>`).join('')}
+      </select></div>
+    </div>`;
+  }
+  h += `<button class="add-sub-btn" onclick="addR09Question()" style="margin-top:8px">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加题目
+  </button></div>`;
+
+  return h;
+}
+
+function addR09Question() { state.r09Questions = (state.r09Questions || 2) + 1; renderConfig(); renderPreview(); }
+function removeR09Question(idx) { if (state.r09Questions <= 1) return; state.r09Questions--; delete state.r09Qs[idx]; renderConfig(); renderPreview(); }
+function addR09Option() { state.r09Options = (state.r09Options || 6) + 1; renderConfig(); renderPreview(); }
+function removeR09Option(idx) { if (state.r09Options <= 2) return; state.r09Options--; delete state.r09Opts[idx]; renderConfig(); renderPreview(); }
+
+/* ====== 渲染预览面板 ====== */
+function renderPreview() {
+  const preview = document.getElementById('preview_content');
+  let h = '';
+  switch (currentType) {
+    case 'R01': h = renderR01Preview(); break;
+    case 'R02': h = renderR02Preview(); break;
+    case 'R03': h = renderR03Preview(); break;
+    case 'R04': h = renderR04Preview(); break;
+    case 'R05': h = renderR05Preview(); break;
+    case 'R06': h = renderR06Preview(); break;
+    case 'R07': h = renderR07Preview(); break;
+    case 'R08': h = renderR08Preview(); break;
+    case 'R09': h = renderR09Preview(); break;
+  }
+  preview.innerHTML = h;
+}
+
+/* R01 预览 - 新格式：左图右句 */
+function renderR01Preview() {
+  const imgCount = state.r01ImageCount;
+  const sentCount = state.r01SentCount;
+  const startNum = state.r01StartNum;
+  const showPy = shouldShowPinyin();
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${startNum}-${startNum + imgCount - 1}题</span>
+  </div>
+  <div class="preview-r01-container">
+    <div>
+      <div class="preview-r02-column-header">图片区域</div>
+      <div class="preview-r01-images">`;
+
+  for (let i = 1; i <= imgCount; i++) {
+    const imgName = state.r01Images[i] || '';
+    h += `<div class="preview-r01-img-slot">
+      ${imgName ? '<span style="font-size:32px">&#x1F5BC;</span>' : '<span style="font-size:24px;color:var(--color-text-tertiary)">&#x25A0;</span>'}
+      <span style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">${String.fromCharCode(64 + i)}</span>
+    </div>`;
+  }
+
+  h += `</div></div>
+    <div>
+      <div class="preview-r02-column-header">文字选项</div>
+      <div class="preview-r01-sentences">`;
+
+  for (let i = 1; i <= sentCount; i++) {
+    const sentText = state.r01Sentences[i] || `句子 ${i}...`;
+    const pinyin = state.r01Pinyin[i] || generateMockPinyin(sentText);
+
+    h += `<div class="preview-r01-txt-opt">
+      <span style="font-size:11px;font-family:var(--font-mono);color:var(--color-text-tertiary);min-width:16px">${startNum + i - 1}</span>
+      <span>${sentText}${showPy ? `<br><span style="font-size:11px;color:var(--color-text-tertiary)">${pinyin}</span>` : ''}</span>
+    </div>`;
+  }
+
+  h += `</div></div></div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R02 预览 - 左问题右回答 */
+function renderR02Preview() {
+  const qCount = state.r02QCount;
+  const aCount = state.r02ACount;
+  const startNum = state.r02StartNum;
+  const showPy = shouldShowPinyin();
+  const endNum = startNum + qCount - 1;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${qCount === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-r02-container">
+    <div>
+      <div class="preview-r02-column-header">问句</div>
+      <div class="preview-r02-questions">`;
+
+  for (let i = 1; i <= qCount; i++) {
+    const txt = state.r02QTexts[i] || `问题 ${i}...`;
+    const pinyin = state.r02QPinyin[i] || generateMockPinyin(txt);
+
+    h += `<div class="preview-r02-item">
+      <span class="item-badge">${startNum + i - 1}.</span>
+      <span>${txt}${showPy ? `<br><span style="font-size:11px;color:var(--color-text-tertiary)">${pinyin}</span>` : ''}</span>
+    </div>`;
+  }
+
+  h += `</div></div>
+    <div>
+      <div class="preview-r02-column-header">答句</div>
+      <div class="preview-r02-answers">`;
+
+  for (let i = 1; i <= aCount; i++) {
+    const txt = state.r02ATexts[i] || `回答 ${i}...`;
+    const pinyin = state.r02APinyin[i] || generateMockPinyin(txt);
+
+    h += `<div class="preview-r02-item">
+      <span class="item-badge">${String.fromCharCode(64+i)}</span>
+      <span>${txt}${showPy ? `<br><span style="font-size:11px;color:var(--color-text-tertiary)">${pinyin}</span>` : ''}</span>
+    </div>`;
+  }
+
+  h += `</div></div></div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R03 预览 */
+function renderR03Preview() {
+  const blankCount = state.r03Blanks;
+  const wordCount = state.r03Words;
+  const startNum = state.r03StartNum;
+  const endNum = startNum + blankCount - 1;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${blankCount === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-fill-list">`;
+
+  for (let i = 1; i <= blankCount; i++) {
+    let txt = state.r03Sentences[i] || `句子 ${i}，用___标记空白...`;
+    txt = txt.replace(/___/g, '<span class="preview-fill-blank">____</span>');
+    h += `<div class="preview-fill-item">${startNum + i - 1}. ${txt}</div>`;
+  }
+
+  h += `</div>
+  <div class="preview-word-bank">`;
+  for (let i = 1; i <= wordCount; i++) {
+    const w = state.r03WordList[i] || `词语${i}`;
+    h += `<span class="preview-word-chip">${String.fromCharCode(64 + i)}. ${w}</span>`;
+  }
+  h += `</div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R04 预览 */
+function renderR04Preview() {
+  const count = state.r04Sentences;
+  const letters = 'ABCDE'.split('');
+  const startNum = state.r04StartNum;
+  const endNum = startNum + count - 1;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${count === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-sort-list">`;
+
+  for (let i = 0; i < count; i++) {
+    const letter = letters[i] || String.fromCharCode(65 + i);
+    const txt = state.r04Texts[letter] || `段落 ${letter} 的内容...`;
+    h += `<div class="preview-sort-card">
+      <span class="letter-badge">${letter}</span>
+      <span class="card-text">${txt}</span>
+    </div>`;
+  }
+
+  h += `</div>
+  <div style="margin-bottom:8px;font-size:12px;color:var(--color-text-secondary);text-align:center">将字母拖入对应的题目位置：</div>
+  <div class="preview-sort-slots">`;
+
+  for (let i = 0; i < count; i++) {
+    const qNum = startNum + i;
+    const val = state.r04Order[qNum] || '';
+    if (i > 0) h += `<span class="preview-sort-arrow">&rarr;</span>`;
+    h += `<div class="preview-sort-slot ${val ? 'filled' : ''}">
+      <div style="text-align:center">
+        <div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">${qNum}</div>
+        <div>${val || '?'}</div>
+      </div>
+    </div>`;
+  }
+
+  h += `</div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R05 预览 - 段落填空（新格式） */
+function renderR05Preview() {
+  const passage = state.r05Passage || '请输入短文内容...';
+  const optCount = state.r05Options;
+  const startNum = state.r05StartNum;
+
+  // 计算文章中的空白数量
+  const blankCount = (passage.match(/___/g) || []).length;
+  const endNum = startNum + blankCount - 1;
+
+  // 处理文章中的空白标记
+  let processedPassage = passage.replace(/___/g, '<span class="preview-passage-blank">____</span>');
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${blankCount <= 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-passage">${processedPassage}</div>`;
+
+  // 选项卡片
+  h += `<div style="margin-bottom:1rem">
+    <span style="font-size:12px;font-weight:500;color:var(--color-text-secondary);display:block;margin-bottom:10px">请选择正确的句子</span>
+    <div class="preview-option-cards">`;
+
+  const optLabels = 'ABCDEFGHIJ';
+  for (let i = 1; i <= optCount; i++) {
+    const txt = state.r05BlankTexts[i] || `选项 ${optLabels[i-1]} 的内容...`;
+    h += `<div class="preview-option-card">
+      <span class="option-key">${optLabels[i-1]}</span>
+      <span class="option-text">${txt}</span>
+    </div>`;
+  }
+
+  h += `</div></div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R06 预览 - 完形填空 */
+function renderR06Preview() {
+  const blankCount = state.r06Blanks;
+  const optCount = state.r06Options;
+  const passage = state.r06Passage || '请输入短文内容...';
+  const startNum = state.r06StartNum;
+  const endNum = startNum + blankCount - 1;
+
+  // 处理文章中的空白标记
+  let processedPassage = passage.replace(/___/g, '<span class="preview-cloze-blank">____</span>');
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${blankCount === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-cloze-passage">${processedPassage}</div>`;
+
+  // 每个空白的选项
+  for (let i = 1; i <= blankCount; i++) {
+    const opts = state.r06BlankOpts[i] || ['', '', '', ''];
+    h += `<div style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:500;margin-bottom:6px;color:var(--color-text-secondary)">${startNum + i - 1}.</div>
+      <div class="preview-cloze-options">`;
+    const optLabels = 'ABCD';
+    for (let j = 0; j < optCount; j++) {
+      h += `<span class="preview-cloze-opt">${optLabels[j]}. ${opts[j] || '...'}</span>`;
+    }
+    h += `</div></div>`;
+  }
+
+  h += `<div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R07 预览 */
+function renderR07Preview() {
+  const subCount = state.r07Subs;
+  const article = state.r07Article || '请输入文章内容...';
+  const startNum = state.r07StartNum;
+  const endNum = startNum + subCount - 1;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${subCount === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-article">${article}</div>
+  <div class="preview-sub-questions">`;
+
+  for (let i = 1; i <= subCount; i++) {
+    const sq = state.r07SubQs[i] || { question: '', a: '', b: '', c: '', d: '', answer: 'C' };
+    const qText = sq.question || `问题 ${i}...`;
+
+    h += `<div class="preview-sub-q">
+      <div class="preview-sub-q-title">${startNum + i - 1}. ${qText}</div>
+      <div class="preview-sub-q-options">
+        <div class="preview-sub-q-opt"><span>A.</span> ${sq.a || '选项A'}</div>
+        <div class="preview-sub-q-opt"><span>B.</span> ${sq.b || '选项B'}</div>
+        <div class="preview-sub-q-opt"><span>C.</span> ${sq.c || '选项C'}</div>
+        <div class="preview-sub-q-opt"><span>D.</span> ${sq.d || '选项D'}</div>
+      </div>
+    </div>`;
+  }
+
+  h += `</div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R08 预览 - 图片判断 */
+function renderR08Preview() {
+  const startNum = state.r08StartNum || 71;
+  const text = state.r08Text || '请输入题干文本...';
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${startNum}题</span>
+  </div>
+  <div class="preview-article">${text}</div>
+  <div style="display:flex;justify-content:center;margin:20px 0">
+    <div style="width:200px;height:150px;border:2px solid var(--color-border);border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;background:var(--color-surface)">
+      <span style="font-size:48px">&#x1F5BC;</span>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:center;gap:40px;margin:20px 0">
+    <div style="width:80px;height:80px;border:2px solid var(--color-border);border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:36px;color:var(--color-success)" title="对">&#x2714;</div>
+    <div style="width:80px;height:80px;border:2px solid var(--color-border);border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:36px;color:var(--color-error)" title="错">&#x2718;</div>
+  </div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* R09 预览 - 图片选词填空 */
+function renderR09Preview() {
+  const qCount = state.r09Questions || 2;
+  const optCount = state.r09Options || 6;
+  const startNum = state.r09StartNum || 31;
+  const endNum = startNum + qCount - 1;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${qCount === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>`;
+
+  // 上方选项列表（A.叫格式）
+  h += `<div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin:16px 0;padding:16px;background:var(--color-surface);border-radius:var(--radius-md)">`;
+  for (let i = 1; i <= optCount; i++) {
+    const opt = state.r09Opts[i] || { text: i === 1 ? '叫' : i === 2 ? '不客气' : i === 3 ? '没有' : i === 4 ? '房间' : i === 5 ? '也' : '只' };
+    h += `<div style="padding:8px 16px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface)">
+      <span style="font-size:14px">${String.fromCharCode(64 + i)}. ${opt.text}</span>
+    </div>`;
+  }
+  h += `</div>`;
+
+  // 题目列表（每道题有图片和对话，用___标记挖空）
+  for (let i = 1; i <= qCount; i++) {
+    const q = state.r09Qs[i] || { image: '', dialogue: 'A: 这个___小吗？\nB: 不___。' };
+    // 处理___显示为下划线空白，换行显示为<br>
+    const display = (q.dialogue || '').replace(/___/g, '<span style="display:inline-block;min-width:40px;border-bottom:2px solid var(--color-primary);margin:0 4px"></span>').replace(/\n/g, '<br>');
+    h += `<div style="display:flex;gap:16px;margin:20px 0;padding:16px;border:1px solid var(--color-border);border-radius:var(--radius-md)">
+      <div style="flex:0 0 150px;height:120px;border:2px solid var(--color-border);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;background:var(--color-surface)">
+        <span style="font-size:32px">&#x1F5BC;</span>
+      </div>
+      <div style="flex:1;font-size:14px">${display}</div>
+    </div>`;
+  }
+
+  h += `<div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* ====== 资源库弹窗 ====== */
+function openResourceModal(type, targetKey) {
+  state.currentResourceType = type;
+  state.currentTargetKey = targetKey;
+  state.selectedResourceId = null;
+  document.getElementById('modal_title').textContent = '选择图片资源';
+  renderResourceGrid();
+  document.getElementById('resource_modal').classList.add('active');
+}
+
+function closeResourceModal() {
+  document.getElementById('resource_modal').classList.remove('active');
+}
+
+function renderResourceGrid() {
+  const grid = document.getElementById('resource_grid');
+  const resources = resourceLibrary[state.currentResourceType] || [];
+  grid.innerHTML = resources.map(r => `
+    <div class="resource-item ${state.selectedResourceId === r.id ? 'selected' : ''}" onclick="selectResource('${r.id}')">
+      <div class="item-thumb">&#x1F5BC;</div>
+      <div class="item-name">${r.name}</div>
+    </div>`).join('');
+}
+
+function selectResource(id) {
+  state.selectedResourceId = id;
+  renderResourceGrid();
+}
+
+function switchResourceTab(el, tab) {
+  document.querySelectorAll('.resource-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderResourceGrid();
+}
+
+function confirmResourceSelection() {
+  if (!state.selectedResourceId) { alert('请选择一个资源'); return; }
+  const resources = resourceLibrary[state.currentResourceType];
+  const sel = resources.find(r => r.id === state.selectedResourceId);
+  if (!sel) return;
+
+  const targetKey = state.currentTargetKey;
+  if (targetKey && targetKey.startsWith('r01_img_')) {
+    const idx = targetKey.replace('r01_img_', '');
+    state.r01Images[idx] = sel.name;
+    const nameEl = document.getElementById(`r01_img_name_${idx}`);
+    if (nameEl) { nameEl.textContent = sel.name; nameEl.classList.remove('empty'); }
+    const previewEl = document.getElementById(`r01_img_preview_${idx}`);
+    if (previewEl) { previewEl.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="font-size:24px">&#x1F5BC;</span><span style="font-size:11px;color:var(--color-text-secondary)">${sel.name}</span></div>`; }
+    const selector = nameEl ? nameEl.closest('.resource-selector') : null;
+    if (selector) selector.classList.add('selected');
+    renderPreview();
+  }
+
+  closeResourceModal();
+}
+
+/* ====== 其他功能 ====== */
+function toggleJsonPreview() {
+  const el = document.getElementById('json_preview');
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    const output = { type: currentType, config: typeConfigs[currentType] };
+    document.getElementById('json_output').textContent = JSON.stringify(output, null, 2);
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function resetForm() {
+  state = {
+    selectedResourceId: null, currentResourceType: null, currentTargetKey: null,
+    r01ImageCount: 4, r01SentCount: 4, r01Images: {}, r01Sentences: {}, r01Pinyin: {}, r01Match: {}, r01StartNum: 31,
+    r02QCount: 4, r02ACount: 6, r02QTexts: {}, r02ATexts: {}, r02QPinyin: {}, r02APinyin: {}, r02Match: {}, r02StartNum: 36,
+    r03Blanks: 5, r03Words: 5, r03Sentences: {}, r03WordList: {}, r03Answers: {}, r03StartNum: 41,
+    r04Sentences: 5, r04Texts: {}, r04Order: {}, r04StartNum: 51,
+    r05Blanks: 4, r05Options: 5, r05Passage: '', r05BlankTexts: {}, r05Answer: {}, r05StartNum: 56,
+    r06Blanks: 5, r06Options: 4, r06Passage: '', r06BlankOpts: {}, r06BlankAnswers: {}, r06StartNum: 61,
+    r07Subs: 2, r07Article: '', r07SubQs: {}, r07StartNum: 66
+  };
+  renderConfig();
+  renderPreview();
+}
+
+function publishQuestion() {
+  // 检查必填项
+  const requiredFields = [];
+  const cfg = typeConfigs[currentType];
+  
+  // 检查题目ID
+  const questionId = document.getElementById('question_id')?.value?.trim();
+  if (!questionId) requiredFields.push('题目ID');
+  
+  // 检查HSK级别
+  const hskLevels = document.getElementById('hsk_levels');
+  if (!hskLevels || hskLevels.selectedOptions.length === 0) requiredFields.push('HSK级别');
+  
+  // 检查起始题号
+  const startNum = document.getElementById('r01_start_num')?.value?.trim() || 
+                   document.getElementById('r02_start_num')?.value?.trim() ||
+                   document.getElementById('r03_start_num')?.value?.trim() ||
+                   document.getElementById('r04_start_num')?.value?.trim() ||
+                   document.getElementById('r05_start_num')?.value?.trim() ||
+                   document.getElementById('r06_start_num')?.value?.trim() ||
+                   document.getElementById('r07_start_num')?.value?.trim() ||
+                   document.getElementById('r08_start_num')?.value?.trim() ||
+                   document.getElementById('r09_start_num')?.value?.trim();
+  if (!startNum) requiredFields.push('起始题号');
+  
+  // R01: 检查图片和句子
+  if (currentType === 'R01') {
+    for (let i = 1; i <= state.r01ImageCount; i++) {
+      const imgName = document.getElementById(`r01_img_name_${i}`)?.textContent;
+      if (!imgName || imgName === '点击选择图片资源') requiredFields.push(`图片 ${String.fromCharCode(64 + i)}`);
+    }
+    for (let i = 1; i <= state.r01SentCount; i++) {
+      const sentText = document.getElementById(`r01_sent_${i}`)?.value?.trim();
+      if (!sentText) requiredFields.push(`句子 ${i}`);
+    }
+  }
+  
+  // R02: 检查问题和回答
+  if (currentType === 'R02') {
+    for (let i = 1; i <= state.r02QCount; i++) {
+      const qText = document.getElementById(`r02_q_${i}`)?.value?.trim();
+      if (!qText) requiredFields.push(`问题 ${i}`);
+    }
+    for (let i = 1; i <= state.r02ACount; i++) {
+      const aText = document.getElementById(`r02_a_${i}`)?.value?.trim();
+      if (!aText) requiredFields.push(`回答 ${i}`);
+    }
+  }
+  
+  // R03: 检查挖空句子和选项
+  if (currentType === 'R03') {
+    for (let i = 1; i <= state.r03Blanks; i++) {
+      const sentText = document.getElementById(`r03_sent_${i}`)?.value?.trim();
+      if (!sentText) requiredFields.push(`句子 ${i}`);
+    }
+    for (let i = 1; i <= state.r03Words; i++) {
+      const wordText = document.getElementById(`r03_word_${i}`)?.value?.trim();
+      if (!wordText) requiredFields.push(`选项 ${i}`);
+    }
+  }
+  
+  // R04: 检查句子
+  if (currentType === 'R04') {
+    for (let i = 1; i <= state.r04Sentences; i++) {
+      const sentText = document.getElementById(`r04_sent_${i}`)?.value?.trim();
+      if (!sentText) requiredFields.push(`句子 ${i}`);
+    }
+  }
+  
+  // R05: 检查文章内容和选项
+  if (currentType === 'R05') {
+    const passage = document.getElementById('r05_passage')?.value?.trim();
+    if (!passage) requiredFields.push('文章内容');
+    for (let i = 1; i <= state.r05Options; i++) {
+      const optText = document.getElementById(`r05_opt_${i}`)?.value?.trim();
+      if (!optText) requiredFields.push(`选项 ${i}`);
+    }
+  }
+  
+  // R06: 检查文章内容和选项
+  if (currentType === 'R06') {
+    const passage = document.getElementById('r06_passage')?.value?.trim();
+    if (!passage) requiredFields.push('文章内容');
+    for (let i = 1; i <= state.r06Blanks; i++) {
+      const blankOpts = document.getElementById(`r06_blank_opts_${i}`)?.value?.trim();
+      if (!blankOpts) requiredFields.push(`空白 ${i} 选项`);
+    }
+  }
+  
+  // R07: 检查文章和子题目
+  if (currentType === 'R07') {
+    const article = document.getElementById('r07_article')?.value?.trim();
+    if (!article) requiredFields.push('文章内容');
+    for (let i = 1; i <= state.r07Subs; i++) {
+      const qText = document.getElementById(`r07_q_${i}`)?.value?.trim();
+      if (!qText) requiredFields.push(`子题目 ${i}`);
+    }
+  }
+  
+  // R08: 检查文本和图片
+  if (currentType === 'R08') {
+    const text = document.getElementById('r08_text')?.value?.trim();
+    if (!text) requiredFields.push('题干文本');
+    const imgName = document.getElementById('r08_img_name')?.textContent;
+    if (!imgName || imgName === '点击选择图片资源') requiredFields.push('题目图片');
+  }
+  
+  // R09: 检查选项和题目
+  if (currentType === 'R09') {
+    for (let i = 1; i <= (state.r09Options || 6); i++) {
+      const optText = document.getElementById(`r09_opt_${i}`)?.value?.trim();
+      if (!optText) requiredFields.push(`选项 ${String.fromCharCode(64 + i)}`);
+    }
+    for (let i = 1; i <= (state.r09Questions || 2); i++) {
+      const imgName = document.getElementById(`r09_img_name_${i}`)?.textContent;
+      if (!imgName || imgName === '点击选择图片资源') requiredFields.push(`题目 ${i} 图片`);
+      const dialogue = document.getElementById(`r09_${i}_dialogue`)?.value?.trim();
+      if (!dialogue) requiredFields.push(`题目 ${i} 对话内容`);
+    }
+  }
+  
+  if (requiredFields.length > 0) {
+    alert('无法发布，请检查必填项！');
+    return;
+  }
+  
+  alert(`题目 ${currentType} 已发布！`);
+}
+
+/* ====== 初始化 ====== */
+renderConfig();
+renderPreview();
+</script>
+</body>
+</html>

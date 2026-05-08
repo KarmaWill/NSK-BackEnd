@@ -171,7 +171,7 @@ function loadRows() {
   }
 }
 
-export function AudioReading() {
+export function AudioReading({ pageTitle = '有声阅读配置' }: { pageTitle?: string } = {}) {
   const [rows, setRows] = useState<ReadingRow[]>(() => loadRows());
   const [refreshing, setRefreshing] = useState(false);
   const [toastText, setToastText] = useState('');
@@ -319,7 +319,7 @@ export function AudioReading() {
     <>
       <div className="page-header">
         <div>
-          <div className="page-title">有声阅读配置</div>
+          <div className="page-title">{pageTitle}</div>
           <div className="page-subtitle">按 CSV 维度配置：级别/单元/名称中英/文章中英拼音 + 资源库音频挂载 + 多语言</div>
         </div>
         <div className="page-actions">

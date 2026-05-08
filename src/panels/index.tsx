@@ -1,6 +1,8 @@
 import type { PanelId } from '../types';
 import { Dashboard } from './Dashboard';
 import { CourseLibConfig } from './CourseLibConfig';
+import { Database } from './Database';
+import { Feedback } from './Feedback';
 import { AiTrainerSync } from './AiTrainerSync';
 import { AiRoles } from './AiRoles';
 import { AiFree } from './AiFree';
@@ -13,6 +15,9 @@ import { Questions } from './Questions';
 import { Multilang } from './Multilang';
 import { Vocab } from './Vocab';
 import { Hsk } from './Hsk';
+import { HskExam } from './HskExam';
+import { HskPaper } from './HskPaper';
+import { HskQuestionBank } from './HskQuestionBank';
 import { Culture } from './Culture';
 import { Library } from './Library';
 import { Users } from './Users';
@@ -32,6 +37,8 @@ type PanelProps = {
 const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   dashboard: (p) => <Dashboard {...p} />,
   'course-config': () => <CourseLibConfig />,
+  medialib: () => <MediaLib />,
+  database: () => <Database />,
   'ai-roles': () => <AiRoles />,
   'ai-capabilities': () => <AiCapabilities />,
   'ai-free': () => <AiFree />,
@@ -41,14 +48,17 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   catalog: (p) => <Lessons {...p} />,
   resources: () => <Resources />,
   'audio-reading': () => <AudioReading />,
+  'audio-reading-mgmt': () => <AudioReading pageTitle="有声阅读管理" />,
   questions: () => <Questions />,
-  medialib: () => <MediaLib />,
-  multilang: () => <Multilang />,
   vocab: () => <Vocab />,
   hsk: () => <Hsk />,
+  'hsk-question-bank': () => <HskQuestionBank />,
+  'hsk-paper': () => <HskPaper />,
+  'hsk-exam': () => <HskExam />,
   culture: () => <Culture />,
   library: () => <Library />,
   users: () => <Users />,
+  feedback: () => <Feedback />,
   premium: () => <Premium />,
   notify: () => <Notify />,
   qtype: () => <Qtype />,

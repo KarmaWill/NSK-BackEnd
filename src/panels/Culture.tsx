@@ -9,7 +9,7 @@ export function Culture() {
     <>
       <div className="page-header">
         <div>
-          <div className="page-title">文化内容管理</div>
+          <div className="page-title">文化视频管理</div>
           <div className="page-subtitle">管理文化视频、文章与交互内容</div>
         </div>
         <div className="page-actions">

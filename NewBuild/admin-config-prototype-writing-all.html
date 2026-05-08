@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>书写题型后台配置 - W01-W04</title>
+<style>
+:root {
+  --color-primary: #E85D04;
+  --color-primary-light: #FCE5D8;
+  --color-primary-dark: #C44B00;
+  --color-success: #0F6E56;
+  --color-success-light: #E1F5EE;
+  --color-error: #991B1B;
+  --color-error-light: #FCEBEB;
+  --color-warning: #854F0B;
+  --color-warning-light: #FAEEDA;
+  --color-background: #F5F5F7;
+  --color-surface: #FFFFFF;
+  --color-text-primary: #1A1A1C;
+  --color-text-secondary: #6B6B76;
+  --color-text-tertiary: #9999A5;
+  --color-border: #E5E5EC;
+  --color-border-light: #EBEBEF;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", Monaco, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #FF7B2E;
+    --color-primary-light: #4A1E0C;
+    --color-primary-dark: #FF9E5E;
+    --color-success: #1D9E75;
+    --color-success-light: #04342C;
+    --color-error: #E25555;
+    --color-error-light: #4A1B0C;
+    --color-warning: #C88B3A;
+    --color-warning-light: #412402;
+    --color-background: #1A1A1C;
+    --color-surface: #252528;
+    --color-text-primary: #F2F2F4;
+    --color-text-secondary: #A1A1A8;
+    --color-text-tertiary: #6B6B76;
+    --color-border: #3A3A42;
+    --color-border-light: #2E2E32;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); background: var(--color-background); color: var(--color-text-primary); line-height: 1.5; }
+
+.app-container { display: flex; height: 100vh; overflow: hidden; }
+
+/* ===== 左侧配置面板 ===== */
+.config-panel {
+  width: 55%; min-width: 500px; max-width: 700px;
+  background: var(--color-surface); border-right: 1px solid var(--color-border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.config-header {
+  padding: 12px 20px; border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.config-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.config-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+.type-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.type-tab {
+  padding: 4px 10px; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+  background: var(--color-surface); font-size: 12px; cursor: pointer; transition: all 0.2s;
+}
+.type-tab:hover { border-color: var(--color-primary); }
+.type-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+.type-tab .badge {
+  font-size: 10px; padding: 1px 4px; border-radius: 3px;
+  background: var(--color-primary-light); color: var(--color-primary-dark); margin-left: 4px;
+}
+.type-tab.active .badge { background: rgba(255,255,255,0.3); color: white; }
+
+.config-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+.config-section { margin-bottom: 24px; }
+.section-title {
+  font-size: 13px; font-weight: 600; color: var(--color-text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.section-title svg { width: 16px; height: 16px; }
+
+.form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+.form-group { flex: 1; margin-bottom: 12px; }
+.form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 4px; }
+.form-group label .required { color: var(--color-error); margin-left: 2px; }
+.form-group label .optional { color: var(--color-text-tertiary); margin-left: 2px; font-weight: 400; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  font-size: 13px; font-family: inherit; background: var(--color-surface); color: var(--color-text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+.form-group textarea { resize: vertical; min-height: 60px; }
+.form-group input::placeholder, .form-group textarea::placeholder { color: var(--color-text-tertiary); }
+
+/* 资源选择器 */
+.resource-selector {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); cursor: pointer; transition: all 0.2s;
+}
+.resource-selector:hover { border-color: var(--color-primary); }
+.resource-selector.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
+.resource-selector .resource-icon { width: 20px; height: 20px; color: var(--color-text-tertiary); }
+.resource-selector .resource-name { flex: 1; font-size: 13px; color: var(--color-text-primary); }
+.resource-selector .resource-name.empty { color: var(--color-text-tertiary); }
+.resource-selector .resource-action { font-size: 12px; color: var(--color-primary); }
+
+/* 选项卡片 */
+.option-card {
+  background: var(--color-background); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  padding: 16px; margin-bottom: 12px;
+}
+.option-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.option-key {
+  width: 28px; height: 28px; border-radius: 4px; background: var(--color-primary); color: white;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;
+}
+
+.image-preview {
+  width: 100%; height: 80px; border: 1px dashed var(--color-border); border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; color: var(--color-text-tertiary);
+  font-size: 12px; margin-bottom: 8px; background: var(--color-surface); overflow: hidden;
+}
+
+/* 子题目 */
+.sub-question {
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  padding: 16px; margin-bottom: 12px; position: relative;
+}
+.sub-question-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--color-border-light);
+}
+.sub-question-num {
+  width: 24px; height: 24px; border-radius: 4px; background: var(--color-primary-light);
+  color: var(--color-primary-dark); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+}
+.sub-question-title { font-size: 13px; font-weight: 500; flex: 1; }
+.sub-question-delete {
+  width: 28px; height: 28px; border-radius: var(--radius-sm); border: 1px solid var(--color-border);
+  background: var(--color-surface); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-tertiary); transition: all 0.2s;
+}
+.sub-question-delete:hover { border-color: var(--color-error); color: var(--color-error); background: var(--color-error-light); }
+
+/* 添加按钮 */
+.add-sub-btn {
+  width: 100%; padding: 12px; border: 2px dashed var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface); cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 6px; font-size: 13px; color: var(--color-text-tertiary); transition: all 0.2s;
+}
+.add-sub-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
+
+/* 匹配关系 */
+.match-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px 12px;
+  background: var(--color-background); border-radius: var(--radius-md); border: 1px solid var(--color-border-light);
+}
+.match-row select { flex: 1; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 12px; background: var(--color-surface); color: var(--color-text-primary); }
+.match-arrow { color: var(--color-primary); font-weight: 600; font-size: 14px; flex-shrink: 0; }
+
+/* 资源库弹窗 */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: var(--color-surface); border-radius: var(--radius-lg); width: 90%; max-width: 600px;
+  max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-header h3 { font-size: 16px; font-weight: 600; }
+.modal-close { width: 32px; height: 32px; border-radius: var(--radius-md); border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary); }
+.modal-close:hover { background: var(--color-background); }
+.modal-body { flex: 1; overflow-y: auto; padding: 16px; }
+.modal-footer { padding: 12px 20px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px; }
+
+.resource-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.resource-tab {
+  padding: 6px 14px; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+  background: var(--color-surface); font-size: 13px; cursor: pointer; color: var(--color-text-primary);
+}
+.resource-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+.resource-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.resource-item {
+  aspect-ratio: 1; border: 2px solid var(--color-border); border-radius: var(--radius-md);
+  padding: 8px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+}
+.resource-item:hover { border-color: var(--color-primary-light); }
+.resource-item.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
+.resource-item .item-thumb { width: 100%; height: 60%; background: var(--color-background); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--color-text-tertiary); }
+.resource-item .item-name { font-size: 11px; color: var(--color-text-secondary); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+
+/* ===== 右侧预览面板 ===== */
+.preview-panel { flex: 1; background: #E8E8EC; display: flex; flex-direction: column; overflow: hidden; }
+@media (prefers-color-scheme: dark) { .preview-panel { background: #1A1A1C; } }
+.preview-header {
+  padding: 12px 20px; background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.preview-header h2 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); display: flex; align-items: center; gap: 6px; }
+.device-info { font-size: 11px; color: var(--color-text-tertiary); display: flex; align-items: center; gap: 6px; }
+.preview-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+.tablet-frame {
+  width: 100%; max-width: 900px; aspect-ratio: 16/10; background: var(--color-surface);
+  border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.tablet-content { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; background: var(--color-background); overflow-y: auto; }
+
+.preview-question-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.preview-q-num { font-size: 13px; font-weight: 500; }
+
+.preview-prompt { font-size: 14px; color: var(--color-text-secondary); text-align: center; margin-bottom: 16px; padding: 8px; background: var(--color-surface); border-radius: var(--radius-md); }
+
+/* 预览 - W01 部件匹配 */
+.preview-w01-container { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.preview-w01-parts { display: flex; gap: 12px; justify-content: center; margin-bottom: 8px; margin-top: 20px; }
+.preview-w01-part {
+  width: 48px; height: 48px; border: 2px solid var(--color-border); border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+  background: var(--color-surface); cursor: pointer; transition: all 0.2s; position: relative;
+}
+.preview-w01-part:hover { border-color: var(--color-primary); }
+.preview-w01-part.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
+.preview-w01-words { display: flex; flex-direction: column; gap: 12px; }
+.preview-w01-word-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border);
+}
+.preview-w01-incomplete { font-size: 16px; color: var(--color-text-primary); min-width: 60px; }
+.preview-w01-arrow { color: var(--color-primary); font-size: 20px; }
+.preview-w01-complete { font-size: 16px; color: var(--color-text-primary); flex: 1; }
+.preview-w01-pinyin { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+.preview-w01-answer { width: 40px; height: 32px; border: 2px solid var(--color-border); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--color-background); }
+
+/* 预览 - W02 填写汉字 */
+.preview-w02-container { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.preview-w02-sentence { font-size: 16px; line-height: 2; padding: 16px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.preview-w02-pinyin { font-size: 12px; color: var(--color-text-tertiary); letter-spacing: 0.1em; }
+.preview-w02-text-pinyin { font-size: 11px; color: var(--color-text-tertiary); letter-spacing: 0.05em; }
+.py-line { display: inline-flex; }
+.py-unit { display: inline-block; width: 1em; text-align: center; font-size: 11px; color: var(--color-text-tertiary); line-height: 1.2; }
+.ch-line { display: inline-flex; }
+.ch-unit { display: inline-block; width: 1em; text-align: center; font-size: 16px; line-height: 1.4; }
+.w02-pinyin-preview { margin-top: 6px; padding: 6px 8px; background: var(--color-background); border-radius: var(--radius-sm); font-size: 12px; color: var(--color-text-tertiary); border: 1px solid var(--color-border-light); }
+.preview-w02-blank { display: inline-block; min-width: 80px; border-bottom: 2px solid var(--color-primary); margin: 0 4px; }
+.preview-w02-answer { margin-top: 16px; padding: 12px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.preview-w02-answer-label { font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 4px; }
+.preview-w02-answer-text { font-size: 14px; color: var(--color-text-primary); }
+
+/* 预览 - W03 看图造句 */
+.preview-w03-container { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.preview-w03-image { width: 200px; height: 150px; border: 2px solid var(--color-border); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; background: var(--color-surface); margin: 0 auto; }
+.preview-w03-keyword { text-align: center; font-size: 18px; font-weight: 500; color: var(--color-primary); }
+.preview-w03-input { width: 100%; min-height: 80px; padding: 12px; border: 2px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px; background: var(--color-surface); resize: vertical; }
+
+/* 预览 - W04 写作 */
+.preview-w04-container { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.preview-w04-topic { font-size: 16px; padding: 16px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-border); line-height: 1.8; }
+.preview-w04-input { width: 100%; min-height: 200px; padding: 16px; border: 2px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px; background: var(--color-surface); resize: vertical; line-height: 1.8; }
+
+.preview-submit { display: flex; justify-content: flex-end; margin-top: 12px; }
+.preview-submit-btn {
+  padding: 8px 24px; border-radius: var(--radius-md); border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-text-tertiary); font-size: 13px; cursor: not-allowed;
+}
+
+/* 底部 */
+.config-footer {
+  padding: 12px 20px; border-top: 1px solid var(--color-border); background: var(--color-surface);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.btn {
+  padding: 8px 16px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-text-primary);
+}
+.btn:hover { background: var(--color-background); }
+.btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+
+.json-preview {
+  margin-top: 16px; padding: 12px; background: #1E1E1E; border-radius: var(--radius-md);
+  font-family: var(--font-mono); font-size: 11px; color: #D4D4D4; overflow-x: auto; max-height: 200px;
+}
+@media (prefers-color-scheme: dark) { .json-preview { background: #0D0D0D; } }
+
+/* 题号设置 */
+.question-number-config { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px; background: var(--color-background); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.question-number-config .form-group { margin-bottom: 0; flex: 1; }
+
+/* W01 部件选项 */
+.w01-parts-container { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.w01-part-input { width: 60px; text-align: center; }
+.w01-words-container { display: flex; flex-direction: column; gap: 12px; }
+.w01-word-row { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--color-background); border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.w01-word-input { flex: 1; }
+.w01-word-input-small { width: 80px; }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <!-- 左侧配置面板 -->
+  <div class="config-panel">
+    <div class="config-header">
+      <div class="config-header-top">
+        <h1>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          书写题型配置
+        </h1>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="resetForm()">重置</button>
+          <button class="btn" onclick="toggleJsonPreview()">查看JSON</button>
+        </div>
+      </div>
+    </div>
+    <div class="config-body" id="config_body"></div>
+    <div class="config-footer">
+      <span style="font-size:12px;color:var(--color-text-tertiary)">* 必填字段</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn">保存草稿</button>
+        <button class="btn btn-primary" onclick="publishQuestion()">发布</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧预览面板 -->
+  <div class="preview-panel">
+    <div class="preview-header">
+      <h2>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        前端渲染预览
+      </h2>
+      <div class="device-info">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
+        </svg>
+        平板横屏 1024x768
+      </div>
+    </div>
+    <div class="preview-body">
+      <div class="tablet-frame">
+        <div class="tablet-content" id="preview_content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 资源库弹窗 -->
+<div class="modal-overlay" id="resource_modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal_title">选择图片资源</h3>
+      <button class="modal-close" onclick="closeResourceModal()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="resource-tabs">
+        <button class="resource-tab active" onclick="switchResourceTab(this,'all')">全部</button>
+        <button class="resource-tab" onclick="switchResourceTab(this,'recent')">最近使用</button>
+        <button class="resource-tab" onclick="switchResourceTab(this,'fav')">收藏</button>
+      </div>
+      <div class="resource-grid" id="resource_grid"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeResourceModal()">取消</button>
+      <button class="btn btn-primary" onclick="confirmResourceSelection()">确认选择</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== 数据定义 ====== */
+const typeConfigs = {
+  W01: { name: '部件匹配', defaultParts: 5, defaultWords: 3 },
+  W02: { name: '填写汉字', defaultSentences: 3 },
+  W03: { name: '看图造句' },
+  W04: { name: '写作' }
+};
+
+const resourceLibrary = {
+  image: [
+    { id: 'img_sing', name: '唱歌.jpg' },
+    { id: 'img_dance', name: '跳舞.jpg' },
+    { id: 'img_eat', name: '吃饭.jpg' },
+    { id: 'img_run', name: '跑步.jpg' },
+    { id: 'img_read', name: '看书.jpg' },
+    { id: 'img_swim', name: '游泳.jpg' },
+    { id: 'img_shopping', name: '购物.jpg' },
+    { id: 'img_travel', name: '旅行.jpg' }
+  ]
+};
+
+let currentType = 'W01';
+let state = {
+  selectedResourceId: null, currentResourceType: null, currentTargetKey: null,
+  // W01 部件匹配
+  w01Parts: ['辶', '口', '足', '卜', '扌'], w01Words: [
+    { incomplete: '丁车', complete: '打车', pinyin: 'dǎchē', answer: 'E' },
+    { incomplete: '寸年', complete: '过年', pinyin: 'guònián', answer: 'A' },
+    { incomplete: '包步', complete: '跑步', pinyin: 'pǎobù', answer: 'C' }
+  ], w01StartNum: 51,
+  // W02 填写汉字
+  w02Sentences: [
+    { textBefore: '这家饭店的', pinyin: '(miàntiáo)', blank: '______', textAfter: '很好吃。', answer: '面条' },
+    { textBefore: '我喜欢吃', pinyin: '(shuǐguǒ)', blank: '______', textAfter: '。', answer: '水果' },
+    { textBefore: '他每天都去', pinyin: '(xuéxiào)', blank: '______', textAfter: '。', answer: '学校' }
+  ], w02StartNum: 56,
+  // W03 看图造句
+  w03Image: '', w03Keyword: '唱歌', w03StartNum: 61, w03AiPrompt: '', w03AiRole: '',
+  // W04 写作
+  w04Topic: '请根据以下提示，写一篇不少于80字的短文。\n\n提示：介绍你的爱好，包括你喜欢做什么、什么时候做、和谁一起做。', w04MinWords: 80, w04StartNum: 66, w04AiPrompt: '', w04AiRole: ''
+};
+
+/* ====== 切换题型 ====== */
+function switchType(type) {
+  currentType = type;
+  renderConfig();
+  renderPreview();
+}
+
+/* ====== 拼音显示控制 ====== */
+function shouldShowPinyin() {
+  const el = document.getElementById('hsk_levels');
+  if (!el) return false;
+  return Array.from(el.selectedOptions).some(o => o.value === '2');
+}
+
+/* 为文本生成拼音HTML（每个汉字上方对应一个拼音，标点不占位） */
+function generatePinyinHtml(text) {
+  if (!text || !text.trim()) return '';
+  const mockMap = {
+    '这':'zhè','家':'jiā','饭':'fàn','店':'diàn','的':'de','很':'hěn','好':'hǎo','吃':'chī',
+    '我':'wǒ','喜':'xǐ','欢':'huān','水':'shuǐ','果':'guǒ','他':'tā','每':'měi','天':'tiān',
+    '都':'dōu','去':'qù','学':'xué','校':'xiào','你':'nǐ','吗':'ma','她':'tā',
+    '朋':'péng','友':'yǒu','一':'yī','起':'qǐ','在':'zài','上':'shàng','下':'xià','大':'dà',
+    '小':'xiǎo','人':'rén','中':'zhōng','国':'guó','北':'běi','京':'jīng','是':'shì','不':'bù',
+    '要':'yào','了':'le','和':'hé','也':'yě','就':'jiù','会':'huì','能':'néng','可':'kě',
+    '以':'yǐ','来':'lái','到':'dào','说':'shuō','看':'kàn','听':'tīng','写':'xiě','读':'dú',
+    '做':'zuò','买':'mǎi','卖':'mài','给':'gěi','让':'ràng','把':'bǎ','被':'bèi','从':'cóng',
+    '对':'duì','为':'wèi','还':'hái','已':'yǐ','经':'jīng','正':'zhèng','没':'méi','有':'yǒu',
+    '时':'shí','候':'hou','年':'nián','月':'yuè','日':'rì','号':'hào','今':'jīn','明':'míng',
+    '昨':'zuó','前':'qián','后':'hòu','里':'lǐ','外':'wài','多':'duō','少':'shǎo','长':'cháng',
+    '短':'duǎn','新':'xīn','旧':'jiù','高':'gāo','远':'yuǎn','近':'jìn','快':'kuài','慢':'màn',
+    '早':'zǎo','晚':'wǎn','开':'kāi','关':'guān','坐':'zuò','站':'zhàn','走':'zǒu','跑':'pǎo',
+    '飞':'fēi','唱':'chàng','跳':'tiào','画':'huà','笑':'xiào','哭':'kū','想':'xiǎng','知':'zhī',
+    '道':'dào','问':'wèn','回':'huí','答':'dá','见':'jiàn','找':'zhǎo','用':'yòng','工':'gōng',
+    '作':'zuò','生':'shēng','活':'huó','东':'dōng','西':'xī','南':'nán','四':'sì','十':'shí',
+    '二':'èr','三':'sān','五':'wǔ','六':'liù','七':'qī','八':'bā','九':'jiǔ','零':'líng',
+    '百':'bǎi','千':'qiān','万':'wàn','第':'dì','个':'gè','们':'men','种':'zhǒng','样':'yàng',
+    '什':'shén','么':'me','哪':'nǎ','最':'zuì','太':'tài','真':'zhēn','非':'fēi','常':'cháng',
+    '比':'bǐ','较':'jiào','因':'yīn','所':'suǒ','但':'dàn','如':'rú','果':'guǒ','那':'nà',
+    '些':'xiē','过':'guò','得':'de','着':'zhe','地':'de','面':'miàn','头':'tóu','手':'shǒu',
+    '脚':'jiǎo','眼':'yǎn','耳':'ěr','口':'kǒu','鼻':'bí','心':'xīn','身':'shēn','体':'tǐ',
+    '衣':'yī','裤':'kù','鞋':'xié','帽':'mào','书':'shū','笔':'bǐ','纸':'zhǐ','字':'zì',
+    '车':'chē','路':'lù','门':'mén','窗':'chuāng','桌':'zhuō','椅':'yǐ','床':'chuáng','房':'fáng',
+    '爱':'ài','情':'qíng','事':'shì','物':'wù','景':'jǐng','色':'sè','声':'shēng','味':'wèi',
+    '白':'bái','黑':'hēi','红':'hóng','绿':'lǜ','蓝':'lán','黄':'huáng','紫':'zǐ','花':'huā',
+    '阳':'yáng','风':'fēng','雨':'yǔ','雪':'xuě','云':'yún','天':'tiān','空':'kōng','海':'hǎi',
+    '河':'hé','山':'shān','石':'shí','土':'tǔ','木':'mù','金':'jīn','火':'huǒ','水':'shuǐ'
+  };
+  let pyHtml = '';
+  let chHtml = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (/[\u4e00-\u9fa5]/.test(ch)) {
+      const py = mockMap[ch] || '';
+      pyHtml += `<span class="py-unit">${py}</span>`;
+      chHtml += `<span class="ch-unit">${ch}</span>`;
+    } else {
+      pyHtml += `<span class="py-unit"></span>`;
+      chHtml += `<span class="ch-unit">${ch}</span>`;
+    }
+  }
+  return `<span class="py-line">${pyHtml}</span><br><span class="ch-line">${chHtml}</span>`;
+}
+
+/* 为文本生成纯文本拼音（用于配置预览） */
+function generatePinyinForText(text) {
+  if (!text || !text.trim()) return '';
+  const mockMap = {
+    '这':'zhè','家':'jiā','饭':'fàn','店':'diàn','的':'de','很':'hěn','好':'hǎo','吃':'chī',
+    '我':'wǒ','喜':'xǐ','欢':'huān','水':'shuǐ','果':'guǒ','他':'tā','每':'měi','天':'tiān',
+    '都':'dōu','去':'qù','学':'xué','校':'xiào','你':'nǐ','吗':'ma','她':'tā',
+    '朋':'péng','友':'yǒu','一':'yī','起':'qǐ','在':'zài','上':'shàng','下':'xià','大':'dà',
+    '小':'xiǎo','人':'rén','中':'zhōng','国':'guó','北':'běi','京':'jīng','是':'shì','不':'bù',
+    '要':'yào','了':'le','和':'hé','也':'yě','就':'jiù','会':'huì','能':'néng','可':'kě',
+    '以':'yǐ','来':'lái','到':'dào','说':'shuō','看':'kàn','听':'tīng','写':'xiě','读':'dú',
+    '做':'zuò','买':'mǎi','卖':'mài','给':'gěi','让':'ràng','把':'bǎ','被':'bèi','从':'cóng',
+    '对':'duì','为':'wèi','还':'hái','已':'yǐ','经':'jīng','正':'zhèng','没':'méi','有':'yǒu',
+    '时':'shí','候':'hou','年':'nián','月':'yuè','日':'rì','号':'hào','今':'jīn','明':'míng',
+    '昨':'zuó','前':'qián','后':'hòu','里':'lǐ','外':'wài','多':'duō','少':'shǎo','长':'cháng',
+    '短':'duǎn','新':'xīn','旧':'jiù','高':'gāo','远':'yuǎn','近':'jìn','快':'kuài','慢':'màn',
+    '早':'zǎo','晚':'wǎn','开':'kāi','关':'guān','坐':'zuò','站':'zhàn','走':'zǒu','跑':'pǎo',
+    '飞':'fēi','唱':'chàng','跳':'tiào','画':'huà','笑':'xiào','哭':'kū','想':'xiǎng','知':'zhī',
+    '道':'dào','问':'wèn','回':'huí','答':'dá','见':'jiàn','找':'zhǎo','用':'yòng','工':'gōng',
+    '作':'zuò','生':'shēng','活':'huó','东':'dōng','西':'xī','南':'nán','四':'sì','十':'shí',
+    '二':'èr','三':'sān','五':'wǔ','六':'liù','七':'qī','八':'bā','九':'jiǔ','零':'líng',
+    '百':'bǎi','千':'qiān','万':'wàn','第':'dì','个':'gè','们':'men','种':'zhǒng','样':'yàng',
+    '什':'shén','么':'me','哪':'nǎ','最':'zuì','太':'tài','真':'zhēn','非':'fēi','常':'cháng',
+    '比':'bǐ','较':'jiào','因':'yīn','所':'suǒ','但':'dàn','如':'rú','果':'guǒ','那':'nà',
+    '些':'xiē','过':'guò','得':'de','着':'zhe','地':'de','面':'miàn','头':'tóu','手':'shǒu',
+    '脚':'jiǎo','眼':'yǎn','耳':'ěr','口':'kǒu','鼻':'bí','心':'xīn','身':'shēn','体':'tǐ',
+    '衣':'yī','裤':'kù','鞋':'xié','帽':'mào','书':'shū','笔':'bǐ','纸':'zhǐ','字':'zì',
+    '车':'chē','路':'lù','门':'mén','窗':'chuāng','桌':'zhuō','椅':'yǐ','床':'chuáng','房':'fáng',
+    '爱':'ài','情':'qíng','事':'shì','物':'wù','景':'jǐng','色':'sè','声':'shēng','味':'wèi',
+    '白':'bái','黑':'hēi','红':'hóng','绿':'lǜ','蓝':'lán','黄':'huáng','紫':'zǐ','花':'huā',
+    '阳':'yáng','风':'fēng','雨':'yǔ','雪':'xuě','云':'yún','空':'kōng','海':'hǎi',
+    '河':'hé','山':'shān','石':'shí','土':'tǔ','木':'mù','金':'jīn','火':'huǒ','水':'shuǐ'
+  };
+  let result = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (/[\u4e00-\u9fa5]/.test(ch)) {
+      result.push(mockMap[ch] || ch);
+    } else {
+      result.push('');
+    }
+  }
+  return result.join(' ');
+}
+
+/* ====== 渲染配置面板 ====== */
+function renderConfig() {
+  const cfg = typeConfigs[currentType];
+  const body = document.getElementById('config_body');
+  let h = '';
+  h += renderMetadataSection(cfg);
+  switch (currentType) {
+    case 'W01': h += renderW01Config(); break;
+    case 'W02': h += renderW02Config(); break;
+    case 'W03': h += renderW03Config(); break;
+    case 'W04': h += renderW04Config(); break;
+  }
+  h += renderScoringSection(cfg);
+  h += `<div class="json-preview" id="json_preview" style="display:none"><pre id="json_output"></pre></div>`;
+  body.innerHTML = h;
+  if (currentType === 'W02') setTimeout(() => updateAllW02PinyinPreviews(), 0);
+}
+
+function renderMetadataSection(cfg) {
+  return `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>元数据</div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:0"><label>题目ID <span class="required">*</span></label><input type="text" id="question_id" value="${currentType}-HSK2-001"></div>
+      <div class="form-group" style="margin-bottom:0"><label>题型 <span class="required">*</span></label><select id="type_selector" onchange="switchType(this.value)">
+        <option value="W01" ${currentType==='W01'?'selected':''}>W01 - 部件匹配</option>
+        <option value="W02" ${currentType==='W02'?'selected':''}>W02 - 填写汉字</option>
+        <option value="W03" ${currentType==='W03'?'selected':''}>W03 - 看图造句</option>
+        <option value="W04" ${currentType==='W04'?'selected':''}>W04 - 写作</option>
+      </select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin-bottom:0"><label>HSK级别 <span class="required">*</span></label><select id="hsk_levels" onchange="renderPreview()"><option value="2">HSK 2</option><option value="3" selected>HSK 3</option><option value="4">HSK 4</option><option value="5">HSK 5</option><option value="6">HSK 6</option></select></div>
+      ${currentType === 'W03' || currentType === 'W04' ? `<div class="form-group" style="margin-bottom:0"><label>AI角色</label><select id="ai_role" onchange="state[currentType === 'W03' ? 'w03AiRole' : 'w04AiRole']=this.value; renderPreview()"><option value="">-- 选择AI角色 --</option><option value="ai_tutor" ${(currentType==='W03'?state.w03AiRole:state.w04AiRole)==='ai_tutor'?'selected':''}>AI Tutor</option><option value="ai_grader" ${(currentType==='W03'?state.w03AiRole:state.w04AiRole)==='ai_grader'?'selected':''}>AI 评分老师</option></select></div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderScoringSection(cfg) {
+  const defaultScore = { W01:'1', W02:'1', W03:'2', W04:'5' }[currentType] || '1';
+  return `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>评分参数</div>
+    <div class="form-group"><label>分值 <span class="required">*</span></label><input type="number" id="score" value="${defaultScore}" min="1"></div>
+    <div class="form-group"><label>解析文本</label><textarea id="explanation" placeholder="答案解析..."></textarea></div>
+  </div>`;
+}
+
+/* ====== W01 部件匹配配置 ====== */
+function renderW01Config() {
+  const parts = state.w01Parts;
+  const words = state.w01Words;
+  const startNum = state.w01StartNum;
+  let h = '';
+  
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="w01_start_num" value="${startNum}" min="1" onchange="state.w01StartNum=parseInt(this.value)||51; renderPreview()"></div>
+  </div>`;
+
+  // 部件选项（5个必填，可新增）
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>部件选项（${parts.length}个）</div>
+    <div class="w01-parts-container">`;
+  
+  parts.forEach((part, idx) => {
+    const label = String.fromCharCode(65 + idx);
+    const canDelete = parts.length > 2;
+    h += `<div style="display:flex;align-items:center;gap:4px">
+      <span style="font-size:12px;font-weight:600;color:var(--color-text-secondary)">${label}.</span>
+      <input type="text" class="w01-part-input" value="${part}" id="w01_part_${idx}" oninput="state.w01Parts[${idx}]=this.value; renderPreview()">
+      ${canDelete ? `<button class="sub-question-delete" onclick="removeW01Part(${idx})" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+    </div>`;
+  });
+  
+  h += `</div>
+    <button class="add-sub-btn" onclick="addW01Part()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      添加部件
+    </button>
+  </div>`;
+
+  // 词语匹配
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>词语匹配（${words.length}个）</div>`;
+  
+  words.forEach((word, idx) => {
+    h += `<div class="w01-word-row" id="w01_word_${idx}">
+      <span style="font-size:12px;font-weight:600;color:var(--color-text-secondary);min-width:24px">${startNum + idx}.</span>
+      <input type="text" class="w01-word-input-small" value="${word.incomplete}" placeholder="不完整" oninput="state.w01Words[${idx}].incomplete=this.value; renderPreview()">
+      <span style="color:var(--color-primary)">→</span>
+      <input type="text" class="w01-word-input" value="${word.complete}" placeholder="完整词语" oninput="state.w01Words[${idx}].complete=this.value; renderPreview()">
+      <input type="text" class="w01-word-input-small" value="${word.pinyin}" placeholder="拼音" oninput="state.w01Words[${idx}].pinyin=this.value; renderPreview()">
+      <select style="width:60px" onchange="state.w01Words[${idx}].answer=this.value; renderPreview()">
+        <option value="">--</option>`;
+    parts.forEach((p, pidx) => {
+      const plabel = String.fromCharCode(65 + pidx);
+      h += `<option value="${plabel}" ${word.answer === plabel ? 'selected' : ''}>${plabel}</option>`;
+    });
+    h += `</select>
+      <button class="sub-question-delete" onclick="removeW01Word(${idx})" style="width:24px;height:24px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`;
+  });
+  
+  h += `<button class="add-sub-btn" onclick="addW01Word()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加词语
+  </button></div>`;
+
+  return h;
+}
+
+function addW01Part() { state.w01Parts.push(''); renderConfig(); renderPreview(); }
+function removeW01Part(idx) { if (state.w01Parts.length <= 2) return; state.w01Parts.splice(idx, 1); renderConfig(); renderPreview(); }
+function addW01Word() { state.w01Words.push({ incomplete: '', complete: '', pinyin: '', answer: '' }); renderConfig(); renderPreview(); }
+function removeW01Word(idx) { if (state.w01Words.length <= 1) return; state.w01Words.splice(idx, 1); renderConfig(); renderPreview(); }
+
+/* ====== W02 填写汉字配置 ====== */
+function renderW02Config() {
+  const sentences = state.w02Sentences;
+  const startNum = state.w02StartNum;
+  let h = '';
+  
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>起始题号 <span class="required">*</span></label><input type="number" id="w02_start_num" value="${startNum}" min="1" onchange="state.w02StartNum=parseInt(this.value)||56; renderPreview()"></div>
+  </div>`;
+
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>句子填空（${sentences.length}个）</div>`;
+  
+  sentences.forEach((sent, idx) => {
+    h += `<div class="sub-question" id="w02_sent_${idx}">
+      <div class="sub-question-header">
+        <span class="sub-question-num">${startNum + idx}.</span>
+        <span class="sub-question-title">句子 ${idx + 1}</span>
+        <button class="sub-question-delete" onclick="removeW02Sentence(${idx})" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>前文 <span class="required">*</span></label><input type="text" value="${sent.textBefore}" placeholder="前文..." oninput="state.w02Sentences[${idx}].textBefore=this.value; updateW02PinyinPreview(${idx}); renderPreview()"><div class="w02-pinyin-preview" id="w02_before_py_${idx}" style="display:none"></div></div>
+        <div class="form-group"><label>拼音提示 <span class="required">*</span></label><input type="text" value="${sent.pinyin}" placeholder="(pinyin)" oninput="state.w02Sentences[${idx}].pinyin=this.value; renderPreview()"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>后文</label><input type="text" value="${sent.textAfter}" placeholder="后文..." oninput="state.w02Sentences[${idx}].textAfter=this.value; updateW02PinyinPreview(${idx}); renderPreview()"><div class="w02-pinyin-preview" id="w02_after_py_${idx}" style="display:none"></div></div>
+        <div class="form-group"><label>正确答案 <span class="required">*</span></label><input type="text" value="${sent.answer}" placeholder="答案..." oninput="state.w02Sentences[${idx}].answer=this.value; renderPreview()"></div>
+      </div>
+    </div>`;
+  });
+  
+  h += `<button class="add-sub-btn" onclick="addW02Sentence()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    添加句子
+  </button></div>`;
+
+  return h;
+}
+
+function addW02Sentence() { state.w02Sentences.push({ textBefore: '', pinyin: '', textAfter: '', answer: '' }); renderConfig(); renderPreview(); }
+function removeW02Sentence(idx) { if (state.w02Sentences.length <= 1) return; state.w02Sentences.splice(idx, 1); renderConfig(); renderPreview(); }
+function updateW02PinyinPreview(idx) {
+  const sent = state.w02Sentences[idx];
+  const beforeEl = document.getElementById(`w02_before_py_${idx}`);
+  const afterEl = document.getElementById(`w02_after_py_${idx}`);
+  if (beforeEl) {
+    const py = generatePinyinForText(sent.textBefore);
+    if (py) { beforeEl.textContent = py; beforeEl.style.display = 'block'; }
+    else { beforeEl.style.display = 'none'; }
+  }
+  if (afterEl) {
+    const py = generatePinyinForText(sent.textAfter);
+    if (py) { afterEl.textContent = py; afterEl.style.display = 'block'; }
+    else { afterEl.style.display = 'none'; }
+  }
+}
+function updateAllW02PinyinPreviews() {
+  state.w02Sentences.forEach((_, idx) => updateW02PinyinPreview(idx));
+}
+
+/* ====== W03 看图造句配置 ====== */
+function renderW03Config() {
+  const startNum = state.w03StartNum;
+  let h = '';
+  
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>题号 <span class="required">*</span></label><input type="number" id="w03_start_num" value="${startNum}" min="1" onchange="state.w03StartNum=parseInt(this.value)||61; renderPreview()"></div>
+  </div>`;
+
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>题目内容</div>
+    <div class="form-group"><label>图片资源 <span class="required">*</span></label>
+      <div class="resource-selector ${state.w03Image ? 'selected' : ''}" onclick="openResourceModal('image','w03')">
+        <svg class="resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span class="resource-name ${state.w03Image ? '' : 'empty'}" id="w03_img_name">${state.w03Image || '点击选择图片资源'}</span>
+        <span class="resource-action">选择</span>
+      </div>
+    </div>
+    <div class="image-preview" id="w03_img_preview">${state.w03Image ? `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="font-size:24px">&#x1F5BC;</span><span style="font-size:11px;color:var(--color-text-secondary)">${state.w03Image}</span></div>` : '<span>图片预览</span>'}</div>
+    <div class="form-group"><label>关键词 <span class="required">*</span></label><input type="text" id="w03_keyword" value="${state.w03Keyword}" placeholder="输入关键词..." oninput="state.w03Keyword=this.value; renderPreview()"></div>
+    <div class="form-group"><label>参考答案</label><textarea id="w03_answer" placeholder="参考答案（可选）..."></textarea></div>
+  </div>`;
+
+  return h;
+}
+
+/* ====== W04 写作配置 ====== */
+function renderW04Config() {
+  const startNum = state.w04StartNum;
+  let h = '';
+  
+  // 题号设置
+  h += `<div class="question-number-config">
+    <div class="form-group"><label>题号 <span class="required">*</span></label><input type="number" id="w04_start_num" value="${startNum}" min="1" onchange="state.w04StartNum=parseInt(this.value)||66; renderPreview()"></div>
+  </div>`;
+
+  h += `<div class="config-section">
+    <div class="section-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>写作题目</div>
+    <div class="form-group"><label>题目要求 <span class="required">*</span></label><textarea id="w04_topic" rows="6" placeholder="输入写作题目要求..." oninput="state.w04Topic=this.value; renderPreview()">${state.w04Topic}</textarea></div>
+    <div class="form-group"><label>最少字数 <span class="required">*</span></label><input type="number" id="w04_min_words" value="${state.w04MinWords}" min="1" onchange="state.w04MinWords=parseInt(this.value)||80; renderPreview()"></div>
+    <div class="form-group"><label>参考答案</label><textarea id="w04_answer" rows="4" placeholder="参考答案（可选）..."></textarea></div>
+    <div class="form-group"><label>AI评分提示词</label><textarea id="w04_ai_prompt" rows="3" placeholder="输入AI评分时使用的提示词...">${state.w04AiPrompt || ''}</textarea></div>
+  </div>`;
+
+  return h;
+}
+
+/* ====== 渲染预览面板 ====== */
+function renderPreview() {
+  const preview = document.getElementById('preview_content');
+  let h = '';
+  switch (currentType) {
+    case 'W01': h = renderW01Preview(); break;
+    case 'W02': h = renderW02Preview(); break;
+    case 'W03': h = renderW03Preview(); break;
+    case 'W04': h = renderW04Preview(); break;
+  }
+  preview.innerHTML = h;
+}
+
+/* W01 预览 - 部件匹配 */
+function renderW01Preview() {
+  const parts = state.w01Parts;
+  const words = state.w01Words;
+  const startNum = state.w01StartNum;
+  const endNum = startNum + words.length - 1;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${words.length === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-w01-container">
+    <div class="preview-w01-parts">`;
+
+  parts.forEach((part, idx) => {
+    const label = String.fromCharCode(65 + idx);
+    h += `<div class="preview-w01-part" title="${label}. ${part || '部件'}"><span style="font-size:11px;color:var(--color-text-tertiary);position:absolute;top:-16px;left:50%;transform:translateX(-50%)">${label}</span>${part || '?'}</div>`;
+  });
+
+  h += `</div>
+    <div class="preview-w01-words">`;
+
+  words.forEach((word, idx) => {
+    h += `<div class="preview-w01-word-row">
+      <span style="font-size:12px;font-weight:600;color:var(--color-text-tertiary);min-width:28px">${startNum + idx}.</span>
+      <span class="preview-w01-incomplete">${word.incomplete || '不完整'}</span>
+      <span class="preview-w01-arrow">&#x2192;</span>
+      <div class="preview-w01-complete">
+        <div class="preview-w01-pinyin">${word.pinyin || 'pinyin'}</div>
+        <div>${word.complete || '完整词语'}</div>
+      </div>
+      <div class="preview-w01-answer"></div>
+    </div>`;
+  });
+
+  h += `</div></div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* W02 预览 - 填写汉字 */
+function renderW02Preview() {
+  const sentences = state.w02Sentences;
+  const startNum = state.w02StartNum;
+  const endNum = startNum + sentences.length - 1;
+  const showPy = shouldShowPinyin();
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${sentences.length === 1 ? startNum + '题' : startNum + '-' + endNum + '题'}</span>
+  </div>
+  <div class="preview-w02-container">`;
+
+  sentences.forEach((sent, idx) => {
+    const beforePyHtml = generatePinyinHtml(sent.textBefore);
+    const afterPyHtml = generatePinyinHtml(sent.textAfter);
+    h += `<div class="preview-w02-sentence">
+      <span style="font-size:12px;font-weight:600;color:var(--color-text-tertiary);margin-right:8px">${startNum + idx}.</span>
+      ${beforePyHtml || (sent.textBefore || '')}
+      <span class="preview-w02-pinyin">${sent.pinyin || '(pinyin)'}</span>
+      <span class="preview-w02-blank"></span>
+      ${afterPyHtml || (sent.textAfter || '')}
+    </div>`;
+  });
+
+  h += `</div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* W03 预览 - 看图造句 */
+function renderW03Preview() {
+  const startNum = state.w03StartNum;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${startNum}题</span>
+  </div>
+  <div class="preview-w03-container">
+    <div class="preview-w03-image">${state.w03Image ? '<span style="font-size:48px">&#x1F5BC;</span>' : '<span style="color:var(--color-text-tertiary)">图片预览</span>'}</div>
+    <div class="preview-w03-keyword">${state.w03Keyword || '关键词'}</div>
+    <textarea class="preview-w03-input" placeholder="请在此处输入句子..."></textarea>
+  </div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* W04 预览 - 写作 */
+function renderW04Preview() {
+  const startNum = state.w04StartNum;
+
+  let h = `<div class="preview-question-header">
+    <span class="preview-q-num">${startNum}题</span>
+  </div>
+  <div class="preview-w04-container">
+    <div class="preview-w04-topic">${state.w04Topic.replace(/\n/g, '<br>')}</div>
+    <textarea class="preview-w04-input" placeholder="请在此处写作（不少于${state.w04MinWords}字）..."></textarea>
+  </div>
+  <div class="preview-submit"><button class="preview-submit-btn">提交</button></div>`;
+  return h;
+}
+
+/* ====== 资源库弹窗 ====== */
+function openResourceModal(type, targetKey) {
+  state.currentResourceType = type;
+  state.currentTargetKey = targetKey;
+  state.selectedResourceId = null;
+  document.getElementById('modal_title').textContent = '选择图片资源';
+  renderResourceGrid();
+  document.getElementById('resource_modal').classList.add('active');
+}
+
+function closeResourceModal() {
+  document.getElementById('resource_modal').classList.remove('active');
+}
+
+function renderResourceGrid() {
+  const grid = document.getElementById('resource_grid');
+  const resources = resourceLibrary[state.currentResourceType] || [];
+  grid.innerHTML = resources.map(r => `
+    <div class="resource-item ${state.selectedResourceId === r.id ? 'selected' : ''}" onclick="selectResource('${r.id}')">
+      <div class="item-thumb">&#x1F5BC;</div>
+      <div class="item-name">${r.name}</div>
+    </div>`).join('');
+}
+
+function selectResource(id) {
+  state.selectedResourceId = id;
+  renderResourceGrid();
+}
+
+function switchResourceTab(el, tab) {
+  document.querySelectorAll('.resource-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderResourceGrid();
+}
+
+function confirmResourceSelection() {
+  if (!state.selectedResourceId) { alert('请选择一个资源'); return; }
+  const resources = resourceLibrary[state.currentResourceType];
+  const sel = resources.find(r => r.id === state.selectedResourceId);
+  if (!sel) return;
+
+  if (state.currentTargetKey === 'w03') {
+    state.w03Image = sel.name;
+    document.getElementById('w03_img_name').textContent = sel.name;
+    document.getElementById('w03_img_name').classList.remove('empty');
+    document.getElementById('w03_img_preview').innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="font-size:24px">&#x1F5BC;</span><span style="font-size:11px;color:var(--color-text-secondary)">${sel.name}</span></div>`;
+    renderPreview();
+  }
+
+  closeResourceModal();
+}
+
+/* ====== 其他功能 ====== */
+function toggleJsonPreview() {
+  const el = document.getElementById('json_preview');
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    const output = { type: currentType, config: typeConfigs[currentType] };
+    document.getElementById('json_output').textContent = JSON.stringify(output, null, 2);
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function resetForm() {
+  state = {
+    selectedResourceId: null, currentResourceType: null, currentTargetKey: null,
+    w01Parts: ['辶', '口', '足', '卜', '扌'], w01Words: [
+      { incomplete: '丁车', complete: '打车', pinyin: 'dǎchē', answer: 'E' },
+      { incomplete: '寸年', complete: '过年', pinyin: 'guònián', answer: 'A' },
+      { incomplete: '包步', complete: '跑步', pinyin: 'pǎobù', answer: 'C' }
+    ], w01StartNum: 51,
+    w02Sentences: [
+      { textBefore: '这家饭店的', pinyin: '(miàntiáo)', blank: '______', textAfter: '很好吃。', answer: '面条' },
+      { textBefore: '我喜欢吃', pinyin: '(shuǐguǒ)', blank: '______', textAfter: '。', answer: '水果' },
+      { textBefore: '他每天都去', pinyin: '(xuéxiào)', blank: '______', textAfter: '。', answer: '学校' }
+    ], w02StartNum: 56,
+    w03Image: '', w03Keyword: '唱歌', w03StartNum: 61, w03AiPrompt: '', w03AiRole: '',
+    w04Topic: '请根据以下提示，写一篇不少于80字的短文。\n\n提示：介绍你的爱好，包括你喜欢做什么、什么时候做、和谁一起做。', w04MinWords: 80, w04StartNum: 66, w04AiPrompt: '', w04AiRole: ''
+  };
+  renderConfig();
+  renderPreview();
+}
+
+function publishQuestion() {
+  // 检查必填项
+  const requiredFields = [];
+  
+  // 检查题目ID
+  const questionId = document.getElementById('question_id')?.value?.trim();
+  if (!questionId) requiredFields.push('题目ID');
+  
+  // 检查HSK级别
+  const hskLevels = document.getElementById('hsk_levels');
+  if (!hskLevels || hskLevels.selectedOptions.length === 0) requiredFields.push('HSK级别');
+  
+  // W01: 检查部件和词语
+  if (currentType === 'W01') {
+    const parts = state.w01Parts;
+    if (parts.length < 5) requiredFields.push('至少5个部件选项');
+    for (let i = 0; i < state.w01Words.length; i++) {
+      const word = state.w01Words[i];
+      if (!word.incomplete) requiredFields.push(`词语 ${i+1} 不完整词语`);
+      if (!word.complete) requiredFields.push(`词语 ${i+1} 完整词语`);
+      if (!word.pinyin) requiredFields.push(`词语 ${i+1} 拼音`);
+    }
+  }
+  
+  // W02: 检查句子
+  if (currentType === 'W02') {
+    for (let i = 0; i < state.w02Sentences.length; i++) {
+      const sent = state.w02Sentences[i];
+      if (!sent.textBefore) requiredFields.push(`句子 ${i+1} 前文`);
+      if (!sent.pinyin) requiredFields.push(`句子 ${i+1} 拼音提示`);
+      if (!sent.answer) requiredFields.push(`句子 ${i+1} 正确答案`);
+    }
+  }
+  
+  // W03: 检查关键词和图片
+  if (currentType === 'W03') {
+    const keyword = document.getElementById('w03_keyword')?.value?.trim();
+    if (!keyword) requiredFields.push('关键词');
+  }
+  
+  // W04: 检查题目要求
+  if (currentType === 'W04') {
+    const topic = document.getElementById('w04_topic')?.value?.trim();
+    if (!topic) requiredFields.push('题目要求');
+  }
+  
+  // 检查起始题号
+  const startNum = document.getElementById('w01_start_num')?.value?.trim() ||
+                   document.getElementById('w02_start_num')?.value?.trim() ||
+                   document.getElementById('w03_start_num')?.value?.trim() ||
+                   document.getElementById('w04_start_num')?.value?.trim();
+  if (!startNum) requiredFields.push('起始题号');
+  
+  if (requiredFields.length > 0) {
+    alert('无法发布，请检查必填项！');
+    return;
+  }
+  
+  alert(`题目 ${currentType} 已发布！`);
+}
+
+/* ====== 初始化 ====== */
+renderConfig();
+renderPreview();
+</script>
+</body>
+</html>

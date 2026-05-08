@@ -50,7 +50,7 @@ const LESSON_MAP: LevelItem[] = [
 const defaultAssets: AssetRow[] = [
   { id: 'Y100001', dirId: 'N10101', bucket: '私有桶', name: '米饭.mp3', type: '音频', format: 'mp3', size: '128 KB', duration: '00:00:12', used: '学习资源 · 题库', enabled: true, createdAt: '2026-03-02 09:22', updatedAt: '2026-03-04 12:13' },
   { id: 'Y100005', dirId: 'N10102', bucket: '私有桶', name: '米.mp3', type: '音频', format: 'mp3', size: '64 KB', duration: '00:00:08', used: '学习资源', enabled: false, createdAt: '2026-03-01 16:40', updatedAt: '2026-03-03 18:45' },
-  { id: 'V100003', dirId: 'N10201', bucket: '私有桶', name: 'V100003.mp4', type: '视频', format: 'mp4', size: '2.1 MB', duration: '00:00:15', used: '文化内容', enabled: true, createdAt: '2026-02-28 14:10', updatedAt: '2026-03-02 10:20' },
+  { id: 'V100003', dirId: 'N10201', bucket: '私有桶', name: 'V100003.mp4', type: '视频', format: 'mp4', size: '2.1 MB', duration: '00:00:15', used: '文化视频管理', enabled: true, createdAt: '2026-02-28 14:10', updatedAt: '2026-03-02 10:20' },
 ];
 
 function formatNow() {

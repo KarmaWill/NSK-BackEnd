@@ -1,0 +1,349 @@
+
+<h2 class="sr-only">HSK后台二级页面：级别详情配置页，展示听力/阅读/书写三节的题型卡片，作为一级配置页与题目配置页之间的过渡层</h2>
+<style>
+:root{
+  --primary:#E85D04;--primary-light:#FCE5D8;--primary-dark:#C44B00;
+  --bg:#F5F5F7;--surface:#FFFFFF;
+  --text1:#1A1A1C;--text2:#6B6B76;--text3:#9999A5;
+  --border:#E5E5EC;--border-light:#EBEBEF;
+  --success:#0F6E56;--success-light:#E1F5EE;
+  --warn:#854F0B;--warn-light:#FAEEDA;
+  --danger:#991B1B;--danger-light:#FCEBEB;
+  --r-sm:6px;--r-md:8px;--r-lg:12px;--r-xl:16px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --primary:#FF7B2E;--primary-light:#4A1E0C;--primary-dark:#FF9E5E;
+    --bg:#1A1A1C;--surface:#252528;
+    --text1:#F2F2F4;--text2:#A1A1A8;--text3:#6B6B76;
+    --border:#3A3A42;--border-light:#2E2E32;
+    --success:#1D9E75;--success-light:#04342C;
+    --warn:#C88B3A;--warn-light:#412402;
+    --danger:#E25555;--danger-light:#4A1B0C;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text1)}
+.page{background:var(--bg);padding:0;min-height:600px}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:52px}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px}
+.bc-link{color:var(--primary);cursor:pointer;text-decoration:none}
+.bc-link:hover{text-decoration:underline}
+.bc-sep{color:var(--text3)}
+.bc-cur{color:var(--text1);font-weight:500}
+.topbar-actions{display:flex;gap:8px}
+.btn{padding:6px 14px;border-radius:var(--r-md);font-size:13px;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text1);transition:all .15s}
+.btn:hover{border-color:var(--text2)}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark);border-color:var(--primary-dark)}
+.content{padding:24px}
+.level-header{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);padding:20px 24px;margin-bottom:20px}
+.lh-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.lh-title{display:flex;align-items:center;gap:12px}
+.level-badge{display:inline-block;padding:4px 14px;border-radius:20px;border:2px solid var(--text1);font-size:14px;font-weight:600;color:var(--text1)}
+.lh-subtitle{font-size:13px;color:var(--text2)}
+.lh-lvl-tabs{display:flex;gap:6px}
+.lvl-tab{padding:4px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--surface);color:var(--text2);transition:all .15s}
+.lvl-tab:hover{border-color:var(--text2);color:var(--text1)}
+.lvl-tab.active{border:2px solid var(--text1);color:var(--text1);font-weight:600;background:var(--surface)}
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.stat-card{background:var(--bg);border-radius:var(--r-md);padding:10px 14px}
+.stat-label{font-size:11px;color:var(--text3);margin-bottom:3px}
+.stat-value{font-size:18px;font-weight:500;color:var(--text1);font-family:"SF Mono",Consolas,monospace}
+.stat-unit{font-size:12px;color:var(--text2);margin-left:3px;font-family:inherit}
+.stat-progress{height:3px;border-radius:2px;background:var(--border);margin-top:6px;overflow:hidden}
+.stat-fill{height:100%;border-radius:2px;background:var(--primary)}
+.section-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);margin-bottom:16px;overflow:hidden}
+.section-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border-light);cursor:pointer;user-select:none}
+.section-header:hover{background:var(--bg)}
+.sh-left{display:flex;align-items:center;gap:10px}
+.section-dot{width:10px;height:10px;border-radius:50%}
+.section-name{font-size:14px;font-weight:500}
+.section-meta{font-size:12px;color:var(--text2)}
+.sh-right{display:flex;align-items:center;gap:10px}
+.section-progress-wrap{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.mini-progress{width:60px;height:4px;border-radius:2px;background:var(--border-light);overflow:hidden}
+.mini-fill{height:100%;border-radius:2px}
+.section-body{padding:16px 20px}
+.qtype-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:10px;margin-bottom:12px}
+.qtype-card{border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;cursor:pointer;transition:all .15s;background:var(--surface);position:relative}
+.qtype-card:hover{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.qtype-card.configured{border-color:var(--border)}
+.qtype-card.unconfigured{border-style:dashed;opacity:.75}
+.qtype-card.unconfigured:hover{opacity:1;border-style:solid;border-color:var(--primary)}
+.qtc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+.qtc-id{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;font-family:"SF Mono",Consolas,monospace}
+.qtc-status{font-size:10px;padding:2px 7px;border-radius:10px}
+.st-done{background:var(--success-light);color:var(--success)}
+.st-empty{background:var(--border-light);color:var(--text3)}
+.st-warn{background:var(--warn-light);color:var(--warn)}
+.qtc-name{font-size:13px;font-weight:500;color:var(--text1);margin-bottom:4px;line-height:1.3}
+.qtc-desc{font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:10px}
+.qtc-footer{display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border-light)}
+.qtc-count{font-size:12px;color:var(--text2)}
+.qtc-count strong{color:var(--text1);font-weight:500}
+.qtc-arrow{font-size:16px;color:var(--text3)}
+.add-type-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;border:2px dashed var(--border);border-radius:var(--r-lg);background:transparent;color:var(--text3);font-size:13px;cursor:pointer;transition:all .15s}
+.add-type-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.badge-listening{background:#EEF2FF;color:#3730A3}
+.badge-reading{background:#E1F5EE;color:#085041}
+.badge-writing{background:#FAEEDA;color:#633806}
+@media(prefers-color-scheme:dark){
+.badge-listening{background:#26215C;color:#CECBF6}
+.badge-reading{background:#04342C;color:#9FE1CB}
+.badge-writing{background:#412402;color:#FAC775}
+}
+.dot-listening{background:#534AB7}
+.dot-reading{background:#1D9E75}
+.dot-writing{background:#EF9F27}
+.fill-listening{background:#534AB7}
+.fill-reading{background:#1D9E75}
+.fill-writing{background:#EF9F27}
+.id-listening{background:#EEF2FF;color:#3730A3}
+.id-reading{background:#E1F5EE;color:#085041}
+.id-writing{background:#FAEEDA;color:#633806}
+@media(prefers-color-scheme:dark){
+.id-listening{background:#26215C;color:#CECBF6}
+.id-reading{background:#04342C;color:#9FE1CB}
+.id-writing{background:#412402;color:#FAC775}
+}
+.collapse-icon{transition:transform .2s;color:var(--text3)}
+.collapsed .collapse-icon{transform:rotate(-90deg)}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--text1);color:var(--surface);padding:10px 18px;border-radius:var(--r-md);font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:100}
+.toast.show{opacity:1}
+.section-body.hidden{display:none}
+.summary-badge{font-size:11px;padding:2px 9px;border-radius:10px;font-weight:500}
+.progress-ring-wrap{display:flex;align-items:center;gap:8px}
+</style>
+
+<div class="page">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <a class="bc-link" onclick="goL1()">HSK 考试配置</a>
+      <span class="bc-sep"><i class="ti ti-chevron-right" style="font-size:13px" aria-hidden="true"></i></span>
+      <span class="bc-cur" id="bc-cur">HSK 4 级 · 题型配置</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" onclick="showToast('已保存为草稿')"><i class="ti ti-device-floppy" style="font-size:14px;margin-right:4px" aria-hidden="true"></i>保存草稿</button>
+      <button class="btn btn-primary" onclick="showToast('配置已发布上线 ✓')"><i class="ti ti-send" style="font-size:14px;margin-right:4px" aria-hidden="true"></i>发布</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="level-header">
+      <div class="lh-top">
+        <div class="lh-title">
+          <div class="level-badge" id="cur-badge">HSK 4</div>
+          <div>
+            <div style="font-size:15px;font-weight:500;margin-bottom:2px" id="cur-title">HSK 4 级模考配置</div>
+            <div class="lh-subtitle">切换等级查看对应题型配置</div>
+          </div>
+        </div>
+        <div class="lh-lvl-tabs" id="lvl-tabs"></div>
+      </div>
+      <div class="stats-row" id="stats-row"></div>
+    </div>
+
+    <div id="sections-wrap"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const LEVELS={
+  1:{name:'HSK 1',title:'HSK 1 级模考配置',duration:40,totalQ:40,passScore:120,configured:18,total:20},
+  2:{name:'HSK 2',title:'HSK 2 级模考配置',duration:55,totalQ:60,passScore:120,configured:22,total:28},
+  3:{name:'HSK 3',title:'HSK 3 级模考配置',duration:85,totalQ:80,passScore:180,configured:30,total:36},
+  4:{name:'HSK 4',title:'HSK 4 级模考配置',duration:100,totalQ:100,passScore:180,configured:38,total:45},
+  5:{name:'HSK 5',title:'HSK 5 级模考配置',duration:125,totalQ:100,passScore:180,configured:29,total:45},
+  6:{name:'HSK 6',title:'HSK 6 级模考配置',duration:140,totalQ:101,passScore:180,configured:15,total:50},
+};
+
+const SECTIONS={
+  listening:{name:'听力',dot:'dot-listening',fill:'fill-listening',id:'id-listening',cls:'badge-listening'},
+  reading:{name:'阅读',dot:'dot-reading',fill:'fill-reading',id:'id-reading',cls:'badge-reading'},
+  writing:{name:'书写',dot:'dot-writing',fill:'fill-writing',id:'id-writing',cls:'badge-writing'},
+};
+
+const QTYPES={
+  1:{
+    listening:[
+      {id:'L01',name:'图片选择',desc:'听音频选对应图片',count:5,status:'done'},
+      {id:'L02',name:'判断对错',desc:'听句判断真假',count:10,status:'done'},
+      {id:'L03',name:'短句选答',desc:'听短句选择答案',count:5,status:'warn'},
+    ],
+    reading:[
+      {id:'R01',name:'图文匹配',desc:'图片与句子对应',count:5,status:'done'},
+      {id:'R02',name:'阅读判断',desc:'阅读句子判对错',count:10,status:'done'},
+      {id:'R03',name:'问答匹配',desc:'问题与回答配对',count:5,status:'empty'},
+    ],
+    writing:[
+      {id:'W01',name:'汉字辨写',desc:'识别或填写汉字',count:10,status:'done'},
+      {id:'W02',name:'连词成句',desc:'拖拽词语排列成句',count:5,status:'empty'},
+    ],
+  },
+  4:{
+    listening:[
+      {id:'L04',name:'对话选答',desc:'听对话后选答案',count:8,status:'done'},
+      {id:'L05',name:'对话多题',desc:'长对话对应多道题',count:12,status:'done'},
+      {id:'L06',name:'短文多题',desc:'短文听力多道题',count:5,status:'done'},
+    ],
+    reading:[
+      {id:'R01',name:'图文匹配',desc:'图片与句子对应',count:10,status:'done'},
+      {id:'R03',name:'问答匹配',desc:'问题与回答配对',count:10,status:'done'},
+      {id:'R04',name:'词语填空',desc:'从词库选词填入空白',count:10,status:'done'},
+      {id:'R05',name:'句子排序',desc:'拖拽排列句子顺序',count:5,status:'warn'},
+      {id:'R06',name:'段落填空',desc:'文章中填入句段',count:5,status:'empty'},
+    ],
+    writing:[
+      {id:'W03',name:'看图造句',desc:'看图片写句子',count:5,status:'done'},
+      {id:'W04',name:'短文写作',desc:'80–150字，AI 评分',count:2,status:'warn'},
+    ],
+  },
+  6:{
+    listening:[
+      {id:'L06',name:'短文多题',desc:'短文听力多道题',count:10,status:'done'},
+      {id:'L07',name:'访谈长篇',desc:'访谈/报道型长篇',count:5,status:'empty'},
+    ],
+    reading:[
+      {id:'R04',name:'词语填空',desc:'从词库选词填入空白',count:20,status:'done'},
+      {id:'R06',name:'段落填空',desc:'文章中填入句段',count:10,status:'done'},
+      {id:'R07',name:'阅读理解',desc:'读文章后选择答案',count:20,status:'done'},
+    ],
+    writing:[
+      {id:'W05',name:'命题作文',desc:'150–400字，AI 评分',count:1,status:'warn'},
+      {id:'W06',name:'缩写改写',desc:'缩写长文，AI 评分',count:1,status:'empty'},
+    ],
+  },
+};
+function getSectionData(level,sec){
+  const base=QTYPES[level]||QTYPES[4];
+  return base[sec]||QTYPES[4][sec]||[];
+}
+
+let curLevel=4;
+const collapsed={listening:false,reading:false,writing:false};
+
+function renderLvlTabs(){
+  const c=document.getElementById('lvl-tabs');
+  c.innerHTML=[1,2,3,4,5,6].map(l=>`
+    <div class="lvl-tab${l===curLevel?' active':''}" onclick="setLevel(${l})">${LEVELS[l].name}</div>
+  `).join('');
+}
+
+function renderStats(){
+  const d=LEVELS[curLevel];
+  const pct=Math.round(d.configured/d.total*100);
+  document.getElementById('stats-row').innerHTML=[
+    {label:'考试时长',value:d.duration,unit:'分钟',pct:Math.round(d.duration/160*100)},
+    {label:'题目总数',value:d.totalQ,unit:'题',pct:Math.round(d.totalQ/101*100)},
+    {label:'及格分数线',value:d.passScore,unit:'分',pct:Math.round(d.passScore/300*100)},
+    {label:'优秀分数线',value:Math.round(d.passScore*1.4),unit:'分',pct:Math.round(d.passScore*1.4/300*100)},
+    {label:'题型配置进度',value:pct,unit:'%',pct:pct,highlight:true},
+  ].map(s=>`
+    <div class="stat-card">
+      <div class="stat-label">${s.label}</div>
+      <div><span class="stat-value" style="${s.highlight?'color:var(--primary)':''}">${s.value}</span><span class="stat-unit">${s.unit}</span></div>
+      <div class="stat-progress"><div class="stat-fill" style="width:${s.pct}%;background:${s.highlight?'var(--primary)':'var(--text3)'}"></div></div>
+    </div>`).join('');
+}
+
+function renderSections(){
+  const wrap=document.getElementById('sections-wrap');
+  wrap.innerHTML=Object.entries(SECTIONS).map(([sec,info])=>{
+    const types=getSectionData(curLevel,sec);
+    const done=types.filter(t=>t.status==='done').length;
+    const total=types.length;
+    const pct=total?Math.round(done/total*100):0;
+    const isCollapsed=collapsed[sec];
+    return`<div class="section-block" id="sb-${sec}">
+      <div class="section-header${isCollapsed?' collapsed':''}" onclick="toggleSection('${sec}')">
+        <div class="sh-left">
+          <div class="section-dot ${info.dot}" style="width:10px;height:10px;border-radius:50%"></div>
+          <div>
+            <span class="section-name">${info.name}</span>
+            <span class="section-meta" style="margin-left:8px">${total} 种题型 · ${types.reduce((s,t)=>s+t.count,0)} 题</span>
+          </div>
+        </div>
+        <div class="sh-right">
+          <div class="section-progress-wrap">
+            <div class="mini-progress"><div class="mini-fill ${info.fill}" style="width:${pct}%"></div></div>
+            <span>${done}/${total} 已配置</span>
+          </div>
+          ${types.some(t=>t.status==='warn')?`<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--warn-light);color:var(--warn)"><i class="ti ti-alert-triangle" style="font-size:12px;margin-right:3px" aria-hidden="true"></i>待完善</span>`:''}
+          ${done===total&&total>0?`<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--success-light);color:var(--success)"><i class="ti ti-circle-check" style="font-size:12px;margin-right:3px" aria-hidden="true"></i>已完成</span>`:''}
+          <i class="ti ti-chevron-down collapse-icon" style="font-size:16px" aria-hidden="true"></i>
+        </div>
+      </div>
+      <div class="section-body${isCollapsed?' hidden':''}" id="body-${sec}">
+        <div class="qtype-grid">
+          ${types.map(t=>`
+            <div class="qtype-card ${t.status==='empty'?'unconfigured':'configured'}" onclick="openQType('${t.id}','${sec}','${info.name}')">
+              <div class="qtc-top">
+                <span class="qtc-id ${info.id}">${t.id}</span>
+                <span class="qtc-status ${t.status==='done'?'st-done':t.status==='warn'?'st-warn':'st-empty'}">${t.status==='done'?'已配置':t.status==='warn'?'待完善':'未配置'}</span>
+              </div>
+              <div class="qtc-name">${t.name}</div>
+              <div class="qtc-desc">${t.desc}</div>
+              <div class="qtc-footer">
+                <span class="qtc-count">${t.status==='empty'?'<span style="color:var(--text3)">暂无题目</span>':'<strong>'+t.count+'</strong> 题'}</span>
+                <i class="ti ti-arrow-right qtc-arrow" style="font-size:15px" aria-hidden="true"></i>
+              </div>
+            </div>`).join('')}
+          <button class="add-type-btn" onclick="addType('${sec}','${info.name}')">
+            <i class="ti ti-plus" style="font-size:16px" aria-hidden="true"></i>添加题型
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setLevel(l){
+  curLevel=l;
+  document.getElementById('cur-badge').textContent='HSK '+l;
+  document.getElementById('cur-title').textContent=LEVELS[l].title;
+  document.getElementById('bc-cur').textContent='HSK '+l+' 级 · 题型配置';
+  renderLvlTabs();
+  renderStats();
+  renderSections();
+}
+
+function toggleSection(sec){
+  collapsed[sec]=!collapsed[sec];
+  const sb=document.getElementById('sb-'+sec);
+  const body=document.getElementById('body-'+sec);
+  const hdr=sb.querySelector('.section-header');
+  if(collapsed[sec]){hdr.classList.add('collapsed');body.classList.add('hidden');}
+  else{hdr.classList.remove('collapsed');body.classList.remove('hidden');}
+}
+
+function openQType(id,sec,secName){
+  if(id.startsWith('W')){
+    showToast('→ 进入 '+id+' '+secName+'题型配置页面');
+    setTimeout(()=>{},400);
+  } else {
+    sendPrompt('展开 '+id+' 的前端渲染规范和后台配置字段');
+  }
+}
+
+function addType(sec,secName){
+  showToast('打开 '+secName+'节题型选择器…');
+}
+
+function goL1(){
+  sendPrompt('回到一级页面：HSK考试配置的整体参数设置（级别、时长、分数线、开关）有哪些字段需要后台配置？');
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+renderLvlTabs();
+renderStats();
+renderSections();
+</script>

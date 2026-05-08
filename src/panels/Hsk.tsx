@@ -3,7 +3,11 @@ import { Toggle } from '../components/Toggle';
 
 const levels = ['HSK 1', 'HSK 2', 'HSK 3', 'HSK 4', 'HSK 5', 'HSK 6'];
 
-export function Hsk() {
+type HskProps = {
+  pageTitle?: string;
+};
+
+export function Hsk({ pageTitle = 'HSK考试管理' }: HskProps = {}) {
   const [activeLevels, setActiveLevels] = useState<Set<number>>(new Set([0, 1]));
 
   const toggleLevel = (i: number) => {
@@ -19,7 +23,7 @@ export function Hsk() {
     <>
       <div className="page-header">
         <div>
-          <div className="page-title">HSK 考试配置</div>
+          <div className="page-title">{pageTitle}</div>
           <div className="page-subtitle">配置 HSK 级别范围、模拟考参数与拼音图表</div>
         </div>
       </div>
