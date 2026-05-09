@@ -20,13 +20,47 @@ function loadAiRoleOptions(): AiRoleOption[] {
   }
 }
 
+/** 难度级别配置 */
+type DifficultyLevel = {
+  id: string;
+  labels: Record<LangKey, string>;
+};
+
+const DIFFICULTY_STORAGE_KEY = 'nsk-ai-difficulty-levels';
+const DEFAULT_DIFFICULTY_LEVELS: DifficultyLevel[] = [
+  { id: 'beginner', labels: { CN: '初级', EN: 'Beginner', ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' } },
+  { id: 'intermediate', labels: { CN: '中级', EN: 'Intermediate', ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' } },
+  { id: 'advanced', labels: { CN: '高级', EN: 'Advanced', ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' } },
+];
+
+function loadDifficultyLevels(): DifficultyLevel[] {
+  try {
+    const raw = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
+    if (!raw) return DEFAULT_DIFFICULTY_LEVELS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return DEFAULT_DIFFICULTY_LEVELS;
+    return parsed.length > 0 ? parsed : DEFAULT_DIFFICULTY_LEVELS;
+  } catch {
+    return DEFAULT_DIFFICULTY_LEVELS;
+  }
+}
+
+function saveDifficultyLevels(levels: DifficultyLevel[]) {
+  try {
+    localStorage.setItem(DIFFICULTY_STORAGE_KEY, JSON.stringify(levels));
+  } catch {
+    /* ignore */
+  }
+}
+
 type FreeConfig = {
   icon: string;
   aiName: string;
   /** 选中的 AI 角色 ID（来自 AI 角色配置） */
   aiRoleId?: string;
   usageScene: string;
-  level: '初级' | '中级' | '高级';
+  /** 难度级别 ID（对应 DifficultyLevel.id） */
+  level: string;
   /** 补充展示文案（多语言），每语言最长 80 字，用于语音测评连调等 */
   copyTextByLang?: Record<LangKey, string>;
   themeNameByLang: Record<LangKey, string>;
@@ -127,7 +161,7 @@ const seedConfigs: FreeConfig[] = [
     icon: '💬',
     aiName: 'AI 自由对话老师 Lin',
     usageScene: '自由对话训练',
-    level: '初级',
+    level: 'beginner',
     copyTextByLang: createEmptyLangMap(),
     themeNameByLang: createEmptyLangMap('日常自由对话', 'Daily Free Talk'),
     themeCategory: '生活口语',
@@ -160,7 +194,7 @@ const seedConfigs: FreeConfig[] = [
     icon: '🧑‍💼',
     aiName: 'AI 商务会话教练',
     usageScene: '商务场景自由对话',
-    level: '中级',
+    level: 'intermediate',
     copyTextByLang: createEmptyLangMap(),
     themeNameByLang: createEmptyLangMap('职场沟通进阶', 'Business Conversation'),
     themeCategory: '商务口语',
@@ -193,7 +227,7 @@ const seedConfigs: FreeConfig[] = [
     icon: '🌍',
     aiName: 'AI 文化交流助手',
     usageScene: '文化主题自由对话',
-    level: '高级',
+    level: 'advanced',
     copyTextByLang: createEmptyLangMap(),
     themeNameByLang: createEmptyLangMap('文化交流对话', 'Culture Talk'),
     themeCategory: '文化口语',
@@ -260,10 +294,18 @@ export function AiFree() {
   const [categoryEditLang, setCategoryEditLang] = useState<LangKey>('CN');
   const [showCategoryManage, setShowCategoryManage] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
+  const [difficultyLevels, setDifficultyLevels] = useState<DifficultyLevel[]>(() => loadDifficultyLevels());
+  const [difficultyLang, setDifficultyLang] = useState<LangKey>('CN');
+  const [showDifficultyManage, setShowDifficultyManage] = useState(false);
+  const [customDifficultyInput, setCustomDifficultyInput] = useState('');
 
   useEffect(() => {
     saveCategoryLabelsToStorage(categoryLabels);
   }, [categoryLabels]);
+
+  useEffect(() => {
+    saveDifficultyLevels(difficultyLevels);
+  }, [difficultyLevels]);
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -305,12 +347,15 @@ export function AiFree() {
     setCategoryEditLang('CN');
     setShowCategoryManage(false);
     setCustomCategoryInput('');
+    setDifficultyLang('CN');
+    setShowDifficultyManage(false);
+    setCustomDifficultyInput('');
     setForm({
       icon: '💬',
       aiName: '',
       aiRoleId: '',
       usageScene: '',
-      level: '初级',
+      level: difficultyLevels[0]?.id ?? 'beginner',
       copyTextByLang: createEmptyLangMap(),
       themeNameByLang: createEmptyLangMap(),
       themeCategory: '生活口语',
@@ -354,6 +399,9 @@ export function AiFree() {
     setCategoryEditLang('CN');
     setShowCategoryManage(false);
     setCustomCategoryInput('');
+    setDifficultyLang('CN');
+    setShowDifficultyManage(false);
+    setCustomDifficultyInput('');
     const row = rows[idx];
     const topicDescByLang = row.topicDescByLang ?? createEmptyLangMap(row.topicDesc ?? '', '');
     const shortBackgroundDescByLang = row.shortBackgroundDescByLang ?? createEmptyLangMap(row.shortBackgroundDesc ?? '', '');
@@ -468,7 +516,7 @@ export function AiFree() {
                 </td>
                 <td><span className="badge badge-muted">{labelsForCategory(categoryLabels, row.themeCategory).CN || row.themeCategory}</span></td>
                 <td style={{ fontSize: 12 }}>{row.roleA} / {row.roleB}</td>
-                <td><span className="badge">{row.level}</span></td>
+                <td><span className="badge">{difficultyLevels.find((d) => d.id === row.level)?.labels.CN ?? row.level}</span></td>
                 <td><span className="td-mono" style={{ fontSize: 12 }}>{row.turnLimit} 轮</span></td>
                 <td><span className={`status-dot ${row.status === 'published' ? 'published' : 'draft'}`}>{row.status === 'published' ? '已上线' : '草稿'}</span></td>
                 <td className="td-mono" style={{ fontSize: 11 }}>{row.createdAt || row.updated || '—'}</td>
@@ -539,18 +587,157 @@ export function AiFree() {
             <div className="form-group">
               <label className="form-label">难度选择（用于语音测评连调）</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                {(['初级', '中级', '高级'] as const).map((lv) => (
+                {difficultyLevels.map((lv) => (
                   <button
-                    key={lv}
+                    key={lv.id}
                     type="button"
-                    className={`btn btn-sm ${form.level === lv ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setForm((p) => ({ ...p, level: lv }))}
+                    className={`btn btn-sm ${form.level === lv.id ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setForm((p) => ({ ...p, level: lv.id }))}
                   >
-                    {lv}
+                    {lv.labels.CN || lv.id}
                   </button>
                 ))}
               </div>
-              <div className="form-hint" style={{ marginBottom: 2 }}>当前难度：{form.level}</div>
+              <div className="form-hint" style={{ marginBottom: 6 }}>
+                当前难度：{difficultyLevels.find((d) => d.id === form.level)?.labels.CN ?? form.level}
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ marginTop: 6, borderColor: 'var(--stone-dark)', color: 'var(--ink)' }}
+                onClick={() => setShowDifficultyManage((b) => !b)}
+              >
+                {showDifficultyManage ? '收起管理' : '管理难度级别'}
+              </button>
+              {showDifficultyManage && (
+                <div style={{ marginTop: 12, padding: 14, background: 'var(--mist)', borderRadius: 8, border: '1px solid var(--stone-dark)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', marginBottom: 10 }}>难度级别管理</div>
+                  <div className="form-hint" style={{ marginBottom: 12 }}>
+                    可以添加新级别、编辑各级别多语言名称或删除不需要的级别。删除级别时，使用该级别的配置将自动切换到第一个级别。
+                  </div>
+                  
+                  {/* 添加新级别 */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      className="form-input"
+                      style={{ flex: '1 1 120px', minWidth: 0 }}
+                      value={customDifficultyInput}
+                      onChange={(e) => setCustomDifficultyInput(e.target.value)}
+                      placeholder="输入新级别中文名（如：专家级）"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      onClick={() => {
+                        const t = customDifficultyInput.trim();
+                        if (!t) return;
+                        const newId = `level_${Date.now()}`;
+                        const newLevel: DifficultyLevel = {
+                          id: newId,
+                          labels: createEmptyLangMap(t, t),
+                        };
+                        setDifficultyLevels((prev) => [...prev, newLevel]);
+                        setCustomDifficultyInput('');
+                      }}
+                    >
+                      添加级别
+                    </button>
+                  </div>
+
+                  {/* 现有级别列表 */}
+                  <label className="form-label" style={{ marginBottom: 8 }}>现有难度级别</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 280, overflowY: 'auto' }}>
+                    {difficultyLevels.map((level) => (
+                      <div
+                        key={level.id}
+                        style={{
+                          padding: 12,
+                          background: 'var(--white)',
+                          borderRadius: 8,
+                          border: '1px solid var(--stone-dark)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{level.labels.CN || level.id}</div>
+                          {difficultyLevels.length > 1 && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: '2px 8px', minWidth: 0, color: 'var(--rose)', fontSize: 12 }}
+                              onClick={() => {
+                                setDifficultyLevels((prev) => {
+                                  const next = prev.filter((d) => d.id !== level.id);
+                                  if (next.length === 0) return prev;
+                                  if (form.level === level.id) {
+                                    setForm((p) => ({ ...p, level: next[0].id }));
+                                  }
+                                  return next;
+                                });
+                              }}
+                            >
+                              删除
+                            </button>
+                          )}
+                        </div>
+                        
+                        {/* 多语言配置 */}
+                        <div style={{ fontSize: 11, color: 'var(--ink-light)', marginBottom: 8 }}>多语言配置：</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {LANG_OPTIONS.map((o) => (
+                              <button
+                                key={o.key}
+                                type="button"
+                                className={`btn btn-sm ${difficultyLang === o.key ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setDifficultyLang(o.key)}
+                                style={langBtnStyle(o.key, difficultyLang === o.key)}
+                              >
+                                {o.key}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            style={{ marginLeft: 'auto' }}
+                            onClick={() => {
+                              setDifficultyLevels((prev) =>
+                                prev.map((d) => {
+                                  if (d.id !== level.id) return d;
+                                  const nextLabels: Record<LangKey, string> = {
+                                    ...d.labels,
+                                    ...Object.fromEntries(
+                                      LANG_OPTIONS.map((o) => o.key)
+                                        .filter((k) => k !== 'CN')
+                                        .map((k) => [k, d.labels.CN || d.labels[k] || '']),
+                                    ) as Record<LangKey, string>,
+                                  };
+                                  return { ...d, labels: nextLabels };
+                                }),
+                              );
+                            }}
+                          >
+                            自动翻译
+                          </button>
+                        </div>
+                        <input
+                          className="form-input"
+                          value={level.labels[difficultyLang] ?? ''}
+                          onChange={(e) => {
+                            setDifficultyLevels((prev) =>
+                              prev.map((d) => {
+                                if (d.id !== level.id) return d;
+                                return { ...d, labels: { ...d.labels, [difficultyLang]: e.target.value } };
+                              }),
+                            );
+                          }}
+                          placeholder={`${LANG_OPTIONS.find((l) => l.key === difficultyLang)?.label ?? difficultyLang}版本名称`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">补充文案（多语言，≤{COPY_TEXT_MAX_LEN} 字，语音测评连调/展示用）</label>
