@@ -1,0 +1,112 @@
+{
+  "bctMappings": [
+    {
+      "examGroup": "BCT (B)",
+      "hskLevel": "HSK6级",
+      "cefr": "C2",
+      "intlStandard": "五级",
+      "vocabRef": "5000及以上",
+      "description": "理解并运用汉语完成较为复杂的商务交际任务。"
+    },
+    {
+      "examGroup": "BCT (B)",
+      "hskLevel": "HSK5级",
+      "cefr": "C1",
+      "intlStandard": "",
+      "vocabRef": "2500",
+      "description": ""
+    },
+    {
+      "examGroup": "BCT (B)",
+      "hskLevel": "HSK4级",
+      "cefr": "B2",
+      "intlStandard": "四级",
+      "vocabRef": "1200",
+      "description": ""
+    },
+    {
+      "examGroup": "BCT (A)",
+      "hskLevel": "HSK3级",
+      "cefr": "B1",
+      "intlStandard": "三级",
+      "vocabRef": "600",
+      "description": "理解并运用汉语完成日常交际和基本商务交际任务。"
+    },
+    {
+      "examGroup": "BCT (A)",
+      "hskLevel": "HSK2级",
+      "cefr": "A2",
+      "intlStandard": "二级",
+      "vocabRef": "300",
+      "description": ""
+    },
+    {
+      "examGroup": "BCT (A)",
+      "hskLevel": "HSK1级",
+      "cefr": "A1",
+      "intlStandard": "一级",
+      "vocabRef": "150",
+      "description": ""
+    }
+  ],
+  "yctMappings": [
+    {
+      "yctLevel": "YCT (四级)",
+      "hskLevel": "HSK3级",
+      "cefr": "B1",
+      "intlStandard": "三级",
+      "vocabRef": "600",
+      "description": "运用汉语完成生活、学习中的基本交际任务；在中国旅游时可应对大部分交际任务。"
+    },
+    {
+      "yctLevel": "YCT (三级)",
+      "hskLevel": "HSK2级",
+      "cefr": "A2",
+      "intlStandard": "二级",
+      "vocabRef": "300",
+      "description": "用汉语就生活中一些常见的话题进行简单而直接的交流。"
+    },
+    {
+      "yctLevel": "YCT (二级)",
+      "hskLevel": "HSK1级",
+      "cefr": "A1",
+      "intlStandard": "一级",
+      "vocabRef": "150",
+      "description": "材料中未单独列出二级具体描述，通常具备基础交流能力。"
+    },
+    {
+      "yctLevel": "YCT (一级)",
+      "hskLevel": null,
+      "cefr": "-",
+      "intlStandard": "-",
+      "vocabRef": "80",
+      "description": "理解并使用最常用的汉语词语和句子，具备进一步学习汉语的能力。"
+    }
+  ],
+  "hskkLevels": [
+    {
+      "hskkLevel": "初级",
+      "hskLevels": ["HSK1级", "HSK2级"],
+      "intlStandard": "一级、二级",
+      "targetDescription": "学习汉语 1-2 学期，掌握 200 词左右",
+      "fullScore": 100,
+      "passScore": 60
+    },
+    {
+      "hskkLevel": "中级",
+      "hskLevels": ["HSK3级", "HSK4级"],
+      "intlStandard": "三级、四级",
+      "targetDescription": "学习汉语 1-2 学年，掌握 900 词左右",
+      "fullScore": 100,
+      "passScore": 60
+    },
+    {
+      "hskkLevel": "高级",
+      "hskLevels": ["HSK5级", "HSK6级"],
+      "intlStandard": "五级",
+      "targetDescription": "学习汉语 2 年以上，掌握 3000 词左右",
+      "fullScore": 100,
+      "passScore": 60
+    }
+  ]
+}

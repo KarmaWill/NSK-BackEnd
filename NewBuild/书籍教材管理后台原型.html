@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>书籍教材管理后台 - 资源挂载</title>
+    <style>
+        /* CSS Variables - Design System */
+        :root {
+            /* Colors */
+            --primary: #1890ff;
+            --primary-hover: #40a9ff;
+            --primary-light: #e6f7ff;
+            --success: #52c41a;
+            --warning: #faad14;
+            --error: #ff4d4f;
+            --text-primary: #262626;
+            --text-secondary: #595959;
+            --text-muted: #8c8c8c;
+            --border-color: #d9d9d9;
+            --border-light: #f0f0f0;
+            --bg-primary: #ffffff;
+            --bg-secondary: #fafafa;
+            --bg-hover: #f5f5f5;
+            
+            /* Spacing */
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 20px;
+            --space-6: 24px;
+            --space-8: 32px;
+            
+            /* Typography */
+            --text-xs: 12px;
+            --text-sm: 14px;
+            --text-base: 14px;
+            --text-lg: 16px;
+            --text-xl: 20px;
+            --text-2xl: 24px;
+            
+            /* Border Radius */
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+        }
+
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            font-size: var(--text-base);
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            line-height: 1.5;
+        }
+
+        /* Layout */
+        .app {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-light);
+            padding: var(--space-4) var(--space-6);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title {
+            font-size: var(--text-xl);
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: var(--space-3);
+        }
+
+        .main {
+            flex: 1;
+            padding: var(--space-6);
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Page Header */
+        .page-header {
+            margin-bottom: var(--space-5);
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+            margin-bottom: var(--space-3);
+        }
+
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb-separator {
+            color: var(--text-muted);
+        }
+
+        .page-title {
+            font-size: var(--text-2xl);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Card */
+        .card {
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-light);
+        }
+
+        .card-header {
+            padding: var(--space-4) var(--space-5);
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-size: var(--text-lg);
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: var(--space-5);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-light);
+            margin-bottom: var(--space-5);
+            background: var(--bg-primary);
+            padding: 0 var(--space-5);
+        }
+
+        .tab {
+            padding: var(--space-4) var(--space-5);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tab:hover {
+            color: var(--primary);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-badge {
+            position: absolute;
+            top: 8px;
+            right: 4px;
+            background: var(--error);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: normal;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-md);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            background: transparent;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+
+        .btn-default {
+            background: white;
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-default:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-sm {
+            padding: var(--space-1) var(--space-3);
+            font-size: var(--text-xs);
+        }
+
+        .btn-danger {
+            color: var(--error);
+        }
+
+        .btn-danger:hover {
+            background: #fff1f0;
+        }
+
+        .btn-link {
+            color: var(--primary);
+            padding: 0;
+        }
+
+        .btn-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Resource Section */
+        .resource-section {
+            margin-bottom: var(--space-6);
+        }
+
+        .resource-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-3);
+            padding-bottom: var(--space-2);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .resource-section-title {
+            font-size: var(--text-base);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .resource-section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        /* Table */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--text-sm);
+        }
+
+        .table th,
+        .table td {
+            padding: var(--space-3) var(--space-4);
+            text-align: left;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .table th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .table tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .table .cell-actions {
+            display: flex;
+            gap: var(--space-2);
+        }
+
+        .table .cell-empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .table .resource-id {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: var(--text-xs);
+            background: var(--bg-secondary);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: var(--space-8);
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: var(--space-3);
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: var(--text-sm);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            width: 90%;
+            max-width: 700px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(-20px);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.active .modal {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            padding: var(--space-4) var(--space-5);
+            border-bottom: 1px solid var(--border-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-title {
+            font-size: var(--text-lg);
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: var(--space-1);
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: var(--space-5);
+            flex: 1;
+            overflow: auto;
+        }
+
+        .modal-footer {
+            padding: var(--space-4) var(--space-5);
+            border-top: 1px solid var(--border-light);
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--space-3);
+        }
+
+        /* Resource Selector */
+        .resource-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-4);
+            height: 400px;
+        }
+
+        .resource-list {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .resource-list-header {
+            padding: var(--space-3);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-light);
+            font-weight: 600;
+            font-size: var(--text-sm);
+        }
+
+        .resource-list-search {
+            padding: var(--space-3);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .resource-list-search input {
+            width: 100%;
+            padding: var(--space-2) var(--space-3);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: var(--text-sm);
+        }
+
+        .resource-list-items {
+            flex: 1;
+            overflow: auto;
+            padding: var(--space-2);
+        }
+
+        .resource-item {
+            padding: var(--space-3);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-2);
+            transition: background 0.2s;
+        }
+
+        .resource-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .resource-item.selected {
+            background: var(--primary-light);
+        }
+
+        .resource-item-checkbox {
+            margin-top: 2px;
+        }
+
+        .resource-item-info {
+            flex: 1;
+        }
+
+        .resource-item-name {
+            font-weight: 500;
+            margin-bottom: var(--space-1);
+        }
+
+        .resource-item-meta {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+
+        .resource-selected {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .resource-selected-items {
+            flex: 1;
+            overflow: auto;
+            padding: var(--space-3);
+        }
+
+        .selected-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-2);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-2);
+        }
+
+        .selected-item-name {
+            font-size: var(--text-sm);
+            font-weight: 500;
+        }
+
+        .selected-item-remove {
+            background: none;
+            border: none;
+            color: var(--error);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 var(--space-1);
+        }
+
+        /* File Upload */
+        .file-upload {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--space-8);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-upload:hover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .file-upload-icon {
+            font-size: 48px;
+            color: var(--text-muted);
+            margin-bottom: var(--space-3);
+        }
+
+        .file-upload-text {
+            color: var(--text-secondary);
+            margin-bottom: var(--space-2);
+        }
+
+        .file-upload-hint {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+
+        /* Info Box */
+        .info-box {
+            background: var(--primary-light);
+            border: 1px solid #bae7ff;
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin: var(--space-4) 0;
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-3);
+        }
+
+        .info-box-icon {
+            font-size: 20px;
+            color: var(--primary);
+        }
+
+        .info-box-content {
+            flex: 1;
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            margin-bottom: var(--space-1);
+        }
+
+        .info-box-text {
+            font-size: var(--text-sm);
+            color: var(--text-secondary);
+        }
+
+        /* Status Badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: var(--text-xs);
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #f6ffed;
+            color: var(--success);
+            border: 1px solid #b7eb8f;
+        }
+
+        .badge-warning {
+            background: #fffbe6;
+            color: var(--warning);
+            border: 1px solid #ffe58f;
+        }
+
+        /* File List */
+        .file-list-item {
+            display: flex;
+            align-items: center;
+            padding: var(--space-3);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-2);
+            background: var(--bg-primary);
+        }
+
+        .file-list-item-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-light);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: var(--space-3);
+            font-size: 20px;
+        }
+
+        .file-list-item-info {
+            flex: 1;
+        }
+
+        .file-list-item-name {
+            font-weight: 500;
+            margin-bottom: var(--space-1);
+        }
+
+        .file-list-item-meta {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+        }
+
+        .file-list-item-actions {
+            display: flex;
+            gap: var(--space-2);
+        }
+
+        /* Unit Link */
+        .unit-link {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .unit-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main {
+                padding: var(--space-4);
+            }
+
+            .tabs {
+                overflow-x: auto;
+                padding: 0 var(--space-4);
+            }
+
+            .tab {
+                padding: var(--space-3) var(--space-4);
+                white-space: nowrap;
+            }
+
+            .resource-selector {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .table {
+                font-size: var(--text-xs);
+            }
+
+            .table th,
+            .table td {
+                padding: var(--space-2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-title">📚 书籍教材管理系统</div>
+            <div class="header-actions">
+                <button class="btn btn-default">返回列表</button>
+                <button class="btn btn-primary">保存</button>
+            </div>
+        </header>
+
+        <!-- Main -->
+        <main class="main">
+            <!-- Page Header -->
+            <div class="page-header">
+                <div class="breadcrumb">
+                    <a href="#">书籍管理</a>
+                    <span class="breadcrumb-separator">/</span>
+                    <a href="#">快乐学中文</a>
+                    <span class="breadcrumb-separator">/</span>
+                    <span>第一册</span>
+                </div>
+                <h1 class="page-title">编辑书籍: 快乐学中文 第一册</h1>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <div class="tab" data-tab="basic" tabindex="0" role="tab">基本信息</div>
+                <div class="tab active" data-tab="structure" tabindex="0" role="tab">结构配置</div>
+                <div class="tab" data-tab="content" tabindex="0" role="tab">内容管理</div>
+                <div class="tab" data-tab="resources" tabindex="0" role="tab">
+                    资源挂载
+                    <span class="tab-badge">2</span>
+                </div>
+            </div>
+
+            <!-- Tab Content: Structure Config -->
+            <div class="tab-content active" id="tab-structure">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">▼ 单元列表</span>
+                        <button class="btn btn-primary btn-sm" onclick="openAddUnitModal()">+ 新增单元</button>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>单元</th>
+                                    <th>有声阅读</th>
+                                    <th>文化视频</th>
+                                    <th>测试卷</th>
+                                    <th>文化点读</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <a href="#" class="unit-link">U1 我和你</a>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">AUDIO_001</span><br>
+                                        <span class="resource-id">AUDIO_002</span>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">VIDEO_001</span>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">EXAM_001</span><br>
+                                        <span class="resource-id">EXAM_002</span>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">CULTURE_001</span>
+                                    </td>
+                                    <td>
+                                        <div class="cell-actions">
+                                            <button class="btn btn-default btn-sm" onclick="openEditUnitModal(1, '我和你', 'You and I')">编辑</button>
+                                            <button class="btn btn-primary btn-sm" onclick="openUnitResourceModal()">配置资源</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <a href="#" class="unit-link">U2 你叫什么</a>
+                                    </td>
+                                    <td class="cell-empty">/</td>
+                                    <td class="cell-empty">/</td>
+                                    <td class="cell-empty">/</td>
+                                    <td class="cell-empty">/</td>
+                                    <td>
+                                        <div class="cell-actions">
+                                            <button class="btn btn-default btn-sm" onclick="openEditUnitModal(2, '你叫什么', 'What\'s Your Name')">编辑</button>
+                                            <button class="btn btn-primary btn-sm" onclick="openUnitResourceModal()">配置资源</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <a href="#" class="unit-link">U3 她是谁</a>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">AUDIO_003</span>
+                                    </td>
+                                    <td class="cell-empty">/</td>
+                                    <td>
+                                        <span class="resource-id">EXAM_003</span>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">CULTURE_002</span>
+                                    </td>
+                                    <td>
+                                        <div class="cell-actions">
+                                            <button class="btn btn-default btn-sm" onclick="openEditUnitModal(3, '她是谁', 'Who is She')">编辑</button>
+                                            <button class="btn btn-primary btn-sm" onclick="openUnitResourceModal()">配置资源</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <a href="#" class="unit-link">U4 我很喜欢</a>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">AUDIO_004</span><br>
+                                        <span class="resource-id">AUDIO_005</span>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">VIDEO_002</span><br>
+                                        <span class="resource-id">VIDEO_003</span>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">EXAM_004</span>
+                                    </td>
+                                    <td>
+                                        <span class="resource-id">CULTURE_003</span>
+                                    </td>
+                                    <td>
+                                        <div class="cell-actions">
+                                            <button class="btn btn-default btn-sm" onclick="openEditUnitModal(4, '我很喜欢', 'I Like It Very Much')">编辑</button>
+                                            <button class="btn btn-primary btn-sm" onclick="openUnitResourceModal()">配置资源</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Book Resources -->
+            <div class="tab-content" id="tab-resources">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">▼ 整本书资源</span>
+                        <button class="btn btn-primary btn-sm" onclick="openFileUploadModal('all')">+ 添加资源</button>
+                    </div>
+                    <div class="card-body">
+                        <!-- Unified Resource Table -->
+                        <div class="resource-section">
+                            <div style="margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-3);">
+                                <span style="color: var(--text-secondary); font-size: var(--text-sm);">资源类型筛选：</span>
+                                <select id="file-type-filter" onchange="filterFileTable()" style="padding: 4px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--text-primary);">
+                                    <option value="all">全部类型</option>
+                                    <option value="jwl">JWL</option>
+                                    <option value="jwr">JWR</option>
+                                    <option value="jwrt">JWRT</option>
+                                </select>
+                            </div>
+                            <table class="table" id="book-file-table">
+                                <thead>
+                                    <tr>
+                                        <th>资源类型</th>
+                                        <th>文件名称</th>
+                                        <th>文件大小</th>
+                                        <th>上传时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr data-type="jwl">
+                                        <td><span class="badge badge-success">JWL</span></td>
+                                        <td>快乐中文第一册.jwl</td>
+                                        <td>10.5 MB</td>
+                                        <td>2024-01-15 10:30</td>
+                                        <td>
+                                            <div class="cell-actions">
+                                                <button class="btn btn-default btn-sm">下载</button>
+                                                <button class="btn btn-danger btn-sm">移除</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr data-type="jwl">
+                                        <td><span class="badge badge-success">JWL</span></td>
+                                        <td>快乐中文第一册_补充.jwl</td>
+                                        <td>3.2 MB</td>
+                                        <td>2024-02-20 14:15</td>
+                                        <td>
+                                            <div class="cell-actions">
+                                                <button class="btn btn-default btn-sm">下载</button>
+                                                <button class="btn btn-danger btn-sm">移除</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr data-type="jwr">
+                                        <td><span class="badge badge-warning">JWR</span></td>
+                                        <td>快乐中文第一册.jwr</td>
+                                        <td>25.8 MB</td>
+                                        <td>2024-01-15 10:35</td>
+                                        <td>
+                                            <div class="cell-actions">
+                                                <button class="btn btn-default btn-sm">下载</button>
+                                                <button class="btn btn-danger btn-sm">移除</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="empty-state" id="file-empty-state" style="display: none;">
+                                <div class="empty-state-icon">📂</div>
+                                <div class="empty-state-text">暂无该类型的资源文件</div>
+                            </div>
+                        </div>
+
+                        <!-- Info Box -->
+                        <div class="info-box">
+                            <div class="info-box-icon">💡</div>
+                            <div class="info-box-content">
+                                <div class="info-box-title">单元级资源配置</div>
+                                <div class="info-box-text">
+                                    测试卷、有声阅读、文化视频、文化点读等资源需要在单元级别配置。
+                                    请在「结构配置」Tab中点击对应单元的「配置资源」按钮进行设置。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Basic Info (Placeholder) -->
+            <div class="tab-content" id="tab-basic">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">基本信息</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="color: var(--text-muted);">基本信息表单内容...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Content Management (Placeholder) -->
+            <div class="tab-content" id="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">内容管理</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="color: var(--text-muted);">课程内容管理...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Unit Resource Config -->
+    <div class="modal-overlay" id="modal-unit-resource">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">配置单元资源 - U1 我和你</span>
+                <button class="modal-close" onclick="closeModal('modal-unit-resource')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 有声阅读 -->
+                <div class="resource-section">
+                    <div class="resource-section-header">
+                        <span class="resource-section-title">有声阅读</span>
+                        <button class="btn btn-primary btn-sm" onclick="openResourceSelector('audiobook')">+ 添加有声阅读</button>
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>资源名称</th>
+                                <th>来源系统</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>AUDIO_001 - U1你好 朗读</td>
+                                <td>有声阅读处</td>
+                                <td>
+                                    <div class="cell-actions">
+                                        <button class="btn btn-link btn-sm" onclick="viewResource('audiobook', 'AUDIO_001')">查看</button>
+                                        <button class="btn btn-danger btn-sm">移除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>AUDIO_002 - U1再见 朗读</td>
+                                <td>有声阅读处</td>
+                                <td>
+                                    <div class="cell-actions">
+                                        <button class="btn btn-link btn-sm" onclick="viewResource('audiobook', 'AUDIO_002')">查看</button>
+                                        <button class="btn btn-danger btn-sm">移除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 文化视频 -->
+                <div class="resource-section">
+                    <div class="resource-section-header">
+                        <span class="resource-section-title">文化视频</span>
+                        <button class="btn btn-primary btn-sm" onclick="openResourceSelector('video')">+ 添加视频</button>
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>资源名称</th>
+                                <th>来源系统</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>VIDEO_001 - 中国问候礼仪</td>
+                                <td>资源管理处</td>
+                                <td>
+                                    <div class="cell-actions">
+                                        <button class="btn btn-link btn-sm" onclick="viewResource('video', 'VIDEO_001')">查看</button>
+                                        <button class="btn btn-danger btn-sm">移除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 测试卷 -->
+                <div class="resource-section">
+                    <div class="resource-section-header">
+                        <span class="resource-section-title">测试卷</span>
+                        <button class="btn btn-primary btn-sm" onclick="openResourceSelector('exam')">+ 添加测试卷</button>
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>资源名称</th>
+                                <th>来源系统</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>EXAM_001 - U1单元测试卷</td>
+                                <td>试卷管理处</td>
+                                <td>
+                                    <div class="cell-actions">
+                                        <button class="btn btn-link btn-sm" onclick="viewResource('exam', 'EXAM_001')">查看</button>
+                                        <button class="btn btn-danger btn-sm">移除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>EXAM_002 - U1口语测试</td>
+                                <td>试卷管理处</td>
+                                <td>
+                                    <div class="cell-actions">
+                                        <button class="btn btn-link btn-sm" onclick="viewResource('exam', 'EXAM_002')">查看</button>
+                                        <button class="btn btn-danger btn-sm">移除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 文化点读 -->
+                <div class="resource-section">
+                    <div class="resource-section-header">
+                        <span class="resource-section-title">文化点读</span>
+                        <button class="btn btn-primary btn-sm" onclick="openResourceSelector('culture')">+ 添加点读</button>
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>资源名称</th>
+                                <th>来源系统</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CULTURE_001 - 汉字起源</td>
+                                <td>文化点读处</td>
+                                <td>
+                                    <div class="cell-actions">
+                                        <button class="btn btn-link btn-sm" onclick="viewResource('culture', 'CULTURE_001')">查看</button>
+                                        <button class="btn btn-danger btn-sm">移除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-default" onclick="closeModal('modal-unit-resource')">取消</button>
+                <button class="btn btn-primary" onclick="closeModal('modal-unit-resource')">完成配置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Resource Selector -->
+    <div class="modal-overlay" id="modal-resource-selector">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="resource-selector-title">添加资源</span>
+                <button class="modal-close" onclick="closeModal('modal-resource-selector')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="resource-selector">
+                    <div class="resource-list">
+                        <div class="resource-list-header">可选资源</div>
+                        <div class="resource-list-search">
+                            <input type="text" placeholder="搜索资源名称..." id="resource-search-input">
+                        </div>
+                        <div class="resource-list-items" id="resource-list-items">
+                            <!-- 动态加载资源列表 -->
+                        </div>
+                    </div>
+                    <div class="resource-selected">
+                        <div class="resource-list-header">已选资源 (<span id="selected-count">0</span>)</div>
+                        <div class="resource-selected-items" id="resource-selected-items">
+                            <!-- 动态显示已选资源 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-default" onclick="closeModal('modal-resource-selector')">取消</button>
+                <button class="btn btn-primary" id="confirm-add-resource" onclick="confirmAddResources()">确认挂载</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Unit -->
+    <div class="modal-overlay" id="modal-edit-unit">
+        <div class="modal" style="max-width: 520px;">
+            <div class="modal-header">
+                <span class="modal-title">编辑单元信息</span>
+                <button class="modal-close" onclick="closeModal('modal-edit-unit')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom: var(--space-5);">
+                    <label class="form-label" style="display: block; font-weight: 500; margin-bottom: var(--space-2); color: var(--text-primary);">单元序号</label>
+                    <input type="number" id="edit-unit-order" class="form-input" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm);" placeholder="请输入单元序号">
+                </div>
+                <div class="form-group" style="margin-bottom: var(--space-5);">
+                    <label class="form-label" style="display: block; font-weight: 500; margin-bottom: var(--space-2); color: var(--text-primary);">单元中文名称 <span style="color: var(--error);">*</span></label>
+                    <input type="text" id="edit-unit-name-cn" class="form-input" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm);" placeholder="请输入单元中文名称">
+                </div>
+                <div class="form-group" style="margin-bottom: var(--space-5);">
+                    <label class="form-label" style="display: block; font-weight: 500; margin-bottom: var(--space-2); color: var(--text-primary);">单元英文名称</label>
+                    <input type="text" id="edit-unit-name-en" class="form-input" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm);" placeholder="请输入单元英文名称">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-default" onclick="closeModal('modal-edit-unit')">取消</button>
+                <button class="btn btn-primary" onclick="saveEditUnit()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Unit -->
+    <div class="modal-overlay" id="modal-add-unit">
+        <div class="modal" style="max-width: 520px;">
+            <div class="modal-header">
+                <span class="modal-title">新增单元</span>
+                <button class="modal-close" onclick="closeModal('modal-add-unit')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="info-box" style="margin-bottom: var(--space-5);">
+                    <div class="info-box-icon">📋</div>
+                    <div class="info-box-content">
+                        <div class="info-box-text">新增单元后，可在结构配置中为该单元配置资源（测试卷、有声阅读、文化视频、文化点读）。</div>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom: var(--space-5);">
+                    <label class="form-label" style="display: block; font-weight: 500; margin-bottom: var(--space-2); color: var(--text-primary);">单元序号</label>
+                    <input type="number" id="add-unit-order" class="form-input" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm);" placeholder="自动计算" readonly>
+                    <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px;">系统自动根据现有单元数量计算</div>
+                </div>
+                <div class="form-group" style="margin-bottom: var(--space-5);">
+                    <label class="form-label" style="display: block; font-weight: 500; margin-bottom: var(--space-2); color: var(--text-primary);">单元中文名称 <span style="color: var(--error);">*</span></label>
+                    <input type="text" id="add-unit-name-cn" class="form-input" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm);" placeholder="请输入单元中文名称，如：我和你">
+                </div>
+                <div class="form-group" style="margin-bottom: var(--space-5);">
+                    <label class="form-label" style="display: block; font-weight: 500; margin-bottom: var(--space-2); color: var(--text-primary);">单元英文名称</label>
+                    <input type="text" id="add-unit-name-en" class="form-input" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm);" placeholder="请输入单元英文名称，如：You and I">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-default" onclick="closeModal('modal-add-unit')">取消</button>
+                <button class="btn btn-primary" onclick="saveNewUnit()">确认新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: File Upload -->
+    <div class="modal-overlay" id="modal-file-upload">
+        <div class="modal" style="max-width: 520px;">
+            <div class="modal-header">
+                <span class="modal-title" id="file-upload-title">添加资源</span>
+                <button class="modal-close" onclick="closeModal('modal-file-upload')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group" style="margin-bottom: var(--space-5);">
+                    <label class="form-label" style="display: block; font-weight: 500; margin-bottom: var(--space-2); color: var(--text-primary);">资源类型 <span style="color: var(--error);">*</span></label>
+                    <select id="upload-file-type" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--text-primary);">
+                        <option value="jwl">JWL - 书籍数据包</option>
+                        <option value="jwr">JWR - 书籍资源包</option>
+                        <option value="jwrt">JWRT - 书籍模板包</option>
+                    </select>
+                </div>
+                <div class="file-upload" onclick="simulateFileUpload()">
+                    <div class="file-upload-icon">📁</div>
+                    <div class="file-upload-text">点击或拖拽文件到此处上传</div>
+                    <div class="file-upload-hint">支持 .jwl, .jwr, .jwrt 格式，单个文件最大 100MB</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-default" onclick="closeModal('modal-file-upload')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab Switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.dataset.tab;
+                
+                // Update tab active state
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update content visibility
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(`tab-${tabId}`).classList.add('active');
+            });
+        });
+
+        // Modal Functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function openUnitResourceModal() {
+            openModal('modal-unit-resource');
+        }
+
+        // 当前选择的资源类型
+        let currentResourceType = '';
+        let selectedResources = [];
+
+        // 模拟各类型资源数据
+        const resourceData = {
+            exam: [
+                { id: 'EXAM_001', name: 'U1单元测试卷', meta: '试卷管理处 · 15题 · 30分钟' },
+                { id: 'EXAM_002', name: 'U1口语测试', meta: '试卷管理处 · 5题 · 15分钟' },
+                { id: 'EXAM_003', name: 'U2单元测试卷', meta: '试卷管理处 · 15题 · 30分钟' },
+                { id: 'EXAM_004', name: '期中综合测试', meta: '试卷管理处 · 30题 · 60分钟' },
+            ],
+            audiobook: [
+                { id: 'AUDIO_001', name: 'U1你好 朗读', meta: '有声阅读处 · 时长 2:30' },
+                { id: 'AUDIO_002', name: 'U1再见 朗读', meta: '有声阅读处 · 时长 1:45' },
+                { id: 'AUDIO_003', name: 'U2你叫什么 朗读', meta: '有声阅读处 · 时长 2:15' },
+                { id: 'AUDIO_004', name: 'U3她是谁 朗读', meta: '有声阅读处 · 时长 2:00' },
+            ],
+            video: [
+                { id: 'VIDEO_001', name: '中国问候礼仪', meta: '资源管理处 · 时长 5:30' },
+                { id: 'VIDEO_002', name: '汉字的起源', meta: '资源管理处 · 时长 8:20' },
+                { id: 'VIDEO_003', name: '中国传统节日', meta: '资源管理处 · 时长 6:45' },
+            ],
+            culture: [
+                { id: 'CULTURE_001', name: '汉字起源', meta: '文化点读处 · 12个知识点' },
+                { id: 'CULTURE_002', name: '书法艺术', meta: '文化点读处 · 8个知识点' },
+                { id: 'CULTURE_003', name: '传统节日', meta: '文化点读处 · 15个知识点' },
+            ]
+        };
+
+        function openResourceSelector(type) {
+            currentResourceType = type;
+            selectedResources = [];
+            
+            const titles = {
+                'exam': '添加测试卷',
+                'audiobook': '添加有声阅读',
+                'video': '添加文化视频',
+                'culture': '添加文化点读'
+            };
+            
+            document.getElementById('resource-selector-title').textContent = titles[type] || '添加资源';
+            loadResourceList(type);
+            updateSelectedCount();
+            openModal('modal-resource-selector');
+        }
+
+        function loadResourceList(type) {
+            const container = document.getElementById('resource-list-items');
+            const resources = resourceData[type] || [];
+            
+            container.innerHTML = resources.map(res => `
+                <div class="resource-item" data-id="${res.id}" data-name="${res.name}">
+                    <input type="checkbox" class="resource-item-checkbox" onchange="toggleResource('${res.id}', '${res.name}')">
+                    <div class="resource-item-info">
+                        <div class="resource-item-name">${res.name}</div>
+                        <div class="resource-item-meta">${res.meta}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleResource(id, name) {
+            const index = selectedResources.findIndex(r => r.id === id);
+            if (index > -1) {
+                selectedResources.splice(index, 1);
+            } else {
+                selectedResources.push({ id, name });
+            }
+            updateSelectedList();
+            updateSelectedCount();
+        }
+
+        function updateSelectedList() {
+            const container = document.getElementById('resource-selected-items');
+            container.innerHTML = selectedResources.map(res => `
+                <div class="selected-item">
+                    <span class="selected-item-name">${res.name}</span>
+                    <button class="selected-item-remove" onclick="removeSelected('${res.id}')">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function removeSelected(id) {
+            selectedResources = selectedResources.filter(r => r.id !== id);
+            updateSelectedList();
+            updateSelectedCount();
+            
+            // 取消对应的checkbox选中状态
+            const item = document.querySelector(`.resource-item[data-id="${id}"]`);
+            if (item) {
+                item.classList.remove('selected');
+                item.querySelector('input[type="checkbox"]').checked = false;
+            }
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selected-count').textContent = selectedResources.length;
+            const btn = document.getElementById('confirm-add-resource');
+            btn.textContent = selectedResources.length > 0 ? `确认挂载 (${selectedResources.length})` : '确认挂载';
+        }
+
+        function confirmAddResources() {
+            if (selectedResources.length > 0) {
+                alert(`已成功挂载 ${selectedResources.length} 个资源！\n\n资源ID: ${selectedResources.map(r => r.id).join(', ')}`);
+            }
+            closeModal('modal-resource-selector');
+        }
+
+        function viewResource(type, id) {
+            const urls = {
+                'exam': '/admin/exams/',
+                'audiobook': '/admin/audiobooks/',
+                'video': '/admin/videos/',
+                'culture': '/admin/culture-read/'
+            };
+            alert(`查看资源详情\n\n类型: ${type}\nID: ${id}\n\n将跳转到: ${urls[type]}${id}`);
+        }
+
+        function openFileUploadModal(type) {
+            document.getElementById('file-upload-title').textContent = '添加资源';
+            if (type && type !== 'all') {
+                document.getElementById('upload-file-type').value = type;
+            }
+            openModal('modal-file-upload');
+        }
+
+        function simulateFileUpload() {
+            const fileType = document.getElementById('upload-file-type').value;
+            alert(`模拟文件上传成功！\n\n资源类型: ${fileType.toUpperCase()}`);
+            closeModal('modal-file-upload');
+        }
+
+        // 文件类型筛选
+        function filterFileTable() {
+            const filter = document.getElementById('file-type-filter').value;
+            const rows = document.querySelectorAll('#book-file-table tbody tr');
+            let visibleCount = 0;
+            rows.forEach(row => {
+                if (filter === 'all' || row.dataset.type === filter) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            document.getElementById('file-empty-state').style.display = visibleCount === 0 ? '' : 'none';
+            document.getElementById('book-file-table').style.display = visibleCount === 0 ? 'none' : '';
+        }
+
+        // 编辑单元
+        let editingUnitOrder = null;
+        function openEditUnitModal(order, nameCn, nameEn) {
+            editingUnitOrder = order;
+            document.getElementById('edit-unit-order').value = order;
+            document.getElementById('edit-unit-name-cn').value = nameCn;
+            document.getElementById('edit-unit-name-en').value = nameEn;
+            openModal('modal-edit-unit');
+        }
+
+        function saveEditUnit() {
+            const nameCn = document.getElementById('edit-unit-name-cn').value.trim();
+            const nameEn = document.getElementById('edit-unit-name-en').value.trim();
+            const order = document.getElementById('edit-unit-order').value;
+            if (!nameCn) {
+                alert('请输入单元中文名称');
+                return;
+            }
+            alert(`单元信息已保存！\n\n序号: U${order}\n中文名称: ${nameCn}\n英文名称: ${nameEn}`);
+            closeModal('modal-edit-unit');
+        }
+
+        // 新增单元
+        function openAddUnitModal() {
+            // 自动计算下一个单元序号
+            const unitRows = document.querySelectorAll('#tab-structure .table tbody tr');
+            const nextOrder = unitRows.length + 1;
+            document.getElementById('add-unit-order').value = nextOrder;
+            document.getElementById('add-unit-name-cn').value = '';
+            document.getElementById('add-unit-name-en').value = '';
+            openModal('modal-add-unit');
+        }
+
+        function saveNewUnit() {
+            const nameCn = document.getElementById('add-unit-name-cn').value.trim();
+            const nameEn = document.getElementById('add-unit-name-en').value.trim();
+            const order = document.getElementById('add-unit-order').value;
+            if (!nameCn) {
+                alert('请输入单元中文名称');
+                return;
+            }
+            alert(`新单元已添加！\n\n序号: U${order}\n中文名称: ${nameCn}\n英文名称: ${nameEn || '(未填写)'}`);
+            closeModal('modal-add-unit');
+        }
+
+        // Close modal on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

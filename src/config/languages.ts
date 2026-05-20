@@ -1,0 +1,58 @@
+export type LangKey = 'CN' | 'EN' | 'ES' | 'FR' | 'PT' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
+
+export const LANG_OPTIONS: Array<{ key: LangKey; label: string }> = [
+  { key: 'CN', label: '中文' },
+  { key: 'EN', label: '英文' },
+  { key: 'ES', label: '西语' },
+  { key: 'FR', label: '法语' },
+  { key: 'PT', label: '葡语' },
+  { key: 'JA', label: '日语' },
+  { key: 'KO', label: '韩语' },
+  { key: 'TH', label: '泰语' },
+  { key: 'VI', label: '越南语' },
+  { key: 'ID', label: '印尼语' },
+  { key: 'MS', label: '马来语' },
+  { key: 'KM', label: '高棉语' },
+];
+
+export type TitleByLang = Partial<Record<LangKey, string>>;
+
+export function createEmptyTitleByLang(cn = '', en = ''): TitleByLang {
+  return { CN: cn, EN: en, ES: '', FR: '', PT: '', JA: '', KO: '', TH: '', VI: '', ID: '', MS: '', KM: '' };
+}
+
+export function resolveTitleByLang(
+  title: string,
+  titleEn?: string,
+  titleByLang?: TitleByLang,
+): TitleByLang {
+  return {
+    ...createEmptyTitleByLang(title, titleEn ?? ''),
+    ...titleByLang,
+    CN: titleByLang?.CN ?? title,
+    EN: titleByLang?.EN ?? titleEn ?? '',
+  };
+}
+
+export function autoTranslateTitleByLang(seed: string): TitleByLang {
+  const base = seed.trim();
+  if (!base) return createEmptyTitleByLang();
+  return {
+    CN: base,
+    EN: `${base} (English)`,
+    ES: `${base} (Español)`,
+    FR: `${base} (Français)`,
+    PT: `${base} (Português)`,
+    JA: `${base} (日本語)`,
+    KO: `${base} (한국어)`,
+    TH: `${base} (ไทย)`,
+    VI: `${base} (Tiếng Việt)`,
+    ID: `${base} (Bahasa Indonesia)`,
+    MS: `${base} (Bahasa Melayu)`,
+    KM: `${base} (ខ្មែរ)`,
+  };
+}
+
+export function primaryEnglishTitle(titleByLang?: TitleByLang, titleEn?: string): string {
+  return titleByLang?.EN?.trim() || titleEn?.trim() || '';
+}

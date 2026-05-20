@@ -1,0 +1,213 @@
+{
+  "publishers": [
+    {
+      "category": "中国 (专业出版社)",
+      "name": "北京语言大学出版社",
+      "country": "中国",
+      "representativeBooks": "《HSK标准教程》、《新实用汉语课本》、《发展汉语》、《轻松学中文》、《汉语乐园》"
+    },
+    {
+      "category": "中国 (专业出版社)",
+      "name": "华语教学出版社 (Sinolingua)",
+      "country": "中国",
+      "representativeBooks": "《互动汉语》、《美好中文》、《熊猫分级阅读》、《职通中文》、《当代中文》"
+    },
+    {
+      "category": "中国 (专业出版社)",
+      "name": "外语教学与研究出版社",
+      "country": "中国",
+      "representativeBooks": "《新HSK教程》、《长城汉语》、《七色龙汉语分级阅读》、《字词中的文化密码》、《走遍中国》"
+    },
+    {
+      "category": "中国 (专业出版社)",
+      "name": "人民教育出版社",
+      "country": "中国",
+      "representativeBooks": "《快乐汉语》、《跟我学汉语》、《国际中文学习词典》"
+    },
+    {
+      "category": "中国 (专业出版社)",
+      "name": "高等教育出版社",
+      "country": "中国",
+      "representativeBooks": "《体验汉语》系列（涵盖生活、商务、少儿、留学等多场景任务型教材）"
+    },
+    {
+      "category": "中国 (大学出版社)",
+      "name": "北京大学出版社",
+      "country": "中国",
+      "representativeBooks": "《博雅汉语》系列、少儿中文教材《Ace Chinese》（与LingoAce联合研发）"
+    },
+    {
+      "category": "中国 (大学出版社)",
+      "name": "暨南大学出版社",
+      "country": "中国",
+      "representativeBooks": "《中文》系列（海外华文学校标准教材）、《汉语》、《幼儿汉语》、《中国历史/地理/文化常识》"
+    },
+    {
+      "category": "中国 (大学出版社)",
+      "name": "华中师范大学出版社",
+      "country": "中国",
+      "representativeBooks": "《飞跃汉语》系列（在东南亚地区广泛授权并使用）"
+    },
+    {
+      "category": "中国 (港台地区)",
+      "name": "商务印书馆 (香港)",
+      "country": "中国香港",
+      "representativeBooks": "《商务国际中文分级词典》、《朗文当代高级辞典》（双语版）"
+    },
+    {
+      "category": "中国 (港台地区)",
+      "name": "牛津大学出版社 (中国)",
+      "country": "中国香港",
+      "representativeBooks": "《牛津初级中文》系列、针对国际学校的《牛津IB线中文教材》"
+    },
+    {
+      "category": "中国 (港台地区)",
+      "name": "三民书局",
+      "country": "中国台湾",
+      "representativeBooks": "《新版实用视听华语》、《时代华语》系列"
+    },
+    {
+      "category": "亚洲 (海外本地)",
+      "name": "Cheng & Tsui (程与徐)",
+      "country": "美国",
+      "representativeBooks": "《Integrated Chinese (中文听说读写)》（北美高校最主流教材）、《Crossing Paths (路)》"
+    },
+    {
+      "category": "亚洲 (海外本地)",
+      "name": "耶鲁大学出版社",
+      "country": "美国",
+      "representativeBooks": "《Encounters (遭遇中文)》（与华语社合编）、《Lady in the Painting (画上的美人)》等汉语读本"
+    },
+    {
+      "category": "亚洲 (海外本地)",
+      "name": "Darakwon (多楽園)",
+      "country": "韩国",
+      "representativeBooks": "《New Step 汉语》系列、新HSK通关系列教材"
+    },
+    {
+      "category": "亚洲 (海外本地)",
+      "name": "教元集团 (Kyowon)",
+      "country": "韩国",
+      "representativeBooks": "引进并出版韩语版《七色龙》中文分级读物系列"
+    },
+    {
+      "category": "亚洲 (海外本地)",
+      "name": "Zenbooks 出版集团",
+      "country": "越南",
+      "representativeBooks": "《飞跃汉语》越南语本地化版本、实用商务汉语系列"
+    },
+    {
+      "category": "欧洲 (海外本地)",
+      "name": "友丰出版社 (Editions You Feng)",
+      "country": "法国",
+      "representativeBooks": "《Méthode de chinois (汉语教程法)》、法国大学及成人实用中文系列教材"
+    },
+    {
+      "category": "欧洲 (海外本地)",
+      "name": "KARO 出版社",
+      "country": "俄罗斯",
+      "representativeBooks": "面向俄语学者的《基础汉语教科书》、中文语法及分级读物系列"
+    },
+    {
+      "category": "欧洲 (海外本地)",
+      "name": "ELi Publishing Group",
+      "country": "意大利",
+      "representativeBooks": "面向欧洲青少年的多媒体中文教材、故事类中文分级读物"
+    },
+    {
+      "category": "大洋洲 (海外本地)",
+      "name": "澳新汉语教材发展中心",
+      "country": "澳大利亚",
+      "representativeBooks": "《澳大利亚课程·标准中文》、《 could/should 实用澳洲本土化中文》"
+    }
+  ],
+  "hskLevels": [
+    {
+      "tier": "初等",
+      "level": "HSK1级",
+      "syllables": "269",
+      "characters": "300",
+      "vocabulary": "500",
+      "grammar": "48"
+    },
+    {
+      "tier": "初等",
+      "level": "HSK2级",
+      "syllables": "199 / 468",
+      "characters": "300 / 600",
+      "vocabulary": "772 / 1272",
+      "grammar": "81 / 129"
+    },
+    {
+      "tier": "初等",
+      "level": "HSK3级",
+      "syllables": "140 / 608",
+      "characters": "300 / 900",
+      "vocabulary": "973 / 2245",
+      "grammar": "81 / 210"
+    },
+    {
+      "tier": "中等",
+      "level": "HSK4级",
+      "syllables": "116 / 724",
+      "characters": "300 / 1200",
+      "vocabulary": "1000 / 3245",
+      "grammar": "76 / 286"
+    },
+    {
+      "tier": "中等",
+      "level": "HSK5级",
+      "syllables": "98 / 822",
+      "characters": "300 / 1500",
+      "vocabulary": "1071 / 4316",
+      "grammar": "71 / 357"
+    },
+    {
+      "tier": "中等",
+      "level": "HSK6级",
+      "syllables": "86 / 908",
+      "characters": "300 / 1800",
+      "vocabulary": "1140 / 5456",
+      "grammar": "67 / 424"
+    },
+    {
+      "tier": "高等",
+      "level": "HSK7-9级",
+      "syllables": "202 / 1110",
+      "characters": "1200 / 3000",
+      "vocabulary": "5636 / 11092",
+      "grammar": "148 / 572"
+    }
+  ],
+  "featureCategories": [
+    {
+      "category": "核心技能类",
+      "tags": [
+        "综合 (听说读写并重)",
+        "听说",
+        "阅读",
+        "写作",
+        "汉字",
+        "拼音"
+      ]
+    },
+    {
+      "category": "用户画像类",
+      "tags": [
+        "华裔"
+      ]
+    },
+    {
+      "category": "生活场景类",
+      "tags": [
+        "日常生活",
+        "旅游",
+        "文化",
+        "美食",
+        "校园",
+        "社交",
+        "商务"
+      ]
+    }
+  ]
+}
