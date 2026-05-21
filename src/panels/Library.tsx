@@ -209,6 +209,30 @@ const INITIAL_BOOK_FILES: BookFileResource[] = [
   { id: 'file-3', type: 'JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
 ];
 
+type AvailableBookFile = {
+  poolId: string;
+  type: 'JWL' | 'JWR' | 'JWRT';
+  fileName: string;
+  fileSize: string;
+  uploadedAt: string;
+};
+
+const BOOK_FILE_TYPE_OPTIONS: Array<{ value: AvailableBookFile['type']; label: string }> = [
+  { value: 'JWL', label: 'JWL - 书籍数据包' },
+  { value: 'JWR', label: 'JWR - 书籍资源包' },
+  { value: 'JWRT', label: 'JWRT - 书籍模板包' },
+];
+
+const AVAILABLE_BOOK_FILES: AvailableBookFile[] = [
+  { poolId: 'pool-1', type: 'JWL', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15' },
+  { poolId: 'pool-2', type: 'JWL', fileName: '快乐中文第一册 修订版.jwl', fileSize: '8.2 MB', uploadedAt: '2024-02-10' },
+  { poolId: 'pool-3', type: 'JWL', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20' },
+  { poolId: 'pool-4', type: 'JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15' },
+  { poolId: 'pool-5', type: 'JWR', fileName: '快乐中文第一册_音频.jwr', fileSize: '18.4 MB', uploadedAt: '2024-03-01' },
+  { poolId: 'pool-6', type: 'JWRT', fileName: '快乐中文第一册.jwrt', fileSize: '2.1 MB', uploadedAt: '2024-01-20' },
+  { poolId: 'pool-7', type: 'JWRT', fileName: '快乐中文第一册_模板.jwrt', fileSize: '1.8 MB', uploadedAt: '2024-02-05' },
+];
+
 function ResourceIdCell({ ids }: { ids: string[] }) {
   if (ids.length === 0) return <span className="library-cell-empty">/</span>;
   return (
@@ -413,12 +437,173 @@ const MOUNT_RESOURCE_SECTIONS: Array<{ key: keyof UnitMountedResources; label: s
   { key: 'cultureRead', label: '文化点读', source: '文化点读处' },
 ];
 
+type UnitResourcePoolItem = {
+  id: string;
+  name: string;
+  meta: string;
+};
+
+const UNIT_RESOURCE_POOL: Record<keyof UnitMountedResources, UnitResourcePoolItem[]> = {
+  audioReading: [
+    { id: 'AUDIO_001', name: 'U1你好 朗读', meta: '有声阅读处 · 时长 2:30' },
+    { id: 'AUDIO_002', name: 'U1再见 朗读', meta: '有声阅读处 · 时长 1:45' },
+    { id: 'AUDIO_003', name: 'U2你叫什么 朗读', meta: '有声阅读处 · 时长 2:15' },
+    { id: 'AUDIO_004', name: 'U3她是谁 朗读', meta: '有声阅读处 · 时长 2:00' },
+  ],
+  cultureVideo: [
+    { id: 'VIDEO_001', name: '中国问候礼仪', meta: '资源管理处 · 时长 5:30' },
+    { id: 'VIDEO_002', name: '汉字的起源', meta: '资源管理处 · 时长 8:20' },
+    { id: 'VIDEO_003', name: '中国传统节日', meta: '资源管理处 · 时长 6:45' },
+  ],
+  exam: [
+    { id: 'EXAM_001', name: 'U1单元测试卷', meta: '试卷管理处 · 15题 · 30分钟' },
+    { id: 'EXAM_002', name: 'U1口语测试', meta: '试卷管理处 · 5题 · 15分钟' },
+    { id: 'EXAM_003', name: 'U2单元测试卷', meta: '试卷管理处 · 15题 · 30分钟' },
+    { id: 'EXAM_004', name: '期中综合测试', meta: '试卷管理处 · 30题 · 60分钟' },
+  ],
+  cultureRead: [
+    { id: 'CULTURE_001', name: '汉字起源', meta: '文化点读处 · 12个知识点' },
+    { id: 'CULTURE_002', name: '书法艺术', meta: '文化点读处 · 8个知识点' },
+    { id: 'CULTURE_003', name: '传统节日', meta: '文化点读处 · 15个知识点' },
+  ],
+};
+
+function getUnitResourceLabel(key: keyof UnitMountedResources, resourceId: string): string {
+  const item = UNIT_RESOURCE_POOL[key].find((r) => r.id === resourceId);
+  return item ? `${item.id} - ${item.name}` : resourceId;
+}
+
+type UnitResourceSelectorModalProps = {
+  open: boolean;
+  sectionKey: keyof UnitMountedResources;
+  sectionLabel: string;
+  existingIds: string[];
+  onClose: () => void;
+  onConfirm: (ids: string[]) => void;
+};
+
+function UnitResourceSelectorModal({
+  open,
+  sectionKey,
+  sectionLabel,
+  existingIds,
+  onClose,
+  onConfirm,
+}: UnitResourceSelectorModalProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setSearchQuery('');
+    setSelectedIds([]);
+  }, [open, sectionKey]);
+
+  const mountedSet = useMemo(() => new Set(existingIds), [existingIds]);
+
+  const filteredAvailable = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return UNIT_RESOURCE_POOL[sectionKey].filter((item) => {
+      if (mountedSet.has(item.id)) return false;
+      if (!query) return true;
+      return item.name.toLowerCase().includes(query) || item.id.toLowerCase().includes(query);
+    });
+  }, [sectionKey, searchQuery, mountedSet]);
+
+  const selectedItems = useMemo(
+    () => UNIT_RESOURCE_POOL[sectionKey].filter((item) => selectedIds.includes(item.id)),
+    [sectionKey, selectedIds],
+  );
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="modal-overlay open library-modal-stack" onClick={onClose} role="dialog" aria-modal="true" aria-label={`添加${sectionLabel}`}>
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">添加{sectionLabel}</div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="library-resource-picker">
+            <div className="library-resource-picker-panel">
+              <div className="library-resource-picker-header">可选资源</div>
+              <div className="library-resource-picker-search">
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="搜索资源名称..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="library-resource-picker-list">
+                {filteredAvailable.length === 0 ? (
+                  <div className="library-chapter-empty" style={{ padding: 24 }}>暂无可选资源</div>
+                ) : (
+                  filteredAvailable.map((item) => {
+                    const checked = selectedIds.includes(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        className={`library-resource-picker-item ${checked ? 'selected' : ''}`}
+                      >
+                        <input type="checkbox" checked={checked} onChange={() => toggleSelect(item.id)} />
+                        <div className="library-resource-picker-item-info">
+                          <div className="library-resource-picker-item-name">{item.name}</div>
+                          <div className="library-resource-picker-item-meta">{item.meta}</div>
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="library-resource-picker-panel">
+              <div className="library-resource-picker-header">已选资源 ({selectedItems.length})</div>
+              <div className="library-resource-picker-selected">
+                {selectedItems.length === 0 ? (
+                  <div className="library-chapter-empty" style={{ padding: 24 }}>请从左侧选择资源</div>
+                ) : (
+                  selectedItems.map((item) => (
+                    <div key={item.id} className="library-resource-picker-selected-item">
+                      <span className="library-resource-picker-selected-name">{item.name}</span>
+                      <button type="button" className="btn-link" onClick={() => toggleSelect(item.id)}>移除</button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => onConfirm(selectedIds)}
+            disabled={selectedIds.length === 0}
+          >
+            确认挂载
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModalProps) {
   const [draft, setDraft] = useState<BookUnitRow>(() => ({
     ...unit,
     mounted: cloneMounted(unit.mounted),
     lessons: unit.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
   }));
+  const [selectorSection, setSelectorSection] = useState<keyof UnitMountedResources | null>(null);
 
   const removeMounted = (key: keyof UnitMountedResources, resourceId: string) => {
     setDraft((prev) => ({
@@ -430,7 +615,21 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
     }));
   };
 
+  const addMounted = (key: keyof UnitMountedResources, ids: string[]) => {
+    setDraft((prev) => ({
+      ...prev,
+      mounted: {
+        ...prev.mounted,
+        [key]: [...new Set([...prev.mounted[key], ...ids])],
+      },
+    }));
+    setSelectorSection(null);
+  };
+
+  const activeSection = MOUNT_RESOURCE_SECTIONS.find((s) => s.key === selectorSection);
+
   return (
+    <>
     <div className="modal-overlay open" onClick={onClose} role="dialog" aria-modal="true" aria-label="配置单元资源">
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -442,7 +641,9 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
             <div key={section.key} className="library-mount-section">
               <div className="library-mount-section-header">
                 <span className="library-mount-section-title">{section.label}</span>
-                <button type="button" className="btn btn-secondary btn-sm">+ 添加{section.label}</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectorSection(section.key)}>
+                  + 添加{section.label}
+                </button>
               </div>
               {draft.mounted[section.key].length === 0 ? (
                 <div className="library-chapter-empty" style={{ padding: '16px' }}>暂未挂载资源</div>
@@ -459,7 +660,7 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
                     <tbody>
                       {draft.mounted[section.key].map((resourceId) => (
                         <tr key={resourceId}>
-                          <td>{resourceId}</td>
+                          <td>{getUnitResourceLabel(section.key, resourceId)}</td>
                           <td>{section.source}</td>
                           <td>
                             <button type="button" className="btn-link" style={{ color: 'var(--rose)' }} onClick={() => removeMounted(section.key, resourceId)}>
@@ -478,6 +679,180 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
         <div className="modal-footer">
           <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
           <button type="button" className="btn btn-primary" onClick={() => onSave(draft)}>完成配置</button>
+        </div>
+      </div>
+    </div>
+
+    {activeSection && (
+      <UnitResourceSelectorModal
+        open
+        sectionKey={activeSection.key}
+        sectionLabel={activeSection.label}
+        existingIds={draft.mounted[activeSection.key]}
+        onClose={() => setSelectorSection(null)}
+        onConfirm={(ids) => addMounted(activeSection.key, ids)}
+      />
+    )}
+    </>
+  );
+}
+
+type AddBookResourceModalProps = {
+  open: boolean;
+  existingFiles: BookFileResource[];
+  onClose: () => void;
+  onConfirm: (files: BookFileResource[]) => void;
+};
+
+function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBookResourceModalProps) {
+  const [resourceType, setResourceType] = useState<AvailableBookFile['type']>('JWL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedPoolIds, setSelectedPoolIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setResourceType('JWL');
+    setSearchQuery('');
+    setSelectedPoolIds([]);
+  }, [open]);
+
+  const mountedNames = useMemo(
+    () => new Set(existingFiles.map((f) => `${f.type}:${f.fileName}`)),
+    [existingFiles],
+  );
+
+  const filteredAvailable = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return AVAILABLE_BOOK_FILES.filter((file) => {
+      if (file.type !== resourceType) return false;
+      if (mountedNames.has(`${file.type}:${file.fileName}`)) return false;
+      if (!query) return true;
+      return file.fileName.toLowerCase().includes(query);
+    });
+  }, [resourceType, searchQuery, mountedNames]);
+
+  const selectedFiles = useMemo(
+    () => AVAILABLE_BOOK_FILES.filter((file) => selectedPoolIds.includes(file.poolId)),
+    [selectedPoolIds],
+  );
+
+  const toggleSelect = (poolId: string) => {
+    setSelectedPoolIds((prev) =>
+      prev.includes(poolId) ? prev.filter((id) => id !== poolId) : [...prev, poolId],
+    );
+  };
+
+  const removeSelected = (poolId: string) => {
+    setSelectedPoolIds((prev) => prev.filter((id) => id !== poolId));
+  };
+
+  const handleConfirm = () => {
+    if (selectedFiles.length === 0) return;
+    onConfirm(
+      selectedFiles.map((file) => ({
+        id: `file-${Date.now()}-${file.poolId}`,
+        type: file.type,
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        uploadedAt: `${file.uploadedAt} 10:00`,
+      })),
+    );
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="modal-overlay open" onClick={onClose} role="dialog" aria-modal="true" aria-label="添加书籍资源">
+      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">添加书籍资源</div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label>资源类型<span className="required">*</span></label>
+            <select
+              className="form-input form-select"
+              value={resourceType}
+              onChange={(e) => {
+                setResourceType(e.target.value as AvailableBookFile['type']);
+                setSelectedPoolIds([]);
+              }}
+            >
+              {BOOK_FILE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="library-info-box" style={{ marginBottom: 16 }}>
+            <div className="library-info-box-icon">📋</div>
+            <div className="library-info-box-text">从资源管理处选择已上传的文件资源，支持多选。</div>
+          </div>
+
+          <div className="library-resource-picker">
+            <div className="library-resource-picker-panel">
+              <div className="library-resource-picker-header">可选资源</div>
+              <div className="library-resource-picker-search">
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="搜索文件名称..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="library-resource-picker-list">
+                {filteredAvailable.length === 0 ? (
+                  <div className="library-chapter-empty" style={{ padding: 24 }}>暂无可选资源</div>
+                ) : (
+                  filteredAvailable.map((file) => {
+                    const checked = selectedPoolIds.includes(file.poolId);
+                    return (
+                      <label
+                        key={file.poolId}
+                        className={`library-resource-picker-item ${checked ? 'selected' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleSelect(file.poolId)}
+                        />
+                        <div className="library-resource-picker-item-info">
+                          <div className="library-resource-picker-item-name">{file.fileName}</div>
+                          <div className="library-resource-picker-item-meta">
+                            {file.fileSize} · {file.uploadedAt}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="library-resource-picker-panel">
+              <div className="library-resource-picker-header">已选资源 ({selectedFiles.length})</div>
+              <div className="library-resource-picker-selected">
+                {selectedFiles.length === 0 ? (
+                  <div className="library-chapter-empty" style={{ padding: 24 }}>请从左侧选择资源</div>
+                ) : (
+                  selectedFiles.map((file) => (
+                    <div key={file.poolId} className="library-resource-picker-selected-item">
+                      <span className="library-resource-picker-selected-name">{file.fileName}</span>
+                      <button type="button" className="btn-link" onClick={() => removeSelected(file.poolId)}>移除</button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
+          <button type="button" className="btn btn-primary" onClick={handleConfirm} disabled={selectedFiles.length === 0}>
+            确认挂载
+          </button>
         </div>
       </div>
     </div>
@@ -1086,13 +1461,6 @@ export function Library() {
                         >
                           ✏️ 编辑
                         </button>
-                        <button
-                          type="button"
-                          className="action-btn data"
-                          onClick={() => showToast(`查看 ${book.title} 的使用数据`)}
-                        >
-                          📊 数据
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -1287,6 +1655,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const [fileTypeFilter, setFileTypeFilter] = useState<'all' | 'JWL' | 'JWR' | 'JWRT'>('all');
   const [editingUnit, setEditingUnit] = useState<BookUnitRow | null>(null);
   const [resourceMountUnit, setResourceMountUnit] = useState<BookUnitRow | null>(null);
+  const [addBookResourceOpen, setAddBookResourceOpen] = useState(false);
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
   const [customPublishers, setCustomPublishers] = useState<string[]>(() =>
     book.publisher && !KNOWN_PUBLISHERS.has(book.publisher) ? [book.publisher] : [],
@@ -1420,6 +1789,11 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const filteredBookFiles = bookFiles.filter((file) => fileTypeFilter === 'all' || file.type === fileTypeFilter);
 
   const bookFileCount = bookFiles.length;
+
+  const handleAddBookResources = (files: BookFileResource[]) => {
+    setBookFiles((prev) => [...prev, ...files]);
+    setAddBookResourceOpen(false);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
@@ -1823,7 +2197,9 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
           <div className="config-section">
             <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>📝 整本书资源</span>
-              <button type="button" className="btn btn-primary btn-sm">➕ 添加资源</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setAddBookResourceOpen(true)}>
+                ➕ 添加资源
+              </button>
             </div>
 
             <div className="library-file-filter" style={{ marginTop: '16px' }}>
@@ -1910,6 +2286,13 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
           onSave={saveUnitResourceMount}
         />
       )}
+
+      <AddBookResourceModal
+        open={addBookResourceOpen}
+        existingFiles={bookFiles}
+        onClose={() => setAddBookResourceOpen(false)}
+        onConfirm={handleAddBookResources}
+      />
     </div>
   );
 }
