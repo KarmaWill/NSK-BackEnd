@@ -45,7 +45,7 @@ type Book = {
   hskLevelMin: string;
   hskLevelMax: string;
   features: string[];
-  format?: string;
+  formats?: BookFormat[];
   premium: boolean;
   coverUrl?: string;
   description: string;
@@ -104,7 +104,8 @@ type BookFileResource = {
   uploadedAt: string;
 };
 
-const FORMAT_OPTIONS = ['', 'JWR', 'JWL', 'JWRT'] as const;
+const BOOK_FORMAT_OPTIONS = ['JWR', 'JWL', 'JWRT'] as const;
+type BookFormat = (typeof BOOK_FORMAT_OPTIONS)[number];
 
 const UNIT_RESOURCE_COLUMNS: Array<{ key: keyof BookResourceFlags; label: string }> = [
   { key: 'pointRead', label: '点读' },
@@ -905,7 +906,7 @@ const MOCK_BOOKS: Book[] = [
     hskLevelMin: 'HSK1级',
     hskLevelMax: 'HSK2级',
     features: ['综合 (听说读写并重)', '阅读', '拼音'],
-    format: 'JWL',
+    formats: ['JWL'],
     premium: false,
     description: '面向海外母语非汉语的中学生，对标《国际中文教育中文水平等级标准》',
     unitCount: 8,
@@ -927,7 +928,7 @@ const MOCK_BOOKS: Book[] = [
     hskLevelMin: 'HSK2级',
     hskLevelMax: 'HSK3级',
     features: ['综合 (听说读写并重)', '阅读', '拼音'],
-    format: 'JWRT',
+    formats: ['JWRT'],
     premium: false,
     description: '快乐中文系列第二册，继续深化听说读写能力',
     unitCount: 8,
@@ -949,7 +950,7 @@ const MOCK_BOOKS: Book[] = [
     hskLevelMin: 'HSK3级',
     hskLevelMax: 'HSK3级',
     features: ['综合 (听说读写并重)', '阅读', '汉字', '拼音'],
-    format: 'JWR',
+    formats: ['JWR'],
     premium: false,
     description: '快乐中文系列第三册，完成初级到中级过渡',
     unitCount: 8,
@@ -971,7 +972,7 @@ const MOCK_BOOKS: Book[] = [
     hskLevelMin: 'HSK1级',
     hskLevelMax: 'HSK1级',
     features: ['综合 (听说读写并重)', '听说', '阅读'],
-    format: 'JWR',
+    formats: ['JWR'],
     premium: false,
     description: 'HSK官方标准教程，配套HSK 1级考试',
     unitCount: 15,
@@ -993,7 +994,7 @@ const MOCK_BOOKS: Book[] = [
     hskLevelMin: 'HSK4级',
     hskLevelMax: 'HSK5级',
     features: ['听说', '阅读', '商务'],
-    format: 'JWL',
+    formats: ['JWL'],
     premium: true,
     description: '针对商务人士的实用中文教材',
     unitCount: 12,
@@ -1015,7 +1016,7 @@ const MOCK_BOOKS: Book[] = [
     hskLevelMin: 'HSK2级',
     hskLevelMax: 'HSK3级',
     features: ['阅读', '文化', '旅游'],
-    format: 'JWRT',
+    formats: ['JWRT'],
     premium: false,
     description: '通过北京日常生活场景学习中文',
     unitCount: 10,
@@ -1200,6 +1201,146 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
   );
 }
 
+type AddVolumeModalProps = {
+  open: boolean;
+  series: BookSeries;
+  nextVolumeOrder: number;
+  onClose: () => void;
+  onCreate: (book: Book) => void;
+};
+
+function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: AddVolumeModalProps) {
+  const [title, setTitle] = useState('');
+  const [titleEn, setTitleEn] = useState('');
+  const [isbn, setIsbn] = useState('');
+  const [authors, setAuthors] = useState('');
+  const [formats, setFormats] = useState<BookFormat[]>([]);
+  const [hskLevelMin, setHskLevelMin] = useState(series.hskLevelMin);
+  const [hskLevelMax, setHskLevelMax] = useState(series.hskLevelMax);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle('');
+    setTitleEn('');
+    setIsbn('');
+    setAuthors('');
+    setFormats([]);
+    setHskLevelMin(series.hskLevelMin);
+    setHskLevelMax(series.hskLevelMax);
+  }, [open, series]);
+
+  const toggleFormat = (fmt: BookFormat) => {
+    setFormats((prev) => (prev.includes(fmt) ? prev.filter((f) => f !== fmt) : [...prev, fmt]));
+  };
+
+  const handleCreate = () => {
+    if (!title.trim() || !isbn.trim()) return;
+    onCreate({
+      id: `book-${Date.now()}`,
+      seriesId: series.id,
+      volumeOrder: nextVolumeOrder,
+      title: title.trim(),
+      titleEn: titleEn.trim() || undefined,
+      publisher: series.publisher,
+      isbn: isbn.trim(),
+      authors: authors.trim() ? authors.split(',').map((a) => a.trim()) : ['待填写'],
+      hskLevelMin,
+      hskLevelMax,
+      features: ['综合 (听说读写并重)'],
+      formats,
+      premium: false,
+      description: '',
+      unitCount: 0,
+      lessonCount: 0,
+      vocabularyCount: 0,
+      characterCount: 0,
+      lastModified: new Date().toISOString().slice(0, 10),
+      isPublished: false,
+    });
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="modal-overlay open" onClick={onClose} role="dialog" aria-modal="true" aria-label="添加册次">
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+        <div className="modal-header">
+          <div className="modal-title">添加册次 · {series.name}</div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-row">
+            <div className="form-group">
+              <label>册次</label>
+              <input className="form-input" value={`第 ${nextVolumeOrder} 册`} readOnly />
+            </div>
+            <div className="form-group">
+              <label>出版社</label>
+              <input className="form-input" value={series.publisher} readOnly />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>书名（中文）<span className="required">*</span></label>
+              <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="如 快乐中文 第四册" />
+            </div>
+            <div className="form-group">
+              <label>英文书名</label>
+              <input className="form-input" value={titleEn} onChange={(e) => setTitleEn(e.target.value)} placeholder="如 Happy Chinese Book 4" />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>ISBN<span className="required">*</span></label>
+              <input className="form-input td-mono" value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="978-..." />
+            </div>
+            <div className="form-group">
+              <label>作者/主编</label>
+              <input className="form-input" value={authors} onChange={(e) => setAuthors(e.target.value)} placeholder="多个作者用逗号分隔" />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>最低级别</label>
+              <select className="form-input form-select" value={hskLevelMin} onChange={(e) => setHskLevelMin(e.target.value)}>
+                {EXTENDED_LEVEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>最高级别</label>
+              <select className="form-input form-select" value={hskLevelMax} onChange={(e) => setHskLevelMax(e.target.value)}>
+                {EXTENDED_LEVEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label>书籍格式</label>
+            <div className="library-feature-tags">
+              {BOOK_FORMAT_OPTIONS.map((fmt) => (
+                <label key={fmt} className={`library-feature-tag ${formats.includes(fmt) ? 'selected' : ''}`}>
+                  <input type="checkbox" checked={formats.includes(fmt)} onChange={() => toggleFormat(fmt)} />
+                  {fmt}
+                </label>
+              ))}
+            </div>
+            <div className="form-hint">可多选，创建后可在书籍编辑的基本信息中继续调整</div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
+          <button type="button" className="btn btn-primary" onClick={handleCreate} disabled={!title.trim() || !isbn.trim()}>
+            创建册次
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Library() {
   const [seriesList, setSeriesList] = useState<BookSeries[]>(INITIAL_SERIES);
   const [books, setBooks] = useState<Book[]>(MOCK_BOOKS);
@@ -1211,6 +1352,7 @@ export function Library() {
   const [toast, setToast] = useState<string | null>(null);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [createSeriesOpen, setCreateSeriesOpen] = useState(false);
+  const [addVolumeOpen, setAddVolumeOpen] = useState(false);
 
   const publisherGroups = useMemo(() => publishersByCategory(), []);
 
@@ -1246,16 +1388,18 @@ export function Library() {
     showToast(`已创建系列「${series.name}」`);
   };
 
+  const handleAddVolume = (book: Book) => {
+    setBooks((prev) => [...prev, book]);
+    setAddVolumeOpen(false);
+    showToast(`已添加 ${book.title}`);
+  };
+
   const togglePublishStatus = (id: string) => {
     setBooks(books.map(b =>
       b.id === id ? { ...b, isPublished: !b.isPublished } : b
     ));
     const book = books.find(b => b.id === id);
     showToast(`已${book?.isPublished ? '下架' : '上架'} ${book?.title}`);
-  };
-
-  const updateBookFormat = (id: string, format: string) => {
-    setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, format } : b)));
   };
 
   const openSeries = (seriesId: string) => {
@@ -1337,10 +1481,7 @@ export function Library() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => showToast('批量导入功能开发中')}>
-              📥 批量导入
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => showToast('新建册次功能开发中')}>
+            <button type="button" className="btn btn-primary" onClick={() => setAddVolumeOpen(true)}>
               ➕ 添加册次
             </button>
           </div>
@@ -1369,7 +1510,6 @@ export function Library() {
               <tr>
                 <th style={{ width: '60px' }}>册次</th>
                 <th style={{ width: '280px' }}>书籍信息</th>
-                <th style={{ width: '96px' }}>格式</th>
                 <th style={{ width: '100px', whiteSpace: 'nowrap' }}>级别</th>
                 <th style={{ width: '180px' }}>功能模块</th>
                 <th style={{ width: '140px', whiteSpace: 'nowrap' }}>内容统计</th>
@@ -1380,7 +1520,7 @@ export function Library() {
             <tbody>
               {filteredBooks.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '60px', color: 'var(--ink-light)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '60px', color: 'var(--ink-light)' }}>
                     {searchQuery ? '未找到匹配的册次' : '该系列暂无书籍'}
                   </td>
                 </tr>
@@ -1412,17 +1552,6 @@ export function Library() {
                           </span>
                         )}
                       </div>
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <select
-                        className="form-input form-select library-format-select"
-                        value={book.format ?? ''}
-                        onChange={(e) => updateBookFormat(book.id, e.target.value)}
-                      >
-                        {FORMAT_OPTIONS.map((opt) => (
-                          <option key={opt || 'empty'} value={opt}>{opt || '—'}</option>
-                        ))}
-                      </select>
                     </td>
                     <td>
                       <span className="hsk-badge" style={{ background: 'var(--primary-l)', color: 'var(--primary)' }}>
@@ -1471,6 +1600,14 @@ export function Library() {
         </div>
 
         {toast && <div className="hsk-toast show">{toast}</div>}
+
+        <AddVolumeModal
+          open={addVolumeOpen}
+          series={selectedSeries}
+          nextVolumeOrder={seriesBooks.length + 1}
+          onClose={() => setAddVolumeOpen(false)}
+          onCreate={handleAddVolume}
+        />
       </>
     );
   }
@@ -1641,7 +1778,9 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
           return { ...book, hskLevelMin: legacy.min, hskLevelMax: legacy.max };
         })();
     const titleByLang = resolveTitleByLang(base.title, base.titleEn, base.titleByLang);
-    return { ...base, titleByLang, title: titleByLang.CN ?? base.title, titleEn: titleByLang.EN ?? base.titleEn };
+    const legacyFormat = (base as Book & { format?: string }).format;
+    const formats = base.formats ?? (legacyFormat ? [legacyFormat as BookFormat] : []);
+    return { ...base, formats, titleByLang, title: titleByLang.CN ?? base.title, titleEn: titleByLang.EN ?? base.titleEn };
   });
   const [activeTab, setActiveTab] = useState<'basic' | 'structure' | 'content' | 'resources'>('basic');
   const [bookUnits, setBookUnits] = useState<BookUnitRow[]>(() =>
@@ -1711,6 +1850,16 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     }));
   };
 
+  const toggleBookFormat = (fmt: BookFormat) => {
+    setEditedBook((prev) => {
+      const list = prev.formats ?? [];
+      return {
+        ...prev,
+        formats: list.includes(fmt) ? list.filter((f) => f !== fmt) : [...list, fmt],
+      };
+    });
+  };
+
   const titleByLang = editedBook.titleByLang ?? resolveTitleByLang(editedBook.title, editedBook.titleEn);
 
   const updateTitleByLang = (lang: LangKey, value: string) => {
@@ -1744,20 +1893,6 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
       title: resolved.CN?.trim() || editedBook.title,
       titleEn: resolved.EN?.trim() || '',
     });
-  };
-
-  const addUnit = () => {
-    const order = bookUnits.length + 1;
-    setBookUnits((prev) => [
-      ...prev,
-      {
-        id: `unit-${Date.now()}`,
-        order,
-        title: `U${order} 新单元`,
-        mounted: createEmptyMounted(),
-        lessons: [],
-      },
-    ]);
   };
 
   const openUnitEditor = (unit: BookUnitRow) => {
@@ -2020,6 +2155,23 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
               </div>
 
               <div className="form-group">
+                <label>书籍格式</label>
+                <div className="library-feature-tags">
+                  {BOOK_FORMAT_OPTIONS.map((fmt) => (
+                    <label key={fmt} className={`library-feature-tag ${(editedBook.formats ?? []).includes(fmt) ? 'selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={(editedBook.formats ?? []).includes(fmt)}
+                        onChange={() => toggleBookFormat(fmt)}
+                      />
+                      {fmt}
+                    </label>
+                  ))}
+                </div>
+                <div className="form-hint">选择本书包含的资源包格式，可多选</div>
+              </div>
+
+              <div className="form-group">
                 <label>功能模块标签<span className="required">*</span></label>
                 <div className="library-feature-picker">
                   {FEATURE_CATEGORIES.map((cat) => {
@@ -2095,11 +2247,8 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
 
         <div className={`config-tab-panel ${activeTab === 'structure' ? 'active' : ''}`} role="tabpanel" hidden={activeTab !== 'structure'}>
           <div className="config-section">
-            <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="section-title">
               <span>📑 单元列表</span>
-              <button type="button" className="btn btn-primary btn-sm" onClick={addUnit}>
-                ➕ 新增单元
-              </button>
             </div>
 
             <div className="paper-table-container" style={{ marginTop: '16px' }}>
@@ -2118,7 +2267,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                   {bookUnits.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="library-chapter-empty">
-                        暂无单元，点击「新增单元」开始配置
+                        暂无单元配置
                       </td>
                     </tr>
                   ) : (
