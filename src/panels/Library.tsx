@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { parseCatalogWorkbook } from '../utils/catalogImport';
 import {
   ALL_FEATURE_TAGS,
   EXTENDED_LEVEL_OPTIONS,
@@ -106,17 +107,6 @@ type BookFileResource = {
 
 const BOOK_FORMAT_OPTIONS = ['JWR', 'JWL', 'JWRT'] as const;
 type BookFormat = (typeof BOOK_FORMAT_OPTIONS)[number];
-
-const UNIT_RESOURCE_COLUMNS: Array<{ key: keyof BookResourceFlags; label: string }> = [
-  { key: 'pointRead', label: '点读' },
-  { key: 'newWords', label: '生字词' },
-  { key: 'vocabulary', label: '词汇' },
-  { key: 'syncTraining', label: '问步训练' },
-  { key: 'knowledgeLecture', label: '知识点讲课' },
-  { key: 'chapterIntro', label: '章节介绍' },
-  { key: 'cultureVideo', label: '文化视频' },
-  { key: 'audioReading', label: '有声阅读' },
-];
 
 function createEmptyResources(): BookResourceFlags {
   return {
@@ -241,186 +231,6 @@ function ResourceIdCell({ ids }: { ids: string[] }) {
       {ids.map((id) => (
         <span key={id} className="library-resource-id">{id}</span>
       ))}
-    </div>
-  );
-}
-
-function ResourceSwitch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  label?: string;
-}) {
-  return (
-    <label className="toggle-wrap library-resource-switch" title={label}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="toggle-track" />
-      <span className="toggle-thumb" />
-    </label>
-  );
-}
-
-type UnitChapterEditorModalProps = {
-  unit: BookUnitRow;
-  onClose: () => void;
-  onSave: (unit: BookUnitRow) => void;
-};
-
-function UnitChapterEditorModal({ unit, onClose, onSave }: UnitChapterEditorModalProps) {
-  const [draft, setDraft] = useState<BookUnitRow>(() => ({
-    ...unit,
-    mounted: cloneMounted(unit.mounted),
-    lessons: unit.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
-  }));
-
-  const updateDraft = (patch: Partial<BookUnitRow>) => {
-    setDraft((prev) => ({ ...prev, ...patch }));
-  };
-
-  const updateLesson = (lessonId: string, patch: Partial<BookChapter>) => {
-    setDraft((prev) => ({
-      ...prev,
-      lessons: prev.lessons.map((l) => (l.id === lessonId ? { ...l, ...patch } : l)),
-    }));
-  };
-
-  const toggleLessonResource = (lessonId: string, key: keyof BookResourceFlags) => {
-    setDraft((prev) => ({
-      ...prev,
-      lessons: prev.lessons.map((l) =>
-        l.id === lessonId ? { ...l, resources: { ...l.resources, [key]: !l.resources[key] } } : l,
-      ),
-    }));
-  };
-
-  const addLesson = () => {
-    const order = draft.lessons.length + 1;
-    setDraft((prev) => ({
-      ...prev,
-      lessons: [
-        ...prev.lessons,
-        {
-          id: `lesson-${Date.now()}`,
-          title: `第 ${order} 课`,
-          resources: createEmptyResources(),
-        },
-      ],
-    }));
-  };
-
-  const removeLesson = (lessonId: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      lessons: prev.lessons.filter((l) => l.id !== lessonId),
-    }));
-  };
-
-  return (
-    <div className="modal-overlay open" onClick={onClose} role="dialog" aria-modal="true" aria-label="配置章节">
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title">配置章节 · {draft.title}</div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
-        </div>
-        <div className="modal-body">
-          <div className="section-title" style={{ marginBottom: 12 }}>单元信息</div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>单元中文名称</label>
-              <input
-                className="form-input"
-                value={draft.title}
-                onChange={(e) => updateDraft({ title: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label>单元英文名称</label>
-              <input
-                className="form-input"
-                value={draft.titleEn ?? ''}
-                onChange={(e) => updateDraft({ titleEn: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label>页码</label>
-              <input
-                className="form-input"
-                value={draft.page ?? ''}
-                onChange={(e) => updateDraft({ page: e.target.value })}
-                placeholder="如 12-25"
-              />
-            </div>
-          </div>
-
-          <div className="section-title" style={{ margin: '20px 0 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>章节列表（{draft.lessons.length}）</span>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={addLesson}>➕ 新增章节</button>
-          </div>
-          {draft.lessons.length === 0 ? (
-            <div className="library-chapter-empty">暂无章节，点击「新增章节」添加课程</div>
-          ) : (
-            <div className="paper-table-container">
-              <table className="paper-table library-chapter-table">
-                <thead>
-                  <tr>
-                    <th>章节名称</th>
-                    <th>页码</th>
-                    {UNIT_RESOURCE_COLUMNS.map((col) => (
-                      <th key={col.key}>{col.label}</th>
-                    ))}
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {draft.lessons.map((lesson) => (
-                    <tr key={lesson.id}>
-                      <td>
-                        <input
-                          className="form-input"
-                          value={lesson.title}
-                          onChange={(e) => updateLesson(lesson.id, { title: e.target.value })}
-                          placeholder="章节名称"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="form-input library-page-input"
-                          value={lesson.page ?? ''}
-                          onChange={(e) => updateLesson(lesson.id, { page: e.target.value })}
-                          placeholder="页码"
-                        />
-                      </td>
-                      {UNIT_RESOURCE_COLUMNS.map((col) => (
-                        <td key={col.key} className="library-resource-cell">
-                          <ResourceSwitch
-                            checked={lesson.resources[col.key]}
-                            onChange={() => toggleLessonResource(lesson.id, col.key)}
-                            label={col.label}
-                          />
-                        </td>
-                      ))}
-                      <td>
-                        <button type="button" className="btn-link" style={{ color: 'var(--rose)' }} onClick={() => removeLesson(lesson.id)}>
-                          删除
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <div className="modal-footer">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
-          <button type="button" className="btn btn-primary" onClick={() => onSave(draft)} disabled={!draft.title.trim()}>
-            保存
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1792,9 +1602,12 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   );
   const [bookFiles, setBookFiles] = useState<BookFileResource[]>(INITIAL_BOOK_FILES);
   const [fileTypeFilter, setFileTypeFilter] = useState<'all' | 'JWL' | 'JWR' | 'JWRT'>('all');
-  const [editingUnit, setEditingUnit] = useState<BookUnitRow | null>(null);
   const [resourceMountUnit, setResourceMountUnit] = useState<BookUnitRow | null>(null);
   const [addBookResourceOpen, setAddBookResourceOpen] = useState(false);
+  const [catalogImportOpen, setCatalogImportOpen] = useState(false);
+  const [catalogImportFileName, setCatalogImportFileName] = useState('');
+  const [editorToast, setEditorToast] = useState<string | null>(null);
+  const catalogImportInputRef = useRef<HTMLInputElement>(null);
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
   const [customPublishers, setCustomPublishers] = useState<string[]>(() =>
     book.publisher && !KNOWN_PUBLISHERS.has(book.publisher) ? [book.publisher] : [],
@@ -1895,25 +1708,12 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     });
   };
 
-  const openUnitEditor = (unit: BookUnitRow) => {
-    setEditingUnit({
-      ...unit,
-      mounted: cloneMounted(unit.mounted),
-      lessons: unit.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
-    });
-  };
-
   const openUnitResourceMount = (unit: BookUnitRow) => {
     setResourceMountUnit({
       ...unit,
       mounted: cloneMounted(unit.mounted),
       lessons: unit.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
     });
-  };
-
-  const saveUnitEditor = (unit: BookUnitRow) => {
-    setBookUnits((prev) => prev.map((u) => (u.id === unit.id ? unit : u)));
-    setEditingUnit(null);
   };
 
   const saveUnitResourceMount = (unit: BookUnitRow) => {
@@ -1928,6 +1728,56 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const handleAddBookResources = (files: BookFileResource[]) => {
     setBookFiles((prev) => [...prev, ...files]);
     setAddBookResourceOpen(false);
+  };
+
+  const showEditorToast = (msg: string) => {
+    setEditorToast(msg);
+    window.setTimeout(() => setEditorToast(null), 2200);
+  };
+
+  const applyImportedCatalog = (data: ArrayBuffer) => {
+    const parsed = parseCatalogWorkbook(data);
+    setBookUnits((prev) =>
+      parsed.map((unit) => {
+        const existing = prev.find((row) => row.order === unit.order);
+        return {
+          id: existing?.id ?? `unit-${unit.order}`,
+          order: unit.order,
+          title: unit.title,
+          titleEn: existing?.titleEn,
+          mounted: existing ? cloneMounted(existing.mounted) : createEmptyMounted(),
+          lessons: unit.lessons.map((lesson, index) => ({
+            id: `lesson-${unit.order}-${index + 1}`,
+            title: lesson.title,
+            page: lesson.page,
+            resources: createEmptyResources(),
+          })),
+        };
+      }),
+    );
+    const lessonCount = parsed.reduce((sum, unit) => sum + unit.lessons.length, 0);
+    showEditorToast(`已导入 ${parsed.length} 个单元、${lessonCount} 课`);
+    setCatalogImportOpen(false);
+    setCatalogImportFileName('');
+  };
+
+  const handleCatalogImportFile = async (file?: File) => {
+    if (!file) return;
+    if (!/\.xlsx$/i.test(file.name)) {
+      showEditorToast('请上传 .xlsx 格式的 Excel 文件');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showEditorToast('文件大小不能超过 10MB');
+      return;
+    }
+    setCatalogImportFileName(file.name);
+    try {
+      const buffer = await file.arrayBuffer();
+      applyImportedCatalog(buffer);
+    } catch (error) {
+      showEditorToast(error instanceof Error ? error.message : '导入失败，请检查表格格式');
+    }
   };
 
   return (
@@ -2274,19 +2124,18 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                     bookUnits.map((unit) => (
                       <tr key={unit.id}>
                         <td>
-                          <button type="button" className="library-unit-link" onClick={() => openUnitEditor(unit)}>
+                          <div className="library-unit-link" style={{ cursor: 'default' }}>
                             {unit.title}
                             {unit.lessons.length > 0 && (
                               <span className="library-unit-lesson-count">{unit.lessons.length} 章</span>
                             )}
-                          </button>
+                          </div>
                         </td>
                         <td><ResourceIdCell ids={unit.mounted.audioReading} /></td>
                         <td><ResourceIdCell ids={unit.mounted.cultureVideo} /></td>
                         <td><ResourceIdCell ids={unit.mounted.exam} /></td>
                         <td><ResourceIdCell ids={unit.mounted.cultureRead} /></td>
                         <td className="library-action-cell">
-                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => openUnitEditor(unit)}>编辑</button>
                           <button type="button" className="btn btn-primary btn-sm" onClick={() => openUnitResourceMount(unit)}>配置资源</button>
                         </td>
                       </tr>
@@ -2310,9 +2159,14 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
 
         <div className={`config-tab-panel ${activeTab === 'content' ? 'active' : ''}`} role="tabpanel" hidden={activeTab !== 'content'}>
           <div className="config-section">
-            <div className="section-title">📋 内容管理</div>
+            <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>📋 内容管理</span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setCatalogImportOpen(true)}>
+                📥 导入教材目录
+              </button>
+            </div>
             {bookUnits.length === 0 ? (
-              <div className="library-chapter-empty">请先在「结构配置」中新增单元</div>
+              <div className="library-chapter-empty">点击「导入教材目录」上传 Excel，自动生成单元与课程</div>
             ) : (
               <div className="library-content-tree">
                 {bookUnits.map((unit) => (
@@ -2337,7 +2191,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
               </div>
             )}
             <div className="form-hint" style={{ marginTop: '16px' }}>
-              章节内容可在「结构配置」中点击「编辑」进行管理
+              支持通过 Excel 导入教材目录；重新导入将覆盖当前单元与课程结构，已挂载的单元资源会按单元序号保留
             </div>
           </div>
         </div>
@@ -2420,14 +2274,6 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
         </div>
       </div>
 
-      {editingUnit && (
-        <UnitChapterEditorModal
-          unit={editingUnit}
-          onClose={() => setEditingUnit(null)}
-          onSave={saveUnitEditor}
-        />
-      )}
-
       {resourceMountUnit && (
         <UnitResourceMountModal
           unit={resourceMountUnit}
@@ -2442,6 +2288,84 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
         onClose={() => setAddBookResourceOpen(false)}
         onConfirm={handleAddBookResources}
       />
+
+      <div
+        className={`modal-overlay ${catalogImportOpen ? 'open' : ''}`}
+        onClick={() => setCatalogImportOpen(false)}
+        role="dialog"
+        aria-modal="true"
+        aria-label="导入教材目录"
+      >
+        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
+          <div className="modal-header">
+            <div className="modal-title">导入教材目录</div>
+            <button type="button" className="modal-close" onClick={() => setCatalogImportOpen(false)} aria-label="关闭">✕</button>
+          </div>
+          <div className="modal-body">
+            <input
+              ref={catalogImportInputRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                void handleCatalogImportFile(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+            <div
+              style={{
+                border: '1px dashed var(--stone-dark)',
+                borderRadius: 12,
+                padding: '44px 20px',
+                textAlign: 'center',
+                background: 'var(--mist)',
+                marginBottom: 18,
+                cursor: 'pointer',
+              }}
+              onClick={() => catalogImportInputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                void handleCatalogImportFile(e.dataTransfer.files?.[0]);
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && catalogImportInputRef.current?.click()}
+            >
+              <div style={{ width: 50, height: 50, margin: '0 auto 12px', border: '2px solid var(--ink-light)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-light)', fontSize: 26 }}>
+                ↑
+              </div>
+              <div style={{ fontSize: 16, marginBottom: 2 }}>点击上传或拖拽 Excel 文件至此</div>
+              <div className="form-hint">支持 .xlsx 格式 · 最大 10MB</div>
+              {catalogImportFileName && (
+                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--teal)' }}>已选择：{catalogImportFileName}</div>
+              )}
+            </div>
+
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>表格格式</div>
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
+              <li>第一列 <b style={{ color: 'var(--ink)' }}>一级目录</b>：单元行，如「第一单元 我和你」</li>
+              <li>第二列 <b style={{ color: 'var(--ink)' }}>二级目录</b>：课程行，如「1 你好」</li>
+              <li>第三列 <b style={{ color: 'var(--ink)' }}>页码</b>：对应课程页码</li>
+              <li>导入后将自动生成「结构配置」与「内容管理」中的单元和课程</li>
+            </ul>
+
+            <div style={{ marginTop: 12 }}>
+              <a
+                href="/教材目录导入模板.xlsx"
+                download="教材目录导入模板.xlsx"
+                className="btn btn-ghost"
+                style={{ gap: 6, textDecoration: 'none' }}
+              >
+                <span>⇩</span>
+                下载导入模板
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {editorToast && <div className="hsk-toast show">{editorToast}</div>}
     </div>
   );
 }
