@@ -38,7 +38,7 @@ type BookSeries = {
   hskLevelMin: string;
   hskLevelMax: string;
   description: string;
-  coverEmoji?: string;
+  coverColor?: string;
 };
 
 type Book = {
@@ -688,7 +688,7 @@ const INITIAL_SERIES: BookSeries[] = [
     hskLevelMin: 'HSK1级',
     hskLevelMax: 'HSK3级',
     description: '面向海外母语非汉语的中学生，对标《国际中文教育中文水平等级标准》',
-    coverEmoji: '📘',
+    coverColor: '#2563EB',
   },
   {
     id: 'series-hsk-standard',
@@ -699,7 +699,7 @@ const INITIAL_SERIES: BookSeries[] = [
     hskLevelMin: 'HSK1级',
     hskLevelMax: 'HSK6级',
     description: 'HSK官方标准教程，配套各级别考试',
-    coverEmoji: '📗',
+    coverColor: '#059669',
   },
   {
     id: 'series-extended',
@@ -710,7 +710,7 @@ const INITIAL_SERIES: BookSeries[] = [
     hskLevelMin: 'HSK2级',
     hskLevelMax: 'HSK5级',
     description: '商务、情景、文化等专题阅读材料',
-    coverEmoji: '📙',
+    coverColor: '#D97706',
   },
 ];
 
@@ -851,7 +851,18 @@ const MOCK_BOOKS: Book[] = [
 
 type ViewMode = 'series' | 'books' | 'edit';
 
-const SERIES_EMOJI_OPTIONS = ['📘', '📗', '📙', '📕', '📚', '📖'];
+const SERIES_COVER_COLORS = [
+  { value: '#2563EB', label: '蓝色' },
+  { value: '#059669', label: '绿色' },
+  { value: '#D97706', label: '琥珀' },
+  { value: '#E11D48', label: '玫红' },
+  { value: '#7C3AED', label: '紫色' },
+  { value: '#475569', label: '石墨' },
+] as const;
+
+type SeriesCoverColor = (typeof SERIES_COVER_COLORS)[number]['value'];
+
+const DEFAULT_SERIES_COVER_COLOR: SeriesCoverColor = SERIES_COVER_COLORS[0].value;
 
 type CreateSeriesModalProps = {
   open: boolean;
@@ -867,7 +878,7 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
   const [hskLevelMin, setHskLevelMin] = useState('HSK1级');
   const [hskLevelMax, setHskLevelMax] = useState('HSK1级');
   const [description, setDescription] = useState('');
-  const [coverEmoji, setCoverEmoji] = useState('📚');
+  const [coverColor, setCoverColor] = useState<string>(DEFAULT_SERIES_COVER_COLOR);
   const publisherGroups = useMemo(() => publishersByCategory(), []);
 
   useEffect(() => {
@@ -878,7 +889,7 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
     setHskLevelMin('HSK1级');
     setHskLevelMax('HSK1级');
     setDescription('');
-    setCoverEmoji('📚');
+    setCoverColor(DEFAULT_SERIES_COVER_COLOR);
   }, [open, defaultPublisher]);
 
   const handleCreate = () => {
@@ -892,7 +903,7 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
       hskLevelMin,
       hskLevelMax,
       description: description.trim(),
-      coverEmoji,
+      coverColor,
     });
   };
 
@@ -982,17 +993,18 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
             </div>
           </div>
           <div className="form-group">
-            <label>系列图标</label>
-            <div className="library-series-emoji-picker">
-              {SERIES_EMOJI_OPTIONS.map((emoji) => (
+            <label>封面色</label>
+            <div className="library-series-color-picker">
+              {SERIES_COVER_COLORS.map((color) => (
                 <button
-                  key={emoji}
+                  key={color.value}
                   type="button"
-                  className={`library-series-emoji-option ${coverEmoji === emoji ? 'selected' : ''}`}
-                  onClick={() => setCoverEmoji(emoji)}
-                >
-                  {emoji}
-                </button>
+                  className={`library-series-color-option ${coverColor === color.value ? 'selected' : ''}`}
+                  style={{ backgroundColor: color.value }}
+                  onClick={() => setCoverColor(color.value)}
+                  aria-label={color.label}
+                  title={color.label}
+                />
               ))}
             </div>
           </div>
@@ -1556,7 +1568,11 @@ export function Library() {
                 footerStat={<>{stat.units} 单元 · {stat.lessons} 课</>}
               >
                 <div className="library-series-card-top">
-                  <div className="library-series-icon">{series.coverEmoji ?? '📚'}</div>
+                  <div
+                    className="library-series-icon"
+                    style={{ backgroundColor: series.coverColor ?? DEFAULT_SERIES_COVER_COLOR }}
+                    aria-hidden
+                  />
                   <div className="library-series-info">
                     <div className="library-series-name">{series.name}</div>
                     {series.nameEn && (

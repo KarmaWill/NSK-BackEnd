@@ -2195,13 +2195,45 @@ input[type="range"].swm-range {
 .library-series-icon {
   width: 44px;
   height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  background: var(--stone-lighter);
   border-radius: 10px;
   flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.library-series-color-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.library-series-color-option {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.library-series-color-option:hover {
+  transform: scale(1.04);
+}
+
+.library-series-color-option.selected {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.12);
+}
+
+.library-volume-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--stone-lighter);
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .library-series-info {
@@ -2323,34 +2355,7 @@ input[type="range"].swm-range {
   color: var(--primary);
 }
 
-.library-series-emoji-picker {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.library-series-emoji-option {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  border: 1px solid var(--stone-dark);
-  background: var(--white);
-  font-size: 22px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-}
-
-.library-series-emoji-option:hover {
-  border-color: var(--ink);
-}
-
-.library-series-emoji-option.selected {
-  border-color: var(--ink);
-  background: var(--stone-lighter);
-  box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.08);
-}
-
-.library-volume-badge {
+.library-series-info {
   display: inline-block;
   padding: 4px 10px;
   border-radius: 6px;
