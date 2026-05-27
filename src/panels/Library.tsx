@@ -1,13 +1,20 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { parseCatalogWorkbook } from '../utils/catalogImport';
+import {
+  BookSortableTableBody,
+  SeriesSortableGrid,
+  SortableBookRow,
+  SortableSeriesCard,
+  reorderBySortOrder,
+  reorderByVolumeOrder,
+} from './librarySortable';
 import {
   ALL_FEATURE_TAGS,
   EXTENDED_LEVEL_OPTIONS,
   FEATURE_CATEGORIES,
-  HSK_LEVELS,
   PUBLISHERS,
   formatHskRange,
-  getHskEquivalent,
   parseLegacyLevel,
   publishersByCategory,
 } from '../config/bookCatalog';
@@ -24,6 +31,7 @@ const KNOWN_PUBLISHERS = new Set(PUBLISHERS.map((p) => p.name));
 
 type BookSeries = {
   id: string;
+  sortOrder: number;
   name: string;
   nameEn?: string;
   publisher: string;
@@ -673,6 +681,7 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
 const INITIAL_SERIES: BookSeries[] = [
   {
     id: 'series-happy-chinese',
+    sortOrder: 1,
     name: '快乐中文系列',
     nameEn: 'Happy Chinese',
     publisher: '人民教育出版社',
@@ -683,6 +692,7 @@ const INITIAL_SERIES: BookSeries[] = [
   },
   {
     id: 'series-hsk-standard',
+    sortOrder: 2,
     name: 'HSK标准教程系列',
     nameEn: 'HSK Standard Course',
     publisher: '北京语言大学出版社',
@@ -693,6 +703,7 @@ const INITIAL_SERIES: BookSeries[] = [
   },
   {
     id: 'series-extended',
+    sortOrder: 3,
     name: '拓展阅读系列',
     nameEn: 'Extended Reading',
     publisher: '外语教学与研究出版社',
@@ -785,7 +796,7 @@ const MOCK_BOOKS: Book[] = [
     formats: ['JWR'],
     premium: false,
     description: 'HSK官方标准教程，配套HSK 1级考试',
-    unitCount: 15,
+    unitCount: 1,
     lessonCount: 15,
     vocabularyCount: 150,
     characterCount: 100,
@@ -874,6 +885,7 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
     if (!name.trim() || !publisher) return;
     onCreate({
       id: `series-${Date.now()}`,
+      sortOrder: 0,
       name: name.trim(),
       nameEn: nameEn.trim() || undefined,
       publisher,
@@ -1157,7 +1169,6 @@ export function Library() {
   const [view, setView] = useState<ViewMode>('series');
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [filterPublisher, setFilterPublisher] = useState('');
-  const [filterHsk, setFilterHsk] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
@@ -1193,9 +1204,36 @@ export function Library() {
   };
 
   const handleCreateSeries = (series: BookSeries) => {
-    setSeriesList((prev) => [...prev, series]);
+    setSeriesList((prev) => [
+      ...prev,
+      {
+        ...series,
+        sortOrder: prev.length ? Math.max(...prev.map((item) => item.sortOrder)) + 1 : 1,
+      },
+    ]);
     setCreateSeriesOpen(false);
     showToast(`已创建系列「${series.name}」`);
+  };
+
+  const handleSeriesDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setSeriesList((prev) => reorderBySortOrder(prev, String(active.id), String(over.id)));
+  };
+
+  const handleBookDragEnd = (seriesId: string) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setBooks((prev) => {
+      const inSeries = prev.filter((book) => book.seriesId === seriesId);
+      const reordered = reorderByVolumeOrder(inSeries, String(active.id), String(over.id));
+      const orderMap = new Map(reordered.map((book) => [book.id, book.volumeOrder]));
+      return prev.map((book) => (
+        book.seriesId === seriesId
+          ? { ...book, volumeOrder: orderMap.get(book.id) ?? book.volumeOrder }
+          : book
+      ));
+    });
   };
 
   const handleAddVolume = (book: Book) => {
@@ -1270,6 +1308,9 @@ export function Library() {
         b.authors.some(a => a.toLowerCase().includes(query));
     });
 
+    const canReorderBooks = !searchQuery;
+    const booksForTable = canReorderBooks ? seriesBooks : filteredBooks;
+
     return (
       <>
         <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1310,7 +1351,7 @@ export function Library() {
             />
           </div>
           <div style={{ marginLeft: 'auto', fontSize: '13px', color: 'var(--ink-light)' }}>
-            共 {filteredBooks.length} 册
+            共 {filteredBooks.length} 册{searchQuery ? ' · 清除搜索后可拖拽排序' : ' · 拖拽左侧手柄排序'}
           </div>
         </div>
 
@@ -1318,94 +1359,98 @@ export function Library() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: '72px', whiteSpace: 'nowrap' }}>排序</th>
                 <th style={{ width: '60px' }}>册次</th>
                 <th style={{ width: '280px' }}>书籍信息</th>
                 <th style={{ width: '100px', whiteSpace: 'nowrap' }}>级别</th>
                 <th style={{ width: '180px' }}>功能模块</th>
-                <th style={{ width: '140px', whiteSpace: 'nowrap' }}>内容统计</th>
                 <th style={{ width: '100px' }}>状态</th>
                 <th style={{ width: '160px', whiteSpace: 'nowrap' }}>操作</th>
               </tr>
             </thead>
-            <tbody>
-              {filteredBooks.length === 0 ? (
+            {filteredBooks.length === 0 ? (
+              <tbody>
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '60px', color: 'var(--ink-light)' }}>
                     {searchQuery ? '未找到匹配的册次' : '该系列暂无书籍'}
                   </td>
                 </tr>
-              ) : (
-                filteredBooks.map(book => (
-                  <tr
+              </tbody>
+            ) : (
+              <BookSortableTableBody
+                itemIds={seriesBooks.map((book) => book.id)}
+                dragDisabled={!canReorderBooks}
+                onDragEnd={handleBookDragEnd(selectedSeries.id)}
+              >
+                {booksForTable.map((book) => (
+                  <SortableBookRow
                     key={book.id}
-                    className="library-book-row"
-                    onClick={() => openBookEditor(book)}
-                    style={{ cursor: 'pointer' }}
+                    id={book.id}
+                    volumeOrder={book.volumeOrder}
+                    dragDisabled={!canReorderBooks}
+                    onOpen={() => openBookEditor(book)}
                   >
-                    <td>
-                      <span className="library-volume-badge">第 {book.volumeOrder} 册</span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <div className="paper-name">{book.title}</div>
-                        {primaryEnglishTitle(book.titleByLang, book.titleEn) && (
-                          <div style={{ fontSize: '12px', color: 'var(--ink-light)' }}>
-                            {primaryEnglishTitle(book.titleByLang, book.titleEn)}
+                    {({ dragHandle, volumeBadge }) => (
+                      <>
+                        <td>{dragHandle}</td>
+                        <td>{volumeBadge}</td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div className="paper-name">{book.title}</div>
+                            {primaryEnglishTitle(book.titleByLang, book.titleEn) && (
+                              <div style={{ fontSize: '12px', color: 'var(--ink-light)' }}>
+                                {primaryEnglishTitle(book.titleByLang, book.titleEn)}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '11px', color: 'var(--ink-lighter)', fontFamily: 'JetBrains Mono, monospace' }}>
+                              ISBN: {book.isbn}
+                            </div>
+                            {book.premium && (
+                              <span className="badge" style={{ background: 'var(--amber-l)', color: 'var(--amber)', width: 'fit-content', fontSize: '10px', padding: '2px 6px' }}>
+                                Premium
+                              </span>
+                            )}
                           </div>
-                        )}
-                        <div style={{ fontSize: '11px', color: 'var(--ink-lighter)', fontFamily: 'JetBrains Mono, monospace' }}>
-                          ISBN: {book.isbn}
-                        </div>
-                        {book.premium && (
-                          <span className="badge" style={{ background: 'var(--amber-l)', color: 'var(--amber)', width: 'fit-content', fontSize: '10px', padding: '2px 6px' }}>
-                            Premium
+                        </td>
+                        <td>
+                          <span className="hsk-badge" style={{ background: 'var(--primary-l)', color: 'var(--primary)' }}>
+                            {bookLevel(book)}
                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="hsk-badge" style={{ background: 'var(--primary-l)', color: 'var(--primary)' }}>
-                        {bookLevel(book)}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {book.features.map(f => (
-                          <span key={f} className="feature-tag">{f}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: '12px', color: 'var(--ink-light)', lineHeight: '1.6' }}>
-                        {book.unitCount} 单元 · {book.lessonCount} 课<br />
-                        {book.vocabularyCount} 词 · {book.characterCount} 字
-                      </div>
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <label className="status-toggle">
-                        <input
-                          type="checkbox"
-                          checked={book.isPublished}
-                          onChange={() => togglePublishStatus(book.id)}
-                        />
-                        <span className="toggle-slider"></span>
-                      </label>
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="actions">
-                        <button
-                          type="button"
-                          className="action-btn edit"
-                          onClick={() => openBookEditor(book)}
-                        >
-                          ✏️ 编辑
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {book.features.map((f) => (
+                              <span key={f} className="feature-tag">{f}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <label className="status-toggle">
+                            <input
+                              type="checkbox"
+                              checked={book.isPublished}
+                              onChange={() => togglePublishStatus(book.id)}
+                            />
+                            <span className="toggle-slider"></span>
+                          </label>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="actions">
+                            <button
+                              type="button"
+                              className="action-btn edit"
+                              onClick={() => openBookEditor(book)}
+                            >
+                              ✏️ 编辑
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </SortableBookRow>
+                ))}
+              </BookSortableTableBody>
+            )}
           </table>
         </div>
 
@@ -1424,13 +1469,6 @@ export function Library() {
 
   const filteredSeries = seriesList.filter((s) => {
     if (filterPublisher && s.publisher !== filterPublisher) return false;
-    if (filterHsk) {
-      const order = HSK_LEVELS.map((l) => l.level);
-      const idx = order.indexOf(filterHsk);
-      const minIdx = order.indexOf(getHskEquivalent(s.hskLevelMin));
-      const maxIdx = order.indexOf(getHskEquivalent(s.hskLevelMax));
-      if (idx === -1 || idx < minIdx || idx > maxIdx) return false;
-    }
     if (searchQuery === '') return true;
     const query = searchQuery.toLowerCase();
     const bookTitles = books
@@ -1441,7 +1479,10 @@ export function Library() {
       s.nameEn?.toLowerCase().includes(query) ||
       s.publisher.toLowerCase().includes(query) ||
       bookTitles.includes(query);
-  });
+  }).sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const canReorderSeries = !searchQuery && !filterPublisher;
+  const sortedSeriesList = [...seriesList].sort((a, b) => a.sortOrder - b.sortOrder);
 
   return (
     <>
@@ -1451,9 +1492,6 @@ export function Library() {
           <div className="page-subtitle">按系列管理课程配套书籍与阅读材料</div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" className="btn btn-secondary" onClick={() => showToast('批量导入功能开发中')}>
-            📥 批量导入
-          </button>
           <button type="button" className="btn btn-primary" onClick={() => setCreateSeriesOpen(true)}>
             ➕ 新建系列
           </button>
@@ -1480,24 +1518,6 @@ export function Library() {
           </select>
         </div>
         <div className="filter-group">
-          <span className="filter-label">HSK级别:</span>
-          <select
-            className="form-input form-select"
-            value={filterHsk}
-            onChange={(e) => setFilterHsk(e.target.value)}
-            style={{ minWidth: '140px' }}
-          >
-            <option value="">全部级别</option>
-            {[...new Set(HSK_LEVELS.map((l) => l.tier))].map((tier) => (
-              <optgroup key={tier} label={tier}>
-                {HSK_LEVELS.filter((l) => l.tier === tier).map((l) => (
-                  <option key={l.level} value={l.level}>{l.level}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        <div className="filter-group">
           <span className="filter-label">搜索:</span>
           <input
             type="text"
@@ -1510,25 +1530,30 @@ export function Library() {
         </div>
         <div style={{ marginLeft: 'auto', fontSize: '13px', color: 'var(--ink-light)' }}>
           共 {filteredSeries.length} 个系列 · {books.length} 册
+          {!canReorderSeries && ' · 清除筛选后可拖拽排序'}
+          {canReorderSeries && ' · 拖拽卡片左侧手柄排序'}
         </div>
       </div>
 
-      <div className="library-series-grid">
-        {filteredSeries.length === 0 ? (
-          <div className="library-series-empty">
-            {searchQuery ? '未找到匹配的系列' : '暂无书籍系列'}
-          </div>
-        ) : (
-          filteredSeries.map((series) => {
+      {filteredSeries.length === 0 ? (
+        <div className="library-series-empty">
+          {searchQuery ? '未找到匹配的系列' : '暂无书籍系列'}
+        </div>
+      ) : (
+        <SeriesSortableGrid
+          itemIds={sortedSeriesList.map((series) => series.id)}
+          dragDisabled={!canReorderSeries}
+          onDragEnd={handleSeriesDragEnd}
+        >
+          {filteredSeries.map((series) => {
             const stat = seriesStats.get(series.id)!;
             return (
-              <div
+              <SortableSeriesCard
                 key={series.id}
-                className="library-series-card"
-                role="button"
-                tabIndex={0}
-                onClick={() => openSeries(series.id)}
-                onKeyDown={(e) => e.key === 'Enter' && openSeries(series.id)}
+                id={series.id}
+                dragDisabled={!canReorderSeries}
+                onEnter={() => openSeries(series.id)}
+                footerStat={<>{stat.units} 单元 · {stat.lessons} 课</>}
               >
                 <div className="library-series-card-top">
                   <div className="library-series-icon">{series.coverEmoji ?? '📚'}</div>
@@ -1547,17 +1572,11 @@ export function Library() {
                   <span>{series.publisher}</span>
                   <span>{stat.total} 册 · {stat.published} 已上架</span>
                 </div>
-                <div className="library-series-footer">
-                  <span className="library-series-stat">
-                    {stat.units} 单元 · {stat.lessons} 课
-                  </span>
-                  <span className="library-series-arrow">进入系列 →</span>
-                </div>
-              </div>
+              </SortableSeriesCard>
             );
-          })
-        )}
-      </div>
+          })}
+        </SeriesSortableGrid>
+      )}
 
       {toast && <div className="hsk-toast show">{toast}</div>}
 
@@ -1736,7 +1755,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   };
 
   const applyImportedCatalog = (data: ArrayBuffer) => {
-    const parsed = parseCatalogWorkbook(data);
+    const parsed = parseCatalogWorkbook(data, { bookTitle: editedBook.title });
     setBookUnits((prev) =>
       parsed.map((unit) => {
         const existing = prev.find((row) => row.order === unit.order);
@@ -2127,7 +2146,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                           <div className="library-unit-link" style={{ cursor: 'default' }}>
                             {unit.title}
                             {unit.lessons.length > 0 && (
-                              <span className="library-unit-lesson-count">{unit.lessons.length} 章</span>
+                              <span className="library-unit-lesson-count">{unit.lessons.length} 课</span>
                             )}
                           </div>
                         </td>
@@ -2174,10 +2193,10 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                     <div className="library-content-unit-title">
                       <span>{unit.title}</span>
                       {unit.titleEn && <span className="library-content-unit-en">{unit.titleEn}</span>}
-                      <span className="library-unit-lesson-count">{unit.lessons.length} 章</span>
+                      <span className="library-unit-lesson-count">{unit.lessons.length} 课</span>
                     </div>
                     {unit.lessons.length === 0 ? (
-                      <div className="library-content-lesson empty">暂无章节</div>
+                      <div className="library-content-lesson empty">暂无课程</div>
                     ) : (
                       unit.lessons.map((lesson) => (
                         <div key={lesson.id} className="library-content-lesson">
@@ -2191,7 +2210,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
               </div>
             )}
             <div className="form-hint" style={{ marginTop: '16px' }}>
-              支持通过 Excel 导入教材目录；重新导入将覆盖当前单元与课程结构，已挂载的单元资源会按单元序号保留
+              一级目录为单元、二级目录为课（如快乐中文）；若教材只有一层目录（如 HSK），整本书作为一个单元，各课归入其下。重新导入会覆盖当前结构，已挂载的单元资源按序号保留。
             </div>
           </div>
         </div>
@@ -2344,10 +2363,9 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
 
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>表格格式</div>
             <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
-              <li>第一列 <b style={{ color: 'var(--ink)' }}>一级目录</b>：单元行，如「第一单元 我和你」</li>
-              <li>第二列 <b style={{ color: 'var(--ink)' }}>二级目录</b>：课程行，如「1 你好」</li>
-              <li>第三列 <b style={{ color: 'var(--ink)' }}>页码</b>：对应课程页码</li>
-              <li>导入后将自动生成「结构配置」与「内容管理」中的单元和课程</li>
+              <li><b style={{ color: 'var(--ink)' }}>双层目录</b>（快乐中文等）：一级目录填单元，如「第一单元 我和你」；二级目录填课，如「1 你好」；第三列填页码</li>
+              <li><b style={{ color: 'var(--ink)' }}>单层目录</b>（HSK 等）：仅填写课程行，如「1 你好」+ 页码；整本书作为一个单元，单元名取当前书名</li>
+              <li>导入后同步更新「结构配置」与「内容管理」</li>
             </ul>
 
             <div style={{ marginTop: 12 }}>

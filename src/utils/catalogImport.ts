@@ -11,6 +11,11 @@ export type ParsedCatalogUnit = {
   lessons: ParsedCatalogLesson[];
 };
 
+export type ParseCatalogOptions = {
+  /** 单层目录教材（如 HSK）导入时，作为唯一单元的标题 */
+  bookTitle?: string;
+};
+
 const CN_DIGIT: Record<string, number> = {
   零: 0,
   一: 1,
@@ -59,23 +64,84 @@ function cellText(value: unknown): string {
   return String(value).trim();
 }
 
-function isHeaderRow(colA: string, colB: string): boolean {
-  return colA.includes('一级目录') || colB.includes('二级目录') || colA.includes('目录');
+function looksLikePage(text: string): boolean {
+  return /^\d+$/.test(text);
 }
 
-export function parseCatalogWorkbook(data: ArrayBuffer): ParsedCatalogUnit[] {
-  const workbook = XLSX.read(data, { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
-    throw new Error('Excel 文件中没有工作表');
+function isHeaderRow(colA: string, colB: string, colC?: string): boolean {
+  return (
+    colA.includes('一级目录')
+    || colB.includes('二级目录')
+    || colB.includes('页码')
+    || colC?.includes('页码')
+    || colA === '目录'
+  );
+}
+
+function hasUnitStructure(rows: unknown[][]): boolean {
+  return rows.some((row) => {
+    if (!Array.isArray(row)) return false;
+    const colA = cellText(row[0]);
+    return /第[一二三四五六七八九十百]+单元/.test(colA);
+  });
+}
+
+function parseFlatLessonRow(row: unknown[]): ParsedCatalogLesson | null {
+  const colA = cellText(row[0]);
+  const colB = cellText(row[1]);
+  const colC = cellText(row[2]);
+
+  if (!colA && !colB) return null;
+
+  if (colA && colB && !colC && looksLikePage(colB)) {
+    return { title: colA, page: colB };
   }
 
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
-    header: 1,
-    defval: null,
-    raw: false,
+  if (colA && colC) {
+    return { title: colA, page: colC || undefined };
+  }
+
+  if (!colA && colB) {
+    return { title: colB, page: colC || undefined };
+  }
+
+  if (colA) {
+    return {
+      title: colA,
+      page: colC || (looksLikePage(colB) ? colB : undefined),
+    };
+  }
+
+  return null;
+}
+
+function parseFlatCatalog(rows: unknown[][], bookTitle: string): ParsedCatalogUnit[] {
+  const lessons: ParsedCatalogLesson[] = [];
+
+  rows.forEach((row, index) => {
+    if (!Array.isArray(row)) return;
+    const colA = cellText(row[0]);
+    const colB = cellText(row[1]);
+    const colC = cellText(row[2]);
+    if (!colA && !colB) return;
+    if (index === 0 && isHeaderRow(colA, colB, colC)) return;
+
+    const lesson = parseFlatLessonRow(row);
+    if (lesson) lessons.push(lesson);
   });
 
+  if (lessons.length === 0) {
+    throw new Error('未识别到有效课程，请检查表格格式');
+  }
+
+  return [{
+    order: 1,
+    title: bookTitle.trim() || '全书',
+    lessons,
+  }];
+}
+
+function parseNestedCatalog(rows: unknown[][]): ParsedCatalogUnit[] {
   const units: ParsedCatalogUnit[] = [];
   let current: ParsedCatalogUnit | null = null;
 
@@ -87,9 +153,9 @@ export function parseCatalogWorkbook(data: ArrayBuffer): ParsedCatalogUnit[] {
     const colC = cellText(row[2]);
 
     if (!colA && !colB) return;
-    if (index === 0 && isHeaderRow(colA, colB)) return;
+    if (index === 0 && isHeaderRow(colA, colB, colC)) return;
 
-    if (colA) {
+    if (colA && /第[一二三四五六七八九十百]+单元/.test(colA)) {
       const order = parseUnitOrder(colA) ?? units.length + 1;
       current = {
         order,
@@ -118,4 +184,24 @@ export function parseCatalogWorkbook(data: ArrayBuffer): ParsedCatalogUnit[] {
   }
 
   return units;
+}
+
+export function parseCatalogWorkbook(data: ArrayBuffer, options?: ParseCatalogOptions): ParsedCatalogUnit[] {
+  const workbook = XLSX.read(data, { type: 'array' });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) {
+    throw new Error('Excel 文件中没有工作表');
+  }
+
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
+    header: 1,
+    defval: null,
+    raw: false,
+  }) as unknown[][];
+
+  if (hasUnitStructure(rows)) {
+    return parseNestedCatalog(rows);
+  }
+
+  return parseFlatCatalog(rows, options?.bookTitle ?? '全书');
 }

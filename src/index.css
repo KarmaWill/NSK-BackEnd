@@ -2164,13 +2164,25 @@ input[type="range"].swm-range {
   border: 1px solid var(--stone-dark);
   border-radius: 12px;
   padding: 18px;
-  cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.library-series-card:hover {
+.library-series-card.is-dragging {
+  opacity: 0.88;
   border-color: var(--ink);
-  box-shadow: 0 0 0 3px var(--stone);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 2;
+}
+
+.library-series-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.library-series-card-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .library-series-card-top {
@@ -2235,8 +2247,69 @@ input[type="range"].swm-range {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--stone-dark);
+  margin-top: 12px;
+}
+
+.library-series-enter-btn {
+  min-height: 44px;
+  min-width: 112px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.library-drag-handle {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--stone-dark);
+  border-radius: 10px;
+  background: var(--stone-lighter);
+  color: var(--ink-light);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  flex-shrink: 0;
+  touch-action: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.library-drag-handle:active {
+  cursor: grabbing;
+}
+
+.library-drag-handle:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--mist);
+}
+
+.library-drag-handle.is-disabled,
+.library-drag-handle:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.library-drag-handle-bars {
+  width: 14px;
+  height: 14px;
+  background:
+    radial-gradient(circle, currentColor 2px, transparent 2px) 0 0 / 7px 7px,
+    radial-gradient(circle, currentColor 2px, transparent 2px) 7px 0 / 7px 7px,
+    radial-gradient(circle, currentColor 2px, transparent 2px) 0 7px / 7px 7px,
+    radial-gradient(circle, currentColor 2px, transparent 2px) 7px 7px / 7px 7px;
+}
+
+.library-book-row {
+  cursor: pointer;
+}
+
+.library-book-row.is-dragging {
+  opacity: 0.88;
+  background: var(--mist);
 }
 
 .library-series-stat {
