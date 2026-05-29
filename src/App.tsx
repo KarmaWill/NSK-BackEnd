@@ -3,11 +3,22 @@ import type { PanelId } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { PanelContent } from './panels';
+import { LoginGate } from './components/LoginGate';
 import { loadCourseLibs, COURSE_LIBS_UPDATED_EVENT } from './stores/courseLibs';
+import { getToken, logout, type AuthUser } from './lib/api';
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [activePanel, setActivePanel] = useState<PanelId>('dashboard');
   const [activeCourseLibId, setActiveCourseLibId] = useState<string>(() => loadCourseLibs()[0]?.id ?? '');
+
+  useEffect(() => {
+    if (getToken()) {
+      setUser({ id: '', username: 'admin', role: 'ADMIN' });
+    }
+    setAuthChecked(true);
+  }, []);
 
   useEffect(() => {
     const sync = () => {
@@ -21,6 +32,12 @@ export default function App() {
     return () => window.removeEventListener(COURSE_LIBS_UPDATED_EVENT, sync);
   }, []);
 
+  if (!authChecked) return null;
+
+  if (!user) {
+    return <LoginGate onSuccess={setUser} />;
+  }
+
   return (
     <div className="app">
       <Sidebar
@@ -30,7 +47,14 @@ export default function App() {
         onActiveCourseLibChange={setActiveCourseLibId}
       />
       <div className="main">
-        <Topbar panelId={activePanel} />
+        <Topbar
+          panelId={activePanel}
+          username={user.username}
+          onLogout={() => {
+            logout();
+            setUser(null);
+          }}
+        />
         <div className="content">
           <div className="page active">
             <PanelContent
