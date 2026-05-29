@@ -368,7 +368,7 @@ export function AiRoles() {
   };
 
   const reportLangBtnStyle = (key: LangKey, active: boolean) =>
-    key === 'CN' ? (active ? { background: '#8a1c2b', borderColor: '#8a1c2b', color: '#fff' } : { background: '#fff5f5', borderColor: '#8a1c2b', color: '#8a1c2b' }) : undefined;
+    key === 'CN' ? (active ? { background: 'var(--brand)', borderColor: 'var(--brand)', color: '#fff' } : { background: 'var(--brand-pale)', borderColor: 'var(--brand)', color: 'var(--brand)' }) : undefined;
 
   const [publishConfirmRow, setPublishConfirmRow] = useState<AiRole | null>(null);
   const [publishConfirmStep, setPublishConfirmStep] = useState<1 | 2>(1);

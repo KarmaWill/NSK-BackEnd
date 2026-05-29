@@ -148,7 +148,7 @@ export function AiCapabilities() {
   }, [avatarKeyword]);
 
   const langBtnStyle = (key: LangKey, active: boolean) =>
-    key === 'CN' ? (active ? { background: '#8a1c2b', borderColor: '#8a1c2b', color: '#fff' } : { background: '#fff5f5', borderColor: '#8a1c2b', color: '#8a1c2b' }) : undefined;
+    key === 'CN' ? (active ? { background: 'var(--brand)', borderColor: 'var(--brand)', color: '#fff' } : { background: 'var(--brand-pale)', borderColor: 'var(--brand)', color: 'var(--brand)' }) : undefined;
 
   const openNew = () => {
     const suggestedAiId = `AI-${Date.now()}`;
@@ -329,7 +329,7 @@ export function AiCapabilities() {
                         type="button"
                         className={`btn btn-sm ${editing.levelId === o.key ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => setEditing((p) => (p ? { ...p, levelId: o.key } : p))}
-                        style={editing.levelId === o.key && o.key === '1' ? { background: '#8a1c2b', borderColor: '#8a1c2b', color: '#fff' } : undefined}
+                        style={editing.levelId === o.key && o.key === '1' ? { background: 'var(--brand)', borderColor: 'var(--brand)', color: '#fff' } : undefined}
                       >
                         {o.label}
                       </button>

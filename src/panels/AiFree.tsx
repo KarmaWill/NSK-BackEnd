@@ -450,8 +450,8 @@ export function AiFree() {
   const langBtnStyle = (key: LangKey, active: boolean) =>
     key === 'CN'
       ? active
-        ? { background: '#8a1c2b', borderColor: '#8a1c2b', color: '#fff' }
-        : { background: '#fff5f5', borderColor: '#8a1c2b', color: '#8a1c2b' }
+        ? { background: 'var(--brand)', borderColor: 'var(--brand)', color: '#fff' }
+        : { background: 'var(--brand-pale)', borderColor: 'var(--brand)', color: 'var(--brand)' }
       : undefined;
 
   return (

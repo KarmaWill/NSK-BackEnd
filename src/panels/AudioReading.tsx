@@ -208,14 +208,14 @@ export function AudioReading({ pageTitle = '有声阅读配置' }: { pageTitle?:
     if (key !== 'CN') return undefined;
     return active
       ? {
-          background: '#8a1c2b',
-          borderColor: '#8a1c2b',
+          background: 'var(--brand)',
+          borderColor: 'var(--brand)',
           color: '#fff',
         }
       : {
-          background: '#fff5f5',
-          borderColor: '#8a1c2b',
-          color: '#8a1c2b',
+          background: 'var(--brand-pale)',
+          borderColor: 'var(--brand)',
+          color: 'var(--brand)',
         };
   };
 

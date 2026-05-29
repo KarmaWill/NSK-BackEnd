@@ -72,13 +72,7 @@ function CMSApp() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="logo-mark">
-            <div className="logo-icon">汉</div>
-            <div>
-              <div className="logo-text">NSK Chinese</div>
-              <div className="logo-sub">CMS Admin v1.0</div>
-            </div>
-          </div>
+          <img src="/sidebar-logo.png" alt="C-Lingo AIOS" className="sidebar-logo-img" />
         </div>
         <div className="role-switcher">
           <span className="role-label">角色：</span>

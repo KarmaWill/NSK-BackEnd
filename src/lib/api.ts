@@ -4,9 +4,9 @@ const API_BASE =
 
 export type ProductCode = 'hsk_web' | 'tablet_app';
 
-export const PRODUCT_OPTIONS: { code: ProductCode; label: string }[] = [
-  { code: 'hsk_web', label: 'C-Lingo 官网 (hsk_web)' },
-  { code: 'tablet_app', label: 'NSK 平板 App (tablet_app)' },
+export const PRODUCT_OPTIONS: { code: ProductCode; label: string; shortLabel: string }[] = [
+  { code: 'hsk_web', label: 'C-Lingo 官网 (hsk_web)', shortLabel: 'C-Lingo 官网' },
+  { code: 'tablet_app', label: 'NSK 平板 App (tablet_app)', shortLabel: 'NSK 平板 App' },
 ];
 
 const TOKEN_KEY = 'clingo-admin-token';

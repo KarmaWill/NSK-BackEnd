@@ -45,6 +45,7 @@ export default function App() {
         onNavigate={setActivePanel}
         activeCourseLibId={activeCourseLibId}
         onActiveCourseLibChange={setActiveCourseLibId}
+        username={user.username}
       />
       <div className="main">
         <Topbar

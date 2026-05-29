@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { PanelId } from '../types';
 import { COURSE_LIBS_UPDATED_EVENT, loadCourseLibs, type CourseLibRow } from '../stores/courseLibs';
+import {
+  getActiveProduct,
+  setActiveProduct,
+  PRODUCT_OPTIONS,
+  type ProductCode,
+} from '../lib/api';
+import { ADMIN_PROFILE_UPDATED_EVENT, loadAdminProfile } from '../stores/adminProfile';
+import { FoxAvatar } from './FoxAvatar';
+import { AdminProfileModal } from './AdminProfileModal';
 
 type Props = {
   activePanel: PanelId;
   onNavigate: (id: PanelId) => void;
   activeCourseLibId: string;
   onActiveCourseLibChange: (id: string) => void;
+  username: string;
 };
 
 const ICONS: Record<string, JSX.Element> = {
@@ -37,11 +47,29 @@ const ICONS: Record<string, JSX.Element> = {
   sysconfig: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>),
 };
 
-export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCourseLibChange }: Props) {
+export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCourseLibChange, username }: Props) {
   const [role, setRole] = useState<'admin' | 'editor'>('admin');
+  const [product, setProduct] = useState<ProductCode>(() => getActiveProduct());
+  const [profile, setProfile] = useState(() => loadAdminProfile());
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [courseLibs, setCourseLibs] = useState<CourseLibRow[]>(() => loadCourseLibs());
   const [hskExpanded, setHskExpanded] = useState(false);
   const isAdmin = role === 'admin';
+  const roleLabel = role === 'admin' ? '管理员' : '课研';
+  useEffect(() => {
+    const onProduct = () => setProduct(getActiveProduct());
+    window.addEventListener('clingo-product-changed', onProduct);
+    return () => window.removeEventListener('clingo-product-changed', onProduct);
+  }, []);
+  useEffect(() => {
+    const syncProfile = () => setProfile(loadAdminProfile());
+    window.addEventListener(ADMIN_PROFILE_UPDATED_EVENT, syncProfile);
+    window.addEventListener('storage', syncProfile);
+    return () => {
+      window.removeEventListener(ADMIN_PROFILE_UPDATED_EVENT, syncProfile);
+      window.removeEventListener('storage', syncProfile);
+    };
+  }, []);
   useEffect(() => {
     const sync = () => {
       const latest = loadCourseLibs();
@@ -76,13 +104,27 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-mark">
-          <div className="logo-icon">汉</div>
-          <div>
-            <div className="logo-text">NSK C-LingoAIOS</div>
-            <div className="logo-sub">UNIFIED ADMIN v1.0</div>
-          </div>
-        </div>
+        <img src="/sidebar-logo.png" alt="C-Lingo AIOS" className="sidebar-logo-img" />
+      </div>
+
+      <div className="product-switcher">
+        <div className="product-switcher-label">产品渠道</div>
+        <select
+          className="product-select"
+          value={product}
+          title="当前配置的产品渠道"
+          onChange={(e) => {
+            const code = e.target.value as ProductCode;
+            setProduct(code);
+            setActiveProduct(code);
+          }}
+        >
+          {PRODUCT_OPTIONS.map((p) => (
+            <option key={p.code} value={p.code} title={p.label}>
+              {p.shortLabel}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="role-switcher">
@@ -200,14 +242,39 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
       </nav>
 
       <div className="sidebar-footer">
-        <div className="user-card">
-          <div className="user-avatar" id="user-avatar">Adm</div>
-          <div>
-            <div className="user-name" id="user-name">群哥</div>
-            <div className="user-role" id="user-role">管理员</div>
+        <div
+          className="user-card"
+          role="button"
+          tabIndex={0}
+          title="管理员账号与头像设置"
+          onClick={() => setProfileModalOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setProfileModalOpen(true);
+            }
+          }}
+        >
+          <div className="user-avatar" id="user-avatar">
+            {profile.avatarUrl ? (
+              <img src={profile.avatarUrl} alt="" className="user-avatar-img" />
+            ) : (
+              <FoxAvatar size={40} />
+            )}
+          </div>
+          <div className="user-card-text">
+            <div className="user-name" id="user-name">{profile.displayName}</div>
+            <div className="user-role" id="user-role">{roleLabel}</div>
           </div>
         </div>
       </div>
+
+      <AdminProfileModal
+        open={profileModalOpen}
+        username={username}
+        roleLabel={roleLabel}
+        onClose={() => setProfileModalOpen(false)}
+      />
     </aside>
   );
 }

@@ -29,61 +29,46 @@ export function LoginGate({ onSuccess }: Props) {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg, #f4fff5)',
-        padding: 24,
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        className="card"
-        style={{ width: '100%', maxWidth: 420, padding: 32 }}
-      >
-        <h1 style={{ margin: '0 0 8px', fontSize: '1.35rem' }}>C-Lingo 管理后台</h1>
-        <p style={{ margin: '0 0 24px', color: 'var(--ink-light)' }}>
-          连接 API 后端 · 本地默认 http://localhost:3000
-        </p>
-        {error && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: '10px 12px',
-              borderRadius: 8,
-              background: '#fef2f2',
-              color: '#b91c1c',
-              fontSize: 14,
-            }}
-          >
-            {error}
+    <div className="login-gate">
+      <div className="login-gate-bg" aria-hidden />
+      <div className="login-gate-overlay" aria-hidden />
+
+      <div className="login-gate-panel">
+        <img
+          src="/login-logo.png"
+          alt="C-Lingo AIOS"
+          className="login-gate-logo"
+        />
+
+        <form onSubmit={handleSubmit} className="login-gate-card card">
+          <h1 className="login-gate-title">管理后台</h1>
+          <p className="login-gate-subtitle">
+            连接 API 后端 · 本地默认 http://localhost:3000
+          </p>
+          {error && <div className="login-gate-error">{error}</div>}
+          <div className="form-group mb-16">
+            <label>用户名</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+            />
           </div>
-        )}
-        <div className="form-group mb-16">
-          <label>用户名</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-          />
-        </div>
-        <div className="form-group mb-16">
-          <label>密码</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-          {loading ? '登录中…' : '登录'}
-        </button>
-      </form>
+          <div className="form-group mb-16">
+            <label>密码</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+          <button type="submit" className="btn btn-primary login-gate-submit" disabled={loading}>
+            {loading ? '登录中…' : '登录'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
