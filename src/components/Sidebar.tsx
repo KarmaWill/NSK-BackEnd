@@ -263,7 +263,7 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
 
             <div className="nav-section">
               <div className="nav-label">内容配置</div>
-              {nav('audio-reading-mgmt', '有声阅读管理')}
+              {nav('audio-reading-mgmt', '有声阅读')}
               {nav('culture', '视频中心')}
             </div>
 
@@ -272,6 +272,17 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
               {nav('hsk-question-bank', '题库管理')}
               {nav('hsk-paper', '试卷管理')}
               {nav('hsk-exam', '考试管理')}
+              {nav('hsk-diagnostic', '诊断测试')}
+              {nav('hsk-vocab-assess', '词汇测评')}
+              {nav('hsk-speaking-rater', '口语Rater')}
+              {nav('hsk-writing-rater', '写作Rater')}
+            </div>
+
+            <div className="nav-section">
+              <div className="nav-label">学习测评</div>
+              {nav('assess-mi', '多元智能测评')}
+              {nav('assess-style', '学习风格测评')}
+              {nav('assess-mbti', 'MBTI测评')}
             </div>
           </>
         )}

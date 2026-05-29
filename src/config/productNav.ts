@@ -11,6 +11,10 @@ const HSK_WEB_PANELS = new Set<PanelId>([
   'hsk-question-bank',
   'hsk-paper',
   'hsk-exam',
+  'hsk-diagnostic',
+  'hsk-vocab-assess',
+  'hsk-speaking-rater',
+  'hsk-writing-rater',
   'culture',
   'users',
   'feedback',
@@ -18,6 +22,9 @@ const HSK_WEB_PANELS = new Set<PanelId>([
   'notify',
   'news-config',
   'ops-banner',
+  'assess-mi',
+  'assess-style',
+  'assess-mbti',
 ]);
 
 export function isPanelAvailableForProduct(panel: PanelId, product: ProductCode): boolean {

@@ -28,6 +28,7 @@ import { Logs } from './Logs';
 import { MediaLib } from './MediaLib';
 import { NewsConfig } from './NewsConfig';
 import { OpsBanner } from './OpsBanner';
+import { LearningAssessment } from './LearningAssessment';
 
 type PanelProps = {
   onNavigate: (id: PanelId) => void;
@@ -49,13 +50,25 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   catalog: (p) => <Lessons {...p} />,
   resources: () => <Resources />,
   'audio-reading': () => <AudioReading />,
-  'audio-reading-mgmt': () => <AudioReading pageTitle="有声阅读管理" />,
+  'audio-reading-mgmt': () => <AudioReading pageTitle="有声阅读" />,
   questions: () => <Questions />,
   vocab: () => <Vocab />,
   hsk: () => <Hsk />,
   'hsk-question-bank': () => <HskQuestionBank />,
   'hsk-paper': () => <HskPaper />,
   'hsk-exam': () => <HskExam />,
+  'hsk-diagnostic': () => (
+    <LearningAssessment title="诊断测试" subtitle="C-Lingo 官网 · HSK 诊断测试配置" />
+  ),
+  'hsk-vocab-assess': () => (
+    <LearningAssessment title="词汇测评" subtitle="C-Lingo 官网 · 词汇测评配置" />
+  ),
+  'hsk-speaking-rater': () => (
+    <LearningAssessment title="口语Rater" subtitle="C-Lingo 官网 · 口语评分 Rater 配置" />
+  ),
+  'hsk-writing-rater': () => (
+    <LearningAssessment title="写作Rater" subtitle="C-Lingo 官网 · 写作评分 Rater 配置" />
+  ),
   culture: () => <Culture />,
   library: () => <Library />,
   users: () => <Users />,
@@ -64,6 +77,15 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   notify: () => <Notify />,
   'news-config': () => <NewsConfig />,
   'ops-banner': () => <OpsBanner />,
+  'assess-mi': () => (
+    <LearningAssessment title="多元智能测评" subtitle="C-Lingo 官网 · 多元智能测评配置" />
+  ),
+  'assess-style': () => (
+    <LearningAssessment title="学习风格测评" subtitle="C-Lingo 官网 · 学习风格测评配置" />
+  ),
+  'assess-mbti': () => (
+    <LearningAssessment title="MBTI测评" subtitle="C-Lingo 官网 · MBTI 测评配置" />
+  ),
   qtype: () => <Qtype />,
   logs: () => <Logs />,
   sysconfig: () => <SysConfig />,

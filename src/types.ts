@@ -22,12 +22,19 @@ export type PanelId =
   | 'hsk-question-bank'
   | 'hsk-paper'
   | 'hsk-exam'
+  | 'hsk-diagnostic'
+  | 'hsk-vocab-assess'
+  | 'hsk-speaking-rater'
+  | 'hsk-writing-rater'
   | 'users'
   | 'feedback'
   | 'premium'
   | 'notify'
   | 'news-config'
   | 'ops-banner'
+  | 'assess-mi'
+  | 'assess-style'
+  | 'assess-mbti'
   | 'qtype'
   | 'logs'
   | 'sysconfig'
@@ -42,7 +49,7 @@ export const NAV_LABELS: Record<PanelId, string> = {
   catalog: '目录管理',
   resources: '学习资源',
   'audio-reading': '有声阅读配置',
-  'audio-reading-mgmt': '有声阅读管理',
+  'audio-reading-mgmt': '有声阅读',
   questions: '题库管理',
   'ai-roles': 'AI 角色配置',
   'ai-capabilities': '课程AI配置',
@@ -56,12 +63,19 @@ export const NAV_LABELS: Record<PanelId, string> = {
   'hsk-question-bank': '题库管理',
   'hsk-paper': '试卷管理',
   'hsk-exam': '考试管理',
+  'hsk-diagnostic': '诊断测试',
+  'hsk-vocab-assess': '词汇测评',
+  'hsk-speaking-rater': '口语Rater',
+  'hsk-writing-rater': '写作Rater',
   users: '用户管理',
   feedback: '用户反馈池',
   premium: 'Premium 管理',
   notify: '通知推送',
   'news-config': '新闻配置',
   'ops-banner': 'Banner 配置',
+  'assess-mi': '多元智能测评',
+  'assess-style': '学习风格测评',
+  'assess-mbti': 'MBTI测评',
   qtype: '题型模板配置',
   logs: '操作日志',
   sysconfig: '系统设置',
