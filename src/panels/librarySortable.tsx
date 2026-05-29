@@ -12,7 +12,6 @@ import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import {
   SortableContext,
   arrayMove,
-  rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
@@ -138,7 +137,7 @@ export function SortableSeriesCard({
         />
         <div className="library-series-card-main">{children}</div>
       </div>
-      <div className="library-series-footer">
+      <div className="library-series-card-aside">
         <span className="library-series-stat">{footerStat}</span>
         <button type="button" className="btn btn-primary library-series-enter-btn" onClick={onEnter}>
           进入系列
@@ -216,7 +215,7 @@ export function SeriesSortableGrid({ itemIds, onDragEnd, children }: SeriesSorta
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={itemIds} strategy={rectSortingStrategy}>
+      <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
         <div className="library-series-grid">{children}</div>
       </SortableContext>
     </DndContext>

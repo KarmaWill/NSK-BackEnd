@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { parseCatalogWorkbook } from '../utils/catalogImport';
 import {
@@ -243,6 +243,50 @@ function ResourceIdCell({ ids }: { ids: string[] }) {
   );
 }
 
+type ConfirmDialogProps = {
+  open: boolean;
+  title?: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function ConfirmDialog({
+  open,
+  title = '确认操作',
+  message,
+  confirmLabel = '确认',
+  onCancel,
+  onConfirm,
+}: ConfirmDialogProps) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="modal-overlay open library-modal-stack"
+      onClick={onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <div className="modal-title">{title}</div>
+          <button type="button" className="modal-close" onClick={onCancel} aria-label="关闭">✕</button>
+        </div>
+        <div className="modal-body">{message}</div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>取消</button>
+          <button type="button" className="btn btn-primary" style={{ background: 'var(--rose)' }} onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type UnitResourceMountModalProps = {
   unit: BookUnitRow;
   onClose: () => void;
@@ -423,8 +467,11 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
     lessons: unit.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
   }));
   const [selectorSection, setSelectorSection] = useState<keyof UnitMountedResources | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ key: keyof UnitMountedResources; resourceId: string } | null>(null);
 
-  const removeMounted = (key: keyof UnitMountedResources, resourceId: string) => {
+  const confirmRemoveMounted = () => {
+    if (!removeTarget) return;
+    const { key, resourceId } = removeTarget;
     setDraft((prev) => ({
       ...prev,
       mounted: {
@@ -432,6 +479,7 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
         [key]: prev.mounted[key].filter((id) => id !== resourceId),
       },
     }));
+    setRemoveTarget(null);
   };
 
   const addMounted = (key: keyof UnitMountedResources, ids: string[]) => {
@@ -446,6 +494,9 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
   };
 
   const activeSection = MOUNT_RESOURCE_SECTIONS.find((s) => s.key === selectorSection);
+  const removeTargetSection = removeTarget
+    ? MOUNT_RESOURCE_SECTIONS.find((item) => item.key === removeTarget.key)
+    : null;
 
   return (
     <>
@@ -482,7 +533,12 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
                           <td>{getUnitResourceLabel(section.key, resourceId)}</td>
                           <td>{section.source}</td>
                           <td>
-                            <button type="button" className="btn-link" style={{ color: 'var(--rose)' }} onClick={() => removeMounted(section.key, resourceId)}>
+                            <button
+                              type="button"
+                              className="btn-link"
+                              style={{ color: 'var(--rose)' }}
+                              onClick={() => setRemoveTarget({ key: section.key, resourceId })}
+                            >
                               移除
                             </button>
                           </td>
@@ -512,6 +568,22 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
         onConfirm={(ids) => addMounted(activeSection.key, ids)}
       />
     )}
+
+    <ConfirmDialog
+      open={removeTarget !== null}
+      title="确认移除"
+      message={
+        removeTarget ? (
+          <p style={{ margin: 0 }}>
+            确认移除「{getUnitResourceLabel(removeTarget.key, removeTarget.resourceId)}」
+            {removeTargetSection ? `（${removeTargetSection.label}）` : ''}吗？
+          </p>
+        ) : null
+      }
+      confirmLabel="确认移除"
+      onCancel={() => setRemoveTarget(null)}
+      onConfirm={confirmRemoveMounted}
+    />
     </>
   );
 }
@@ -1045,22 +1117,14 @@ type AddVolumeModalProps = {
 
 function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: AddVolumeModalProps) {
   const [title, setTitle] = useState('');
-  const [titleEn, setTitleEn] = useState('');
   const [isbn, setIsbn] = useState('');
-  const [authors, setAuthors] = useState('');
   const [formats, setFormats] = useState<BookFormat[]>([]);
-  const [hskLevelMin, setHskLevelMin] = useState(series.hskLevelMin);
-  const [hskLevelMax, setHskLevelMax] = useState(series.hskLevelMax);
 
   useEffect(() => {
     if (!open) return;
     setTitle('');
-    setTitleEn('');
     setIsbn('');
-    setAuthors('');
     setFormats([]);
-    setHskLevelMin(series.hskLevelMin);
-    setHskLevelMax(series.hskLevelMax);
   }, [open, series]);
 
   const toggleFormat = (fmt: BookFormat) => {
@@ -1074,12 +1138,11 @@ function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: Ad
       seriesId: series.id,
       volumeOrder: nextVolumeOrder,
       title: title.trim(),
-      titleEn: titleEn.trim() || undefined,
       publisher: series.publisher,
       isbn: isbn.trim(),
-      authors: authors.trim() ? authors.split(',').map((a) => a.trim()) : ['待填写'],
-      hskLevelMin,
-      hskLevelMax,
+      authors: ['待填写'],
+      hskLevelMin: series.hskLevelMin,
+      hskLevelMax: series.hskLevelMax,
       features: ['综合 (听说读写并重)'],
       formats,
       premium: false,
@@ -1103,53 +1166,13 @@ function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: Ad
           <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
         </div>
         <div className="modal-body">
-          <div className="form-row">
-            <div className="form-group">
-              <label>册次</label>
-              <input className="form-input" value={`第 ${nextVolumeOrder} 册`} readOnly />
-            </div>
-            <div className="form-group">
-              <label>出版社</label>
-              <input className="form-input" value={series.publisher} readOnly />
-            </div>
+          <div className="form-group">
+            <label>书名（中文）<span className="required">*</span></label>
+            <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="如 快乐中文 第四册" />
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>书名（中文）<span className="required">*</span></label>
-              <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="如 快乐中文 第四册" />
-            </div>
-            <div className="form-group">
-              <label>英文书名</label>
-              <input className="form-input" value={titleEn} onChange={(e) => setTitleEn(e.target.value)} placeholder="如 Happy Chinese Book 4" />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>ISBN<span className="required">*</span></label>
-              <input className="form-input td-mono" value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="978-..." />
-            </div>
-            <div className="form-group">
-              <label>作者/主编</label>
-              <input className="form-input" value={authors} onChange={(e) => setAuthors(e.target.value)} placeholder="多个作者用逗号分隔" />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>最低级别</label>
-              <select className="form-input form-select" value={hskLevelMin} onChange={(e) => setHskLevelMin(e.target.value)}>
-                {EXTENDED_LEVEL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>最高级别</label>
-              <select className="form-input form-select" value={hskLevelMax} onChange={(e) => setHskLevelMax(e.target.value)}>
-                {EXTENDED_LEVEL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
+          <div className="form-group">
+            <label>ISBN<span className="required">*</span></label>
+            <input className="form-input td-mono" value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="978-..." />
           </div>
           <div className="form-group">
             <label>书籍格式</label>
@@ -1409,11 +1432,6 @@ export function Library() {
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <div className="paper-name">{book.title}</div>
-                            {primaryEnglishTitle(book.titleByLang, book.titleEn) && (
-                              <div style={{ fontSize: '12px', color: 'var(--ink-light)' }}>
-                                {primaryEnglishTitle(book.titleByLang, book.titleEn)}
-                              </div>
-                            )}
                             <div style={{ fontSize: '11px', color: 'var(--ink-lighter)', fontFamily: 'JetBrains Mono, monospace' }}>
                               ISBN: {book.isbn}
                             </div>
@@ -1567,26 +1585,30 @@ export function Library() {
                 onEnter={() => openSeries(series.id)}
                 footerStat={<>{stat.units} 单元 · {stat.lessons} 课</>}
               >
-                <div className="library-series-card-top">
-                  <div
-                    className="library-series-icon"
-                    style={{ backgroundColor: series.coverColor ?? DEFAULT_SERIES_COVER_COLOR }}
-                    aria-hidden
-                  />
-                  <div className="library-series-info">
-                    <div className="library-series-name">{series.name}</div>
-                    {series.nameEn && (
-                      <div className="library-series-name-en">{series.nameEn}</div>
-                    )}
+                <div
+                  className="library-series-icon"
+                  style={{ backgroundColor: series.coverColor ?? DEFAULT_SERIES_COVER_COLOR }}
+                  aria-hidden
+                />
+                <div className="library-series-text">
+                  <div className="library-series-title-row">
+                    <div className="library-series-info">
+                      <div className="library-series-name">{series.name}</div>
+                      {series.nameEn && (
+                        <div className="library-series-name-en">{series.nameEn}</div>
+                      )}
+                    </div>
+                    <span className="hsk-badge" style={{ background: 'var(--primary-l)', color: 'var(--primary)', flexShrink: 0 }}>
+                      {bookLevel(series)}
+                    </span>
                   </div>
-                  <span className="hsk-badge" style={{ background: 'var(--primary-l)', color: 'var(--primary)', flexShrink: 0 }}>
-                    {bookLevel(series)}
-                  </span>
-                </div>
-                <div className="library-series-desc">{series.description}</div>
-                <div className="library-series-meta">
-                  <span>{series.publisher}</span>
-                  <span>{stat.total} 册 · {stat.published} 已上架</span>
+                  <div className="library-series-detail-row">
+                    <span className="library-series-desc">{series.description}</span>
+                    <span className="library-series-meta">
+                      <span>{series.publisher}</span>
+                      <span>{stat.total} 册 · {stat.published} 已上架</span>
+                    </span>
+                  </div>
                 </div>
               </SortableSeriesCard>
             );
@@ -1642,6 +1664,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const [catalogImportOpen, setCatalogImportOpen] = useState(false);
   const [catalogImportFileName, setCatalogImportFileName] = useState('');
   const [editorToast, setEditorToast] = useState<string | null>(null);
+  const [fileToRemove, setFileToRemove] = useState<BookFileResource | null>(null);
   const catalogImportInputRef = useRef<HTMLInputElement>(null);
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
   const [customPublishers, setCustomPublishers] = useState<string[]>(() =>
@@ -1870,20 +1893,20 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
           <button
             type="button"
             role="tab"
-            aria-selected={activeTab === 'structure'}
-            className={`type-tab ${activeTab === 'structure' ? 'active' : ''}`}
-            onClick={() => setActiveTab('structure')}
-          >
-            📑 结构配置
-          </button>
-          <button
-            type="button"
-            role="tab"
             aria-selected={activeTab === 'content'}
             className={`type-tab ${activeTab === 'content' ? 'active' : ''}`}
             onClick={() => setActiveTab('content')}
           >
             📋 内容管理
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'structure'}
+            className={`type-tab ${activeTab === 'structure' ? 'active' : ''}`}
+            onClick={() => setActiveTab('structure')}
+          >
+            📑 结构配置
           </button>
           <button
             type="button"
@@ -2284,7 +2307,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                             type="button"
                             className="btn-link"
                             style={{ color: 'var(--rose)' }}
-                            onClick={() => setBookFiles((prev) => prev.filter((f) => f.id !== file.id))}
+                            onClick={() => setFileToRemove(file)}
                           >
                             移除
                           </button>
@@ -2398,6 +2421,23 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={fileToRemove !== null}
+        title="确认移除"
+        message={
+          fileToRemove ? (
+            <p style={{ margin: 0 }}>确认移除「{fileToRemove.fileName}」吗？</p>
+          ) : null
+        }
+        confirmLabel="确认移除"
+        onCancel={() => setFileToRemove(null)}
+        onConfirm={() => {
+          if (!fileToRemove) return;
+          setBookFiles((prev) => prev.filter((f) => f.id !== fileToRemove.id));
+          setFileToRemove(null);
+        }}
+      />
 
       {editorToast && <div className="hsk-toast show">{editorToast}</div>}
     </div>
