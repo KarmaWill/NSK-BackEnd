@@ -26,6 +26,8 @@ import { SysConfig } from './SysConfig';
 import { Qtype } from './Qtype';
 import { Logs } from './Logs';
 import { MediaLib } from './MediaLib';
+import { NewsConfig } from './NewsConfig';
+import { OpsBanner } from './OpsBanner';
 
 type PanelProps = {
   onNavigate: (id: PanelId) => void;
@@ -60,6 +62,8 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   feedback: () => <Feedback />,
   premium: () => <Premium />,
   notify: () => <Notify />,
+  'news-config': () => <NewsConfig />,
+  'ops-banner': () => <OpsBanner />,
   qtype: () => <Qtype />,
   logs: () => <Logs />,
   sysconfig: () => <SysConfig />,

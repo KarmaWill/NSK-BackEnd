@@ -26,6 +26,8 @@ export type PanelId =
   | 'feedback'
   | 'premium'
   | 'notify'
+  | 'news-config'
+  | 'ops-banner'
   | 'qtype'
   | 'logs'
   | 'sysconfig'
@@ -48,7 +50,7 @@ export const NAV_LABELS: Record<PanelId, string> = {
   'ai-scene': '场景训练管理',
   'ai-eval': '发音评测设置',
   'ai-api': 'API 集成配置',
-  culture: '文化视频管理',
+  culture: '视频中心',
   library: '书籍教材管理',
   hsk: 'HSK考试管理',
   'hsk-question-bank': '题库管理',
@@ -58,6 +60,8 @@ export const NAV_LABELS: Record<PanelId, string> = {
   feedback: '用户反馈池',
   premium: 'Premium 管理',
   notify: '通知推送',
+  'news-config': '新闻配置',
+  'ops-banner': 'Banner 配置',
   qtype: '题型模板配置',
   logs: '操作日志',
   sysconfig: '系统设置',

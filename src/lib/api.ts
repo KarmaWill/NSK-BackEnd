@@ -31,6 +31,11 @@ export function getActiveProduct(): ProductCode {
   return 'hsk_web';
 }
 
+export function getActiveProductLabel(): string {
+  const code = getActiveProduct();
+  return PRODUCT_OPTIONS.find((p) => p.code === code)?.shortLabel ?? PRODUCT_OPTIONS[0].shortLabel;
+}
+
 export function setActiveProduct(code: ProductCode): void {
   localStorage.setItem(PRODUCT_KEY, code);
   window.dispatchEvent(new CustomEvent('clingo-product-changed', { detail: code }));

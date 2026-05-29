@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import type { PanelId } from '../types';
 import { NAV_LABELS } from '../types';
+import { getActiveProductLabel } from '../lib/api';
 
 type Props = {
   panelId: PanelId;
@@ -9,11 +11,22 @@ type Props = {
 
 export function Topbar({ panelId, username, onLogout }: Props) {
   const title = NAV_LABELS[panelId] ?? panelId;
+  const [productLabel, setProductLabel] = useState(() => getActiveProductLabel());
+
+  useEffect(() => {
+    const sync = () => setProductLabel(getActiveProductLabel());
+    window.addEventListener('clingo-product-changed', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('clingo-product-changed', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
 
   return (
     <header className="topbar">
       <div className="breadcrumb" id="breadcrumb">
-        <span>C-Lingo AIOS</span>
+        <span>{productLabel}</span>
         <span className="breadcrumb-sep">›</span>
         <span className="breadcrumb-curr" id="bc-curr">{title}</span>
       </div>

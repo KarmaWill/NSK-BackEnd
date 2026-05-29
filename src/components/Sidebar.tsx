@@ -8,6 +8,7 @@ import {
   type ProductCode,
 } from '../lib/api';
 import { ADMIN_PROFILE_UPDATED_EVENT, loadAdminProfile } from '../stores/adminProfile';
+import { isTabletAppProduct } from '../config/productNav';
 import { FoxAvatar } from './FoxAvatar';
 import { AdminProfileModal } from './AdminProfileModal';
 
@@ -56,6 +57,7 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
   const [hskExpanded, setHskExpanded] = useState(false);
   const isAdmin = role === 'admin';
   const roleLabel = role === 'admin' ? '管理员' : '课研';
+  const isTabletApp = isTabletAppProduct(product);
   useEffect(() => {
     const onProduct = () => setProduct(getActiveProduct());
     window.addEventListener('clingo-product-changed', onProduct);
@@ -98,6 +100,31 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
       {ICONS[id] ?? ICONS['dashboard']}
       {label}
       {badge && <span className={`nav-badge ${badge.className ?? ''}`}>{badge.text}</span>}
+    </div>
+  );
+
+  const hskNavBlock = () => (
+    <div className="course-tree">
+      <div className="course-tree-node">
+        <div
+          className={`nav-item ${activePanel === 'hsk' || activePanel === 'hsk-question-bank' || activePanel === 'hsk-paper' || activePanel === 'hsk-exam' ? 'active' : ''}`}
+          role="button"
+          tabIndex={0}
+          onClick={() => setHskExpanded(!hskExpanded)}
+          onKeyDown={(e) => e.key === 'Enter' && setHskExpanded(!hskExpanded)}
+        >
+          <span className="course-lib-dot">{hskExpanded ? '▼' : '▶'}</span>
+          {ICONS['hsk']}
+          HSK考试管理
+        </div>
+        {hskExpanded && (
+          <div className="course-lib-children">
+            {nav('hsk-question-bank', '题库管理', undefined, 'course-child-item')}
+            {nav('hsk-paper', '试卷管理', undefined, 'course-child-item')}
+            {nav('hsk-exam', '考试管理', undefined, 'course-child-item')}
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -148,13 +175,17 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
         <div className="nav-section">
           <div className="nav-label">资源库</div>
           {nav('medialib', '资源库')}
+          {!isTabletApp && nav('database', '数据库管理')}
         </div>
 
+        {isTabletApp && (
         <div className="nav-section">
           <div className="nav-label">数据库</div>
           {nav('database', '数据库管理')}
         </div>
+        )}
 
+        {isTabletApp && (
         <div className="nav-section">
           <div className="nav-label nav-label-row">
             <span>课程库</span>
@@ -186,52 +217,66 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
             ))}
           </div>
         </div>
+        )}
 
-        <div className="nav-section">
-          <div className="nav-label">AI 配置</div>
-          {nav('ai-roles', 'AI 角色配置')}
-          {nav('ai-free', '自由对话训练')}
-          {nav('ai-scene', '场景训练管理')}
-        </div>
-
-        <div className="nav-section">
-          <div className="nav-label">专业内容管理</div>
-          {nav('audio-reading-mgmt', '有声阅读管理')}
-          {nav('library', '书籍教材管理')}
-          <div className="course-tree">
-            <div className="course-tree-node">
-              <div
-                className={`nav-item ${activePanel === 'hsk' || activePanel === 'hsk-question-bank' || activePanel === 'hsk-paper' || activePanel === 'hsk-exam' ? 'active' : ''}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => setHskExpanded(!hskExpanded)}
-                onKeyDown={(e) => e.key === 'Enter' && setHskExpanded(!hskExpanded)}
-              >
-                <span className="course-lib-dot">{hskExpanded ? '▼' : '▶'}</span>
-                {ICONS['hsk']}
-                HSK考试管理
-              </div>
-              {hskExpanded && (
-                <div className="course-lib-children">
-                  {nav('hsk-question-bank', '题库管理', undefined, 'course-child-item')}
-                  {nav('hsk-paper', '试卷管理', undefined, 'course-child-item')}
-                  {nav('hsk-exam', '考试管理', undefined, 'course-child-item')}
-                </div>
-              )}
+        {isTabletApp ? (
+          <>
+            <div className="nav-section">
+              <div className="nav-label">AI 配置</div>
+              {nav('ai-roles', 'AI 角色配置')}
+              {nav('ai-free', '自由对话训练')}
+              {nav('ai-scene', '场景训练管理')}
             </div>
-          </div>
-          {nav('culture', '文化视频管理')}
-        </div>
 
-        <div className="nav-section">
-          <div className="nav-label">用户 & 运营</div>
-          {nav('users', '用户管理', { text: '2.4k', className: 'ok' })}
-          {nav('feedback', '用户反馈池')}
-          {nav('premium', 'Premium 管理')}
-          {nav('notify', '通知推送', { text: '3', className: 'warn' })}
-        </div>
+            <div className="nav-section">
+              <div className="nav-label">专业内容管理</div>
+              {nav('audio-reading-mgmt', '有声阅读管理')}
+              {nav('library', '书籍教材管理')}
+              {hskNavBlock()}
+              {nav('culture', '文化视频管理')}
+            </div>
 
-        {isAdmin && (
+            <div className="nav-section">
+              <div className="nav-label">用户 & 运营</div>
+              {nav('users', '用户管理', { text: '2.4k', className: 'ok' })}
+              {nav('feedback', '用户反馈池')}
+              {nav('premium', 'Premium 管理')}
+              {nav('notify', '通知推送', { text: '3', className: 'warn' })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="nav-section">
+              <div className="nav-label">用户 & 运营</div>
+              {nav('users', '用户管理', { text: '2.4k', className: 'ok' })}
+              {nav('feedback', '用户反馈池')}
+              {nav('premium', 'Premium 管理')}
+              {nav('notify', '通知推送', { text: '3', className: 'warn' })}
+              {nav('ops-banner', 'Banner 配置')}
+              {nav('news-config', '新闻配置')}
+            </div>
+
+            <div className="nav-section">
+              <div className="nav-label">AI 配置</div>
+              {nav('ai-roles', 'AI 角色配置')}
+            </div>
+
+            <div className="nav-section">
+              <div className="nav-label">内容配置</div>
+              {nav('audio-reading-mgmt', '有声阅读管理')}
+              {nav('culture', '视频中心')}
+            </div>
+
+            <div className="nav-section">
+              <div className="nav-label">HSK 考试管理</div>
+              {nav('hsk-question-bank', '题库管理')}
+              {nav('hsk-paper', '试卷管理')}
+              {nav('hsk-exam', '考试管理')}
+            </div>
+          </>
+        )}
+
+        {isTabletApp && isAdmin && (
           <div className="nav-section" id="admin-section">
             <div className="nav-label">系统管理</div>
             {nav('qtype', '题型模板配置')}

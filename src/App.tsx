@@ -5,7 +5,8 @@ import { Topbar } from './components/Topbar';
 import { PanelContent } from './panels';
 import { LoginGate } from './components/LoginGate';
 import { loadCourseLibs, COURSE_LIBS_UPDATED_EVENT } from './stores/courseLibs';
-import { getToken, logout, type AuthUser } from './lib/api';
+import { getToken, logout, type AuthUser, getActiveProduct } from './lib/api';
+import { isPanelAvailableForProduct } from './config/productNav';
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -30,6 +31,16 @@ export default function App() {
     };
     window.addEventListener(COURSE_LIBS_UPDATED_EVENT, sync);
     return () => window.removeEventListener(COURSE_LIBS_UPDATED_EVENT, sync);
+  }, []);
+
+  useEffect(() => {
+    const syncPanelForProduct = () => {
+      const product = getActiveProduct();
+      setActivePanel((prev) => (isPanelAvailableForProduct(prev, product) ? prev : 'dashboard'));
+    };
+    syncPanelForProduct();
+    window.addEventListener('clingo-product-changed', syncPanelForProduct);
+    return () => window.removeEventListener('clingo-product-changed', syncPanelForProduct);
   }, []);
 
   if (!authChecked) return null;

@@ -25,9 +25,9 @@ export function Dashboard({ onNavigate }: Props) {
     <div className="dashboard-shell">
       <section className="dashboard-hero">
         <div className="dashboard-hero-copy">
-          <div className="dashboard-eyebrow">NSK Horizon OS</div>
+          <div className="dashboard-eyebrow">C-Lingo AIOS</div>
           <h1>数据仪表盘</h1>
-          <p>字灵大陆 · 综合运营概览</p>
+          <p>数据监控概览</p>
           <div className="dashboard-hero-tags">
             <span>Learning Ops</span>
             <span>AI Training</span>

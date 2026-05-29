@@ -1,7 +1,7 @@
 const items = [
-  { title: 'Beijing, China\'s Capital City', type: '视频', course: 'Unit 4', unlock: '完成Unit 4', status: '已发布' },
-  { title: 'Culture Hub — Tips & Etiquette', type: '文章', course: '通用', unlock: '免费', status: '已发布' },
-  { title: '文化奖励：中国新年', type: '交互', course: 'Unit 6', unlock: '完成Unit 6', status: '草稿' },
+  { title: 'Homepage Hero Film', position: '官网首页首屏', duration: '00:45', publishAt: '2026-05-20', status: '已发布' },
+  { title: 'AI Speaking Demo', position: 'AI 口语介绍区', duration: '00:32', publishAt: '2026-05-18', status: '已发布' },
+  { title: 'HSK Learning Journey', position: '考试转化页', duration: '00:58', publishAt: '待定', status: '草稿' },
 ];
 
 export function Culture() {
@@ -9,8 +9,8 @@ export function Culture() {
     <>
       <div className="page-header">
         <div>
-          <div className="page-title">文化视频管理</div>
-          <div className="page-subtitle">管理文化视频、文章与交互内容</div>
+          <div className="page-title">视频中心</div>
+          <div className="page-subtitle">配置 C-Lingo 官网大视频、展示位置与上下线状态</div>
         </div>
         <div className="page-actions">
           <button type="button" className="btn btn-primary btn-sm">+ 新建内容</button>
@@ -18,21 +18,21 @@ export function Culture() {
       </div>
       <div className="card">
       <div className="card-header">
-        <div className="card-title">内容列表</div>
-        <button type="button" className="btn btn-primary btn-sm">+ 新建内容</button>
+        <div className="card-title">官网视频配置</div>
+        <button type="button" className="btn btn-primary btn-sm">+ 新建视频</button>
       </div>
       <div className="card-body">
         <table>
           <thead>
-            <tr><th>标题</th><th>类型</th><th>关联课程</th><th>解锁条件</th><th>状态</th><th>操作</th></tr>
+            <tr><th>视频标题</th><th>展示位置</th><th>时长</th><th>上线时间</th><th>状态</th><th>操作</th></tr>
           </thead>
           <tbody>
             {items.map((row) => (
               <tr key={row.title}>
                 <td><b>{row.title}</b></td>
-                <td><span className={`badge ${row.type === '视频' ? 'badge-indigo' : row.type === '文章' ? 'badge-green' : 'badge-amber'}`}>{row.type}</span></td>
-                <td>{row.course}</td>
-                <td>{row.unlock}</td>
+                <td>{row.position}</td>
+                <td><span className="td-mono">{row.duration}</span></td>
+                <td>{row.publishAt}</td>
                 <td><span className={`badge ${row.status === '已发布' ? 'badge-teal' : 'badge-amber'}`}>{row.status}</span></td>
                 <td><button type="button" className="btn btn-secondary btn-sm">编辑</button></td>
               </tr>
