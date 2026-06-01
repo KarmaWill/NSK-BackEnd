@@ -21,6 +21,7 @@ import {
 import {
   LANG_OPTIONS,
   autoTranslateTitleByLang,
+  formatVolumeLabelCn,
   primaryEnglishTitle,
   resolveTitleByLang,
   type LangKey,
@@ -48,7 +49,9 @@ type Book = {
   title: string;
   titleEn?: string;
   titleByLang?: TitleByLang;
+  volumeLabelByLang?: TitleByLang;
   publisher: string;
+  publisherByLang?: TitleByLang;
   isbn: string;
   authors: string[];
   hskLevelMin: string;
@@ -1629,6 +1632,56 @@ export function Library() {
 }
 
 // 书籍编辑器组件
+type LibraryMultilangPanelProps = {
+  langTab: LangKey;
+  onLangTabChange: (lang: LangKey) => void;
+  valueByLang: TitleByLang;
+  onChange: (lang: LangKey, value: string) => void;
+  onAutoTranslate: () => void;
+  placeholder?: string;
+  hint?: ReactNode;
+};
+
+function LibraryMultilangPanel({
+  langTab,
+  onLangTabChange,
+  valueByLang,
+  onChange,
+  onAutoTranslate,
+  placeholder,
+  hint,
+}: LibraryMultilangPanelProps) {
+  return (
+    <div className="library-multilang-panel">
+      <div className="library-multilang-toolbar">
+        <div className="library-multilang-tabs">
+          {LANG_OPTIONS.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              className={`btn btn-sm ${langTab === o.key ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => onLangTabChange(o.key)}
+            >
+              {o.key} {o.label}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onAutoTranslate}>
+          自动翻译
+        </button>
+      </div>
+      <input
+        type="text"
+        className="form-input"
+        value={valueByLang[langTab] ?? ''}
+        onChange={(e) => onChange(langTab, e.target.value)}
+        placeholder={placeholder ?? `${LANG_OPTIONS.find((l) => l.key === langTab)?.label ?? langTab}`}
+      />
+      {hint}
+    </div>
+  );
+}
+
 type BookEditorProps = {
   book: Book;
   seriesName?: string;
@@ -1645,9 +1698,23 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
           return { ...book, hskLevelMin: legacy.min, hskLevelMax: legacy.max };
         })();
     const titleByLang = resolveTitleByLang(base.title, base.titleEn, base.titleByLang);
+    const volumeLabelByLang = resolveTitleByLang(
+      formatVolumeLabelCn(base.volumeOrder),
+      undefined,
+      base.volumeLabelByLang,
+    );
+    const publisherByLang = resolveTitleByLang(base.publisher, undefined, base.publisherByLang);
     const legacyFormat = (base as Book & { format?: string }).format;
     const formats = base.formats ?? (legacyFormat ? [legacyFormat as BookFormat] : []);
-    return { ...base, formats, titleByLang, title: titleByLang.CN ?? base.title, titleEn: titleByLang.EN ?? base.titleEn };
+    return {
+      ...base,
+      formats,
+      titleByLang,
+      volumeLabelByLang,
+      publisherByLang,
+      title: titleByLang.CN ?? base.title,
+      titleEn: titleByLang.EN ?? base.titleEn,
+    };
   });
   const [activeTab, setActiveTab] = useState<'basic' | 'structure' | 'content' | 'resources'>('basic');
   const [bookUnits, setBookUnits] = useState<BookUnitRow[]>(() =>
@@ -1667,6 +1734,8 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const [fileToRemove, setFileToRemove] = useState<BookFileResource | null>(null);
   const catalogImportInputRef = useRef<HTMLInputElement>(null);
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
+  const [volumeLangTab, setVolumeLangTab] = useState<LangKey>('CN');
+  const [publisherLangTab, setPublisherLangTab] = useState<LangKey>('CN');
   const [customPublishers, setCustomPublishers] = useState<string[]>(() =>
     book.publisher && !KNOWN_PUBLISHERS.has(book.publisher) ? [book.publisher] : [],
   );
@@ -1686,7 +1755,14 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     const name = newPublisherName.trim();
     if (!name) return;
     setCustomPublishers((prev) => (prev.includes(name) ? prev : [...prev, name]));
-    setEditedBook((prev) => ({ ...prev, publisher: name }));
+    setEditedBook((prev) => ({
+      ...prev,
+      publisher: name,
+      publisherByLang: {
+        ...(prev.publisherByLang ?? resolveTitleByLang(prev.publisher)),
+        CN: name,
+      },
+    }));
     setNewPublisherName('');
   };
 
@@ -1732,6 +1808,10 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   };
 
   const titleByLang = editedBook.titleByLang ?? resolveTitleByLang(editedBook.title, editedBook.titleEn);
+  const volumeLabelByLang =
+    editedBook.volumeLabelByLang ?? resolveTitleByLang(formatVolumeLabelCn(editedBook.volumeOrder));
+  const publisherByLang =
+    editedBook.publisherByLang ?? resolveTitleByLang(editedBook.publisher);
 
   const updateTitleByLang = (lang: LangKey, value: string) => {
     const next = { ...titleByLang, [lang]: value };
@@ -1755,14 +1835,81 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     }));
   };
 
+  const updateVolumeLabelByLang = (lang: LangKey, value: string) => {
+    const next = { ...volumeLabelByLang, [lang]: value };
+    setEditedBook((prev) => ({ ...prev, volumeLabelByLang: next }));
+  };
+
+  const runAutoTranslateVolume = () => {
+    const seed = (
+      volumeLabelByLang.CN ??
+      volumeLabelByLang[volumeLangTab] ??
+      formatVolumeLabelCn(editedBook.volumeOrder)
+    ).trim();
+    if (!seed) return;
+    const next = autoTranslateTitleByLang(seed);
+    setEditedBook((prev) => ({ ...prev, volumeLabelByLang: next }));
+  };
+
+  const updatePublisherByLang = (lang: LangKey, value: string) => {
+    const next = { ...publisherByLang, [lang]: value };
+    setEditedBook((prev) => ({
+      ...prev,
+      publisherByLang: next,
+      publisher: lang === 'CN' ? value : prev.publisher,
+    }));
+  };
+
+  const runAutoTranslatePublisher = () => {
+    const seed = (publisherByLang.CN ?? publisherByLang[publisherLangTab] ?? editedBook.publisher).trim();
+    if (!seed) return;
+    const next = autoTranslateTitleByLang(seed);
+    setEditedBook((prev) => ({
+      ...prev,
+      publisherByLang: next,
+      publisher: next.CN ?? prev.publisher,
+    }));
+  };
+
+  const handleVolumeOrderChange = (volumeOrder: number) => {
+    setEditedBook((prev) => ({
+      ...prev,
+      volumeOrder,
+      volumeLabelByLang: {
+        ...(prev.volumeLabelByLang ?? resolveTitleByLang(formatVolumeLabelCn(prev.volumeOrder))),
+        CN: formatVolumeLabelCn(volumeOrder),
+      },
+    }));
+  };
+
+  const handlePublisherChange = (publisher: string) => {
+    setEditedBook((prev) => ({
+      ...prev,
+      publisher,
+      publisherByLang: {
+        ...(prev.publisherByLang ?? resolveTitleByLang(prev.publisher)),
+        CN: publisher,
+      },
+    }));
+  };
+
   const handleSave = () => {
     if (!editedBook.publisher || editedBook.features.length === 0) return;
     const resolved = resolveTitleByLang(editedBook.title, editedBook.titleEn, editedBook.titleByLang);
+    const resolvedVolume = resolveTitleByLang(
+      formatVolumeLabelCn(editedBook.volumeOrder),
+      undefined,
+      editedBook.volumeLabelByLang,
+    );
+    const resolvedPublisher = resolveTitleByLang(editedBook.publisher, undefined, editedBook.publisherByLang);
     onSave({
       ...editedBook,
       titleByLang: resolved,
+      volumeLabelByLang: resolvedVolume,
+      publisherByLang: resolvedPublisher,
       title: resolved.CN?.trim() || editedBook.title,
       titleEn: resolved.EN?.trim() || '',
+      publisher: resolvedPublisher.CN?.trim() || editedBook.publisher,
     });
   };
 
@@ -1929,90 +2076,101 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
               
               <div className="form-group">
                 <label>书名（多语言）<span className="required">*</span></label>
-                <div className="library-multilang-panel">
-                  <div className="library-multilang-toolbar">
-                    <div className="library-multilang-tabs">
-                      {LANG_OPTIONS.map((o) => (
-                        <button
-                          key={o.key}
-                          type="button"
-                          className={`btn btn-sm ${titleLangTab === o.key ? 'btn-primary' : 'btn-secondary'}`}
-                          onClick={() => setTitleLangTab(o.key)}
-                        >
-                          {o.key} {o.label}
-                        </button>
+                <LibraryMultilangPanel
+                  langTab={titleLangTab}
+                  onLangTabChange={setTitleLangTab}
+                  valueByLang={titleByLang}
+                  onChange={updateTitleByLang}
+                  onAutoTranslate={runAutoTranslateTitle}
+                  placeholder={`${LANG_OPTIONS.find((l) => l.key === titleLangTab)?.label ?? titleLangTab}书名`}
+                  hint={
+                    titleLangTab === 'CN' && !(titleByLang.CN ?? '').trim() ? (
+                      <div className="form-hint" style={{ color: 'var(--rose)', marginTop: 8 }}>中文书名为必填项</div>
+                    ) : undefined
+                  }
+                />
+              </div>
+
+              <div className="form-group">
+                <label>册次<span className="required">*</span></label>
+                <select
+                  className="form-input form-select"
+                  style={{ maxWidth: 320, marginBottom: 10 }}
+                  value={editedBook.volumeOrder}
+                  onChange={(e) => handleVolumeOrderChange(Number(e.target.value))}
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>第 {n} 册</option>
+                  ))}
+                </select>
+                <LibraryMultilangPanel
+                  langTab={volumeLangTab}
+                  onLangTabChange={setVolumeLangTab}
+                  valueByLang={volumeLabelByLang}
+                  onChange={updateVolumeLabelByLang}
+                  onAutoTranslate={runAutoTranslateVolume}
+                  placeholder={`${LANG_OPTIONS.find((l) => l.key === volumeLangTab)?.label ?? volumeLangTab}册次名称`}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>出版社<span className="required">*</span></label>
+                <select
+                  className="form-input form-select"
+                  style={{ maxWidth: 480, marginBottom: 10 }}
+                  value={editedBook.publisher}
+                  onChange={(e) => handlePublisherChange(e.target.value)}
+                >
+                  <option value="">请选择出版社</option>
+                  {[...publisherGroups.entries()].map(([category, pubs]) => (
+                    <optgroup key={category} label={category}>
+                      {pubs.map((p) => (
+                        <option key={p.name} value={p.name}>{p.name}</option>
                       ))}
-                    </div>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={runAutoTranslateTitle}>
-                      自动翻译
-                    </button>
-                  </div>
+                    </optgroup>
+                  ))}
+                  {customPublishers.length > 0 && (
+                    <optgroup label="自定义">
+                      {customPublishers.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                <div className="library-custom-add" style={{ marginBottom: 10 }}>
                   <input
                     type="text"
                     className="form-input"
-                    value={titleByLang[titleLangTab] ?? ''}
-                    onChange={(e) => updateTitleByLang(titleLangTab, e.target.value)}
-                    placeholder={`${LANG_OPTIONS.find((l) => l.key === titleLangTab)?.label ?? titleLangTab}书名`}
+                    placeholder="输入自定义出版社名称"
+                    value={newPublisherName}
+                    onChange={(e) => setNewPublisherName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomPublisher())}
                   />
-                  {titleLangTab === 'CN' && !(titleByLang.CN ?? '').trim() && (
-                    <div className="form-hint" style={{ color: 'var(--rose)' }}>中文书名为必填项</div>
-                  )}
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomPublisher}>
+                    + 添加
+                  </button>
                 </div>
+                {selectedPublisher?.representativeBooks && (
+                  <div className="form-hint" style={{ marginBottom: 10 }}>
+                    代表系列：{selectedPublisher.representativeBooks}
+                  </div>
+                )}
+                <LibraryMultilangPanel
+                  langTab={publisherLangTab}
+                  onLangTabChange={setPublisherLangTab}
+                  valueByLang={publisherByLang}
+                  onChange={updatePublisherByLang}
+                  onAutoTranslate={runAutoTranslatePublisher}
+                  placeholder={`${LANG_OPTIONS.find((l) => l.key === publisherLangTab)?.label ?? publisherLangTab}出版社名称`}
+                  hint={
+                    publisherLangTab === 'CN' && !editedBook.publisher ? (
+                      <div className="form-hint" style={{ color: 'var(--rose)', marginTop: 8 }}>请先选择或添加出版社</div>
+                    ) : undefined
+                  }
+                />
               </div>
 
               <div className="form-row">
-                <div className="form-group">
-                  <label>册次<span className="required">*</span></label>
-                  <select
-                    className="form-input form-select"
-                    value={editedBook.volumeOrder}
-                    onChange={(e) => setEditedBook({ ...editedBook, volumeOrder: Number(e.target.value) })}
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={n}>第 {n} 册</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>出版社<span className="required">*</span></label>
-                  <select
-                    className="form-input form-select"
-                    value={editedBook.publisher}
-                    onChange={(e) => setEditedBook({ ...editedBook, publisher: e.target.value })}
-                  >
-                    <option value="">请选择出版社</option>
-                    {[...publisherGroups.entries()].map(([category, pubs]) => (
-                      <optgroup key={category} label={category}>
-                        {pubs.map((p) => (
-                          <option key={p.name} value={p.name}>{p.name}</option>
-                        ))}
-                      </optgroup>
-                    ))}
-                    {customPublishers.length > 0 && (
-                      <optgroup label="自定义">
-                        {customPublishers.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-                  <div className="library-custom-add">
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="输入自定义出版社名称"
-                      value={newPublisherName}
-                      onChange={(e) => setNewPublisherName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomPublisher())}
-                    />
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomPublisher}>
-                      + 添加
-                    </button>
-                  </div>
-                  {selectedPublisher?.representativeBooks && (
-                    <div className="form-hint">代表系列：{selectedPublisher.representativeBooks}</div>
-                  )}
-                </div>
                 <div className="form-group">
                   <label>ISBN<span className="required">*</span></label>
                   <input

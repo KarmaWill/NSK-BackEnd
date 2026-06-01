@@ -34,6 +34,10 @@ export function resolveTitleByLang(
   };
 }
 
+export function formatVolumeLabelCn(order: number): string {
+  return `第 ${order} 册`;
+}
+
 export function autoTranslateTitleByLang(seed: string): TitleByLang {
   const base = seed.trim();
   if (!base) return createEmptyTitleByLang();
