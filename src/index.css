@@ -2816,6 +2816,29 @@ input[type="range"].swm-range {
   font-weight: 500;
 }
 
+.library-feature-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(1, 50, 32, 0.12);
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.library-feature-tag-remove:hover {
+  background: var(--rose-l, #fde8ea);
+  color: var(--rose);
+}
+
 .library-feature-tag:hover {
   border-color: var(--ink-light);
 }

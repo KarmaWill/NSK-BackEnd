@@ -1121,18 +1121,12 @@ type AddVolumeModalProps = {
 function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: AddVolumeModalProps) {
   const [title, setTitle] = useState('');
   const [isbn, setIsbn] = useState('');
-  const [formats, setFormats] = useState<BookFormat[]>([]);
 
   useEffect(() => {
     if (!open) return;
     setTitle('');
     setIsbn('');
-    setFormats([]);
   }, [open, series]);
-
-  const toggleFormat = (fmt: BookFormat) => {
-    setFormats((prev) => (prev.includes(fmt) ? prev.filter((f) => f !== fmt) : [...prev, fmt]));
-  };
 
   const handleCreate = () => {
     if (!title.trim() || !isbn.trim()) return;
@@ -1147,7 +1141,6 @@ function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: Ad
       hskLevelMin: series.hskLevelMin,
       hskLevelMax: series.hskLevelMax,
       features: ['综合 (听说读写并重)'],
-      formats,
       premium: false,
       description: '',
       unitCount: 0,
@@ -1176,18 +1169,6 @@ function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: Ad
           <div className="form-group">
             <label>ISBN<span className="required">*</span></label>
             <input className="form-input td-mono" value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="978-..." />
-          </div>
-          <div className="form-group">
-            <label>书籍格式</label>
-            <div className="library-feature-tags">
-              {BOOK_FORMAT_OPTIONS.map((fmt) => (
-                <label key={fmt} className={`library-feature-tag ${formats.includes(fmt) ? 'selected' : ''}`}>
-                  <input type="checkbox" checked={formats.includes(fmt)} onChange={() => toggleFormat(fmt)} />
-                  {fmt}
-                </label>
-              ))}
-            </div>
-            <div className="form-hint">可多选，创建后可在书籍编辑的基本信息中继续调整</div>
           </div>
         </div>
         <div className="modal-footer">
@@ -1797,14 +1778,46 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     }));
   };
 
-  const toggleBookFormat = (fmt: BookFormat) => {
-    setEditedBook((prev) => {
-      const list = prev.formats ?? [];
-      return {
-        ...prev,
-        formats: list.includes(fmt) ? list.filter((f) => f !== fmt) : [...list, fmt],
-      };
+  const removeFeatureTag = (tag: string, category: string, isCustom: boolean) => {
+    setEditedBook((prev) => ({
+      ...prev,
+      features: prev.features.filter((f) => f !== tag),
+    }));
+    if (!isCustom) return;
+    setCustomTagsByCategory((prev) => {
+      const list = prev[category] ?? [];
+      if (!list.includes(tag)) return prev;
+      const next = list.filter((t) => t !== tag);
+      if (next.length === 0) {
+        const { [category]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [category]: next };
     });
+  };
+
+  const renderFeatureTag = (tag: string, category: string, isCustom = false) => {
+    const selected = editedBook.features.includes(tag);
+    return (
+      <label key={tag} className={`library-feature-tag ${selected ? 'selected' : ''}`}>
+        <input type="checkbox" checked={selected} onChange={() => toggleFeature(tag)} />
+        <span>{tag}</span>
+        {selected && (
+          <button
+            type="button"
+            className="library-feature-tag-remove"
+            aria-label={`移除 ${tag}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              removeFeatureTag(tag, category, isCustom);
+            }}
+          >
+            ×
+          </button>
+        )}
+      </label>
+    );
   };
 
   const titleByLang = editedBook.titleByLang ?? resolveTitleByLang(editedBook.title, editedBook.titleEn);
@@ -2221,23 +2234,6 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
               </div>
 
               <div className="form-group">
-                <label>书籍格式</label>
-                <div className="library-feature-tags">
-                  {BOOK_FORMAT_OPTIONS.map((fmt) => (
-                    <label key={fmt} className={`library-feature-tag ${(editedBook.formats ?? []).includes(fmt) ? 'selected' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={(editedBook.formats ?? []).includes(fmt)}
-                        onChange={() => toggleBookFormat(fmt)}
-                      />
-                      {fmt}
-                    </label>
-                  ))}
-                </div>
-                <div className="form-hint">选择本书包含的资源包格式，可多选</div>
-              </div>
-
-              <div className="form-group">
                 <label>功能模块标签<span className="required">*</span></label>
                 <div className="library-feature-picker">
                   {FEATURE_CATEGORIES.map((cat) => {
@@ -2246,26 +2242,8 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                     <div key={cat.category} className="library-feature-group">
                       <div className="library-feature-group-title">{cat.category}</div>
                       <div className="library-feature-tags">
-                        {cat.tags.map((tag) => (
-                          <label key={tag} className={`library-feature-tag ${editedBook.features.includes(tag) ? 'selected' : ''}`}>
-                            <input
-                              type="checkbox"
-                              checked={editedBook.features.includes(tag)}
-                              onChange={() => toggleFeature(tag)}
-                            />
-                            {tag}
-                          </label>
-                        ))}
-                        {customTags.map((tag) => (
-                          <label key={tag} className={`library-feature-tag ${editedBook.features.includes(tag) ? 'selected' : ''}`}>
-                            <input
-                              type="checkbox"
-                              checked={editedBook.features.includes(tag)}
-                              onChange={() => toggleFeature(tag)}
-                            />
-                            {tag}
-                          </label>
-                        ))}
+                        {cat.tags.map((tag) => renderFeatureTag(tag, cat.category))}
+                        {customTags.map((tag) => renderFeatureTag(tag, cat.category, true))}
                       </div>
                       <div className="library-custom-add">
                         <input
