@@ -3109,6 +3109,31 @@ input[type="range"].swm-range {
   color: #2563eb;
 }
 
+.library-format-badge-video {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.library-format-badge-guidance {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.library-format-badge-multi-media {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.library-format-badge-point-read-jwr {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.library-format-badge-point-read {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
 .library-content-tree {
   display: flex;
   flex-direction: column;

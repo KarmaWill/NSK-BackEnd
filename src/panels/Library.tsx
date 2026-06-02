@@ -10,6 +10,14 @@ import {
   reorderByVolumeOrder,
 } from './librarySortable';
 import {
+  ALL_BOOK_RESOURCE_FILTER_OPTIONS,
+  BOOK_RESOURCE_TYPE_SELECT_OPTIONS,
+  bookResourceBadgeClass,
+  getBookResourceTypeLabel,
+  normalizeBookResourceType,
+  type BookResourceType,
+} from '../config/bookResourceTypes';
+import {
   ALL_FEATURE_TAGS,
   EXTENDED_LEVEL_OPTIONS,
   FEATURE_CATEGORIES,
@@ -18,6 +26,16 @@ import {
   parseLegacyLevel,
   publishersByCategory,
 } from '../config/bookCatalog';
+import {
+  LIBRARY_FIELD_HINTS,
+  LIBRARY_FIELD_LIMITS,
+  parseAuthorsInput,
+  sanitizeAuthorsInput,
+  sanitizeDescription,
+  sanitizeFeatureTagInput,
+  sanitizeIsbn,
+  sanitizeTitleName,
+} from '../utils/libraryFieldValidation';
 import {
   LANG_OPTIONS,
   autoTranslateTitleByLang,
@@ -57,6 +75,8 @@ type Book = {
   hskLevelMin: string;
   hskLevelMax: string;
   features: string[];
+  customFeatureTagsByCategory?: Record<string, string[]>;
+  hiddenFeatureTagsByCategory?: Record<string, string[]>;
   formats?: BookFormat[];
   premium: boolean;
   coverUrl?: string;
@@ -73,6 +93,35 @@ function bookLevel(book: Pick<Book, 'hskLevelMin' | 'hskLevelMax'>) {
   return formatHskRange(book.hskLevelMin, book.hskLevelMax);
 }
 
+function buildInitialCustomTagsByCategory(book: Book): Record<string, string[]> {
+  if (book.customFeatureTagsByCategory && Object.keys(book.customFeatureTagsByCategory).length > 0) {
+    return { ...book.customFeatureTagsByCategory };
+  }
+  const orphans = book.features.filter((f) => !ALL_FEATURE_TAGS.includes(f));
+  if (orphans.length === 0) return {};
+  return { 生活场景类: orphans };
+}
+
+function getCategoryFeatureTags(
+  presetTags: string[],
+  hiddenTags: string[],
+  customTags: string[],
+): Array<{ tag: string; isCustom: boolean }> {
+  const seen = new Set<string>();
+  const items: Array<{ tag: string; isCustom: boolean }> = [];
+  for (const tag of presetTags) {
+    if (hiddenTags.includes(tag) || seen.has(tag)) continue;
+    seen.add(tag);
+    items.push({ tag, isCustom: false });
+  }
+  for (const tag of customTags) {
+    if (seen.has(tag)) continue;
+    seen.add(tag);
+    items.push({ tag, isCustom: true });
+  }
+  return items;
+}
+
 type BookResourceFlags = {
   pointRead: boolean;
   newWords: boolean;
@@ -87,6 +136,8 @@ type BookResourceFlags = {
 type UnitMountedResources = {
   audioReading: string[];
   cultureVideo: string[];
+  sceneVideo: string[];
+  communTraining: string[];
   exam: string[];
   cultureRead: string[];
 };
@@ -110,10 +161,11 @@ type BookUnitRow = {
 
 type BookFileResource = {
   id: string;
-  type: 'JWL' | 'JWR' | 'JWRT';
+  type: BookResourceType;
   fileName: string;
   fileSize: string;
   uploadedAt: string;
+  meta?: string;
 };
 
 const BOOK_FORMAT_OPTIONS = ['JWR', 'JWL', 'JWRT'] as const;
@@ -133,15 +185,25 @@ function createEmptyResources(): BookResourceFlags {
 }
 
 function createEmptyMounted(): UnitMountedResources {
-  return { audioReading: [], cultureVideo: [], exam: [], cultureRead: [] };
+  return {
+    audioReading: [],
+    cultureVideo: [],
+    sceneVideo: [],
+    communTraining: [],
+    exam: [],
+    cultureRead: [],
+  };
 }
 
 function cloneMounted(mounted: UnitMountedResources): UnitMountedResources {
+  const empty = createEmptyMounted();
   return {
-    audioReading: [...mounted.audioReading],
-    cultureVideo: [...mounted.cultureVideo],
-    exam: [...mounted.exam],
-    cultureRead: [...mounted.cultureRead],
+    audioReading: [...(mounted.audioReading ?? empty.audioReading)],
+    cultureVideo: [...(mounted.cultureVideo ?? empty.cultureVideo)],
+    sceneVideo: [...(mounted.sceneVideo ?? empty.sceneVideo)],
+    communTraining: [...(mounted.communTraining ?? empty.communTraining)],
+    exam: [...(mounted.exam ?? empty.exam)],
+    cultureRead: [...(mounted.cultureRead ?? empty.cultureRead)],
   };
 }
 
@@ -154,6 +216,8 @@ const MOCK_BOOK_UNITS: BookUnitRow[] = [
     mounted: {
       audioReading: ['AUDIO_001', 'AUDIO_002'],
       cultureVideo: ['VIDEO_001'],
+      sceneVideo: ['SCENE_001'],
+      communTraining: ['COMM_001'],
       exam: ['EXAM_001', 'EXAM_002'],
       cultureRead: ['CULTURE_001'],
     },
@@ -180,6 +244,8 @@ const MOCK_BOOK_UNITS: BookUnitRow[] = [
     mounted: {
       audioReading: ['AUDIO_003'],
       cultureVideo: [],
+      sceneVideo: [],
+      communTraining: [],
       exam: ['EXAM_003'],
       cultureRead: ['CULTURE_002'],
     },
@@ -195,6 +261,8 @@ const MOCK_BOOK_UNITS: BookUnitRow[] = [
     mounted: {
       audioReading: ['AUDIO_004', 'AUDIO_005'],
       cultureVideo: ['VIDEO_002', 'VIDEO_003'],
+      sceneVideo: ['SCENE_002'],
+      communTraining: ['COMM_002'],
       exam: ['EXAM_004'],
       cultureRead: ['CULTURE_003'],
     },
@@ -206,33 +274,32 @@ const MOCK_BOOK_UNITS: BookUnitRow[] = [
 ];
 
 const INITIAL_BOOK_FILES: BookFileResource[] = [
-  { id: 'file-1', type: 'JWL', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15 10:30' },
-  { id: 'file-2', type: 'JWL', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20 14:15' },
-  { id: 'file-3', type: 'JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
+  { id: 'file-1', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15 10:30' },
+  { id: 'file-2', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20 14:15' },
+  { id: 'file-3', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
+  { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00', meta: '页码 12-18' },
 ];
 
 type AvailableBookFile = {
   poolId: string;
-  type: 'JWL' | 'JWR' | 'JWRT';
+  type: BookResourceType;
   fileName: string;
   fileSize: string;
   uploadedAt: string;
+  meta?: string;
 };
 
-const BOOK_FILE_TYPE_OPTIONS: Array<{ value: AvailableBookFile['type']; label: string }> = [
-  { value: 'JWL', label: 'JWL - 书籍数据包' },
-  { value: 'JWR', label: 'JWR - 书籍资源包' },
-  { value: 'JWRT', label: 'JWRT - 书籍模板包' },
-];
-
 const AVAILABLE_BOOK_FILES: AvailableBookFile[] = [
-  { poolId: 'pool-1', type: 'JWL', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15' },
-  { poolId: 'pool-2', type: 'JWL', fileName: '快乐中文第一册 修订版.jwl', fileSize: '8.2 MB', uploadedAt: '2024-02-10' },
-  { poolId: 'pool-3', type: 'JWL', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20' },
-  { poolId: 'pool-4', type: 'JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15' },
-  { poolId: 'pool-5', type: 'JWR', fileName: '快乐中文第一册_音频.jwr', fileSize: '18.4 MB', uploadedAt: '2024-03-01' },
-  { poolId: 'pool-6', type: 'JWRT', fileName: '快乐中文第一册.jwrt', fileSize: '2.1 MB', uploadedAt: '2024-01-20' },
-  { poolId: 'pool-7', type: 'JWRT', fileName: '快乐中文第一册_模板.jwrt', fileSize: '1.8 MB', uploadedAt: '2024-02-05' },
+  { poolId: 'pool-1', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15' },
+  { poolId: 'pool-2', type: 'GUIDANCE', fileName: '快乐中文第一册 修订版.jwl', fileSize: '8.2 MB', uploadedAt: '2024-02-10' },
+  { poolId: 'pool-3', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20' },
+  { poolId: 'pool-4', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15' },
+  { poolId: 'pool-5', type: 'POINT_READ_JWR', fileName: '快乐中文第一册_音频.jwr', fileSize: '18.4 MB', uploadedAt: '2024-03-01' },
+  { poolId: 'pool-6', type: 'POINT_READ', fileName: '快乐中文第一册.jwrt', fileSize: '2.1 MB', uploadedAt: '2024-01-20' },
+  { poolId: 'pool-7', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01', meta: '页码 12-18 · 时长 5:20' },
+  { poolId: 'pool-8', type: 'VIDEO', fileName: 'U2文化介绍.mp4', fileSize: '96 MB', uploadedAt: '2024-03-05', meta: '页码 24-30 · 时长 4:10' },
+  { poolId: 'pool-9', type: 'MULTI_MEDIA', fileName: 'U1多媒体包.zip', fileSize: '45 MB', uploadedAt: '2024-02-28', meta: '含视频打点 · page_num 映射' },
+  { poolId: 'pool-10', type: 'MULTI_MEDIA', fileName: 'U2互动多媒体.zip', fileSize: '52 MB', uploadedAt: '2024-03-08', meta: '含页码映射 · 3 个视频节点' },
 ];
 
 function ResourceIdCell({ ids }: { ids: string[] }) {
@@ -299,6 +366,8 @@ type UnitResourceMountModalProps = {
 const MOUNT_RESOURCE_SECTIONS: Array<{ key: keyof UnitMountedResources; label: string; source: string }> = [
   { key: 'audioReading', label: '有声阅读', source: '有声阅读处' },
   { key: 'cultureVideo', label: '文化视频', source: '资源管理处' },
+  { key: 'sceneVideo', label: '情景视频', source: '章节视频处' },
+  { key: 'communTraining', label: '交际训练', source: '交际训练处' },
   { key: 'exam', label: '测试卷', source: '试卷管理处' },
   { key: 'cultureRead', label: '文化点读', source: '文化点读处' },
 ];
@@ -320,6 +389,16 @@ const UNIT_RESOURCE_POOL: Record<keyof UnitMountedResources, UnitResourcePoolIte
     { id: 'VIDEO_001', name: '中国问候礼仪', meta: '资源管理处 · 时长 5:30' },
     { id: 'VIDEO_002', name: '汉字的起源', meta: '资源管理处 · 时长 8:20' },
     { id: 'VIDEO_003', name: '中国传统节日', meta: '资源管理处 · 时长 6:45' },
+  ],
+  sceneVideo: [
+    { id: 'SCENE_001', name: 'U1打招呼情景', meta: '章节视频处 · 时长 3:20' },
+    { id: 'SCENE_002', name: 'U1自我介绍情景', meta: '章节视频处 · 时长 4:10' },
+    { id: 'SCENE_003', name: 'U2购物情景', meta: '章节视频处 · 时长 5:00' },
+  ],
+  communTraining: [
+    { id: 'COMM_001', name: 'U1问候交际练习', meta: '交际训练处 · 6 个场景' },
+    { id: 'COMM_002', name: 'U1购物对话训练', meta: '交际训练处 · 8 个场景' },
+    { id: 'COMM_003', name: 'U2问路与指路', meta: '交际训练处 · 5 个场景' },
   ],
   exam: [
     { id: 'EXAM_001', name: 'U1单元测试卷', meta: '试卷管理处 · 15题 · 30分钟' },
@@ -599,13 +678,13 @@ type AddBookResourceModalProps = {
 };
 
 function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBookResourceModalProps) {
-  const [resourceType, setResourceType] = useState<AvailableBookFile['type']>('JWL');
+  const [resourceType, setResourceType] = useState<BookResourceType>('VIDEO');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPoolIds, setSelectedPoolIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
-    setResourceType('JWL');
+    setResourceType('VIDEO');
     setSearchQuery('');
     setSelectedPoolIds([]);
   }, [open]);
@@ -649,6 +728,7 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
         fileName: file.fileName,
         fileSize: file.fileSize,
         uploadedAt: `${file.uploadedAt} 10:00`,
+        meta: file.meta,
       })),
     );
   };
@@ -669,11 +749,11 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
               className="form-input form-select"
               value={resourceType}
               onChange={(e) => {
-                setResourceType(e.target.value as AvailableBookFile['type']);
+                setResourceType(e.target.value as BookResourceType);
                 setSelectedPoolIds([]);
               }}
             >
-              {BOOK_FILE_TYPE_OPTIONS.map((opt) => (
+              {BOOK_RESOURCE_TYPE_SELECT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
@@ -681,7 +761,9 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
 
           <div className="library-info-box" style={{ marginBottom: 16 }}>
             <div className="library-info-box-icon">📋</div>
-            <div className="library-info-box-text">从资源管理处选择已上传的文件资源，支持多选。</div>
+            <div className="library-info-box-text">
+              从资源管理处选择已上传的文件资源，支持多选。多媒体资源可含视频打点与页码映射（page_num）。
+            </div>
           </div>
 
           <div className="library-resource-picker">
@@ -716,6 +798,7 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
                           <div className="library-resource-picker-item-name">{file.fileName}</div>
                           <div className="library-resource-picker-item-meta">
                             {file.fileSize} · {file.uploadedAt}
+                            {file.meta ? ` · ${file.meta}` : ''}
                           </div>
                         </div>
                       </label>
@@ -998,16 +1081,21 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
               <input
                 className="form-input"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                maxLength={LIBRARY_FIELD_LIMITS.title}
+                onChange={(e) => setName(sanitizeTitleName(e.target.value))}
                 placeholder="如 快乐中文系列"
               />
+              <div className="form-hint">
+                {LIBRARY_FIELD_HINTS.title} · {name.length}/{LIBRARY_FIELD_LIMITS.title}
+              </div>
             </div>
             <div className="form-group">
               <label>英文名称</label>
               <input
                 className="form-input"
                 value={nameEn}
-                onChange={(e) => setNameEn(e.target.value)}
+                maxLength={LIBRARY_FIELD_LIMITS.title}
+                onChange={(e) => setNameEn(sanitizeTitleName(e.target.value))}
                 placeholder="如 Happy Chinese"
               />
             </div>
@@ -1088,10 +1176,14 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
             <textarea
               className="form-input"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              maxLength={LIBRARY_FIELD_LIMITS.description}
+              onChange={(e) => setDescription(sanitizeDescription(e.target.value))}
               rows={3}
               placeholder="简要描述系列特点、适用人群等..."
             />
+            <div className="form-hint">
+              {LIBRARY_FIELD_HINTS.description} · {description.length}/{LIBRARY_FIELD_LIMITS.description}
+            </div>
           </div>
         </div>
         <div className="modal-footer">
@@ -1164,11 +1256,13 @@ function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: Ad
         <div className="modal-body">
           <div className="form-group">
             <label>书名（中文）<span className="required">*</span></label>
-            <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="如 快乐中文 第四册" />
+            <input className="form-input" value={title} maxLength={LIBRARY_FIELD_LIMITS.title} onChange={(e) => setTitle(sanitizeTitleName(e.target.value))} placeholder="如 快乐中文 第四册" />
+            <div className="form-hint">{LIBRARY_FIELD_HINTS.title} · {title.length}/{LIBRARY_FIELD_LIMITS.title}</div>
           </div>
           <div className="form-group">
             <label>ISBN<span className="required">*</span></label>
-            <input className="form-input td-mono" value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="978-..." />
+            <input className="form-input td-mono" value={isbn} maxLength={LIBRARY_FIELD_LIMITS.isbn} onChange={(e) => setIsbn(sanitizeIsbn(e.target.value))} placeholder="978-..." />
+            <div className="form-hint">{LIBRARY_FIELD_HINTS.isbn} · {isbn.length}/{LIBRARY_FIELD_LIMITS.isbn}</div>
           </div>
         </div>
         <div className="modal-footer">
@@ -1621,6 +1715,9 @@ type LibraryMultilangPanelProps = {
   onAutoTranslate: () => void;
   placeholder?: string;
   hint?: ReactNode;
+  sanitizeValue?: (value: string) => string;
+  maxLength?: number;
+  fieldHint?: string;
 };
 
 function LibraryMultilangPanel({
@@ -1631,7 +1728,11 @@ function LibraryMultilangPanel({
   onAutoTranslate,
   placeholder,
   hint,
+  sanitizeValue,
+  maxLength,
+  fieldHint,
 }: LibraryMultilangPanelProps) {
+  const currentValue = valueByLang[langTab] ?? '';
   return (
     <div className="library-multilang-panel">
       <div className="library-multilang-toolbar">
@@ -1654,11 +1755,21 @@ function LibraryMultilangPanel({
       <input
         type="text"
         className="form-input"
-        value={valueByLang[langTab] ?? ''}
-        onChange={(e) => onChange(langTab, e.target.value)}
+        value={currentValue}
+        maxLength={maxLength}
+        onChange={(e) => {
+          const next = sanitizeValue ? sanitizeValue(e.target.value) : e.target.value;
+          onChange(langTab, next);
+        }}
         placeholder={placeholder ?? `${LANG_OPTIONS.find((l) => l.key === langTab)?.label ?? langTab}`}
       />
       {hint}
+      {fieldHint && (
+        <div className="form-hint" style={{ marginTop: hint ? 8 : 0 }}>
+          {fieldHint}
+          {maxLength != null ? ` · ${currentValue.length}/${maxLength}` : ''}
+        </div>
+      )}
     </div>
   );
 }
@@ -1706,7 +1817,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     })),
   );
   const [bookFiles, setBookFiles] = useState<BookFileResource[]>(INITIAL_BOOK_FILES);
-  const [fileTypeFilter, setFileTypeFilter] = useState<'all' | 'JWL' | 'JWR' | 'JWRT'>('all');
+  const [fileTypeFilter, setFileTypeFilter] = useState<'all' | BookResourceType>('all');
   const [resourceMountUnit, setResourceMountUnit] = useState<BookUnitRow | null>(null);
   const [addBookResourceOpen, setAddBookResourceOpen] = useState(false);
   const [catalogImportOpen, setCatalogImportOpen] = useState(false);
@@ -1720,14 +1831,14 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const [customPublishers, setCustomPublishers] = useState<string[]>(() =>
     book.publisher && !KNOWN_PUBLISHERS.has(book.publisher) ? [book.publisher] : [],
   );
-  const [customTagsByCategory, setCustomTagsByCategory] = useState<Record<string, string[]>>(() => {
-    const orphans = book.features.filter((f) => !ALL_FEATURE_TAGS.includes(f));
-    const initial: Record<string, string[]> = {};
-    if (orphans.length) initial['生活场景类'] = orphans;
-    return initial;
-  });
+  const [customTagsByCategory, setCustomTagsByCategory] = useState<Record<string, string[]>>(() =>
+    buildInitialCustomTagsByCategory(book),
+  );
+  const [hiddenTagsByCategory, setHiddenTagsByCategory] = useState<Record<string, string[]>>(() =>
+    book.hiddenFeatureTagsByCategory ? { ...book.hiddenFeatureTagsByCategory } : {},
+  );
   const [newTagByCategory, setNewTagByCategory] = useState<Record<string, string>>({});
-  const [hiddenTagsByCategory, setHiddenTagsByCategory] = useState<Record<string, string[]>>({});
+  const [authorsInput, setAuthorsInput] = useState(() => sanitizeAuthorsInput(book.authors.join(', ')));
   const [newPublisherName, setNewPublisherName] = useState('');
   const publisherGroups = useMemo(() => publishersByCategory(), []);
 
@@ -1749,16 +1860,29 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   };
 
   const addCustomFeatureTag = (category: string) => {
-    const tag = (newTagByCategory[category] ?? '').trim();
+    const tag = sanitizeFeatureTagInput(newTagByCategory[category] ?? '');
     if (!tag) return;
     const preset = FEATURE_CATEGORIES.find((c) => c.category === category)?.tags ?? [];
-    if (!preset.includes(tag)) {
+
+    if (preset.includes(tag)) {
+      setHiddenTagsByCategory((prev) => {
+        const hidden = prev[category] ?? [];
+        if (!hidden.includes(tag)) return prev;
+        const next = hidden.filter((t) => t !== tag);
+        if (next.length === 0) {
+          const { [category]: _removed, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [category]: next };
+      });
+    } else {
       setCustomTagsByCategory((prev) => {
         const list = prev[category] ?? [];
         if (list.includes(tag)) return prev;
         return { ...prev, [category]: [...list, tag] };
       });
     }
+
     setEditedBook((prev) => ({
       ...prev,
       features: prev.features.includes(tag) ? prev.features : [...prev.features, tag],
@@ -1833,7 +1957,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     editedBook.publisherByLang ?? resolveTitleByLang(editedBook.publisher);
 
   const updateTitleByLang = (lang: LangKey, value: string) => {
-    const next = { ...titleByLang, [lang]: value };
+    const next = { ...titleByLang, [lang]: sanitizeTitleName(value) };
     setEditedBook((prev) => ({
       ...prev,
       titleByLang: next,
@@ -1846,11 +1970,14 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     const seed = (titleByLang.CN ?? titleByLang[titleLangTab] ?? editedBook.title).trim();
     if (!seed) return;
     const next = autoTranslateTitleByLang(seed);
+    const sanitized = Object.fromEntries(
+      Object.entries(next).map(([key, val]) => [key, sanitizeTitleName(val ?? '')]),
+    ) as TitleByLang;
     setEditedBook((prev) => ({
       ...prev,
-      titleByLang: next,
-      title: next.CN ?? prev.title,
-      titleEn: next.EN ?? '',
+      titleByLang: sanitized,
+      title: sanitized.CN ?? prev.title,
+      titleEn: sanitized.EN ?? '',
     }));
   };
 
@@ -1914,7 +2041,12 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
 
   const handleSave = () => {
     if (!editedBook.publisher || editedBook.features.length === 0) return;
+    const parsedAuthors = parseAuthorsInput(authorsInput);
+    if (parsedAuthors.length === 0) return;
     const resolved = resolveTitleByLang(editedBook.title, editedBook.titleEn, editedBook.titleByLang);
+    const resolvedTitleByLang = Object.fromEntries(
+      Object.entries(resolved).map(([key, val]) => [key, sanitizeTitleName(val ?? '')]),
+    ) as TitleByLang;
     const resolvedVolume = resolveTitleByLang(
       formatVolumeLabelCn(editedBook.volumeOrder),
       undefined,
@@ -1923,12 +2055,17 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     const resolvedPublisher = resolveTitleByLang(editedBook.publisher, undefined, editedBook.publisherByLang);
     onSave({
       ...editedBook,
-      titleByLang: resolved,
+      titleByLang: resolvedTitleByLang,
       volumeLabelByLang: resolvedVolume,
       publisherByLang: resolvedPublisher,
-      title: resolved.CN?.trim() || editedBook.title,
-      titleEn: resolved.EN?.trim() || '',
+      customFeatureTagsByCategory: customTagsByCategory,
+      hiddenFeatureTagsByCategory: hiddenTagsByCategory,
+      title: resolvedTitleByLang.CN?.trim() || editedBook.title,
+      titleEn: resolvedTitleByLang.EN?.trim() || '',
       publisher: resolvedPublisher.CN?.trim() || editedBook.publisher,
+      isbn: sanitizeIsbn(editedBook.isbn),
+      authors: parsedAuthors,
+      description: sanitizeDescription(editedBook.description),
     });
   };
 
@@ -1945,7 +2082,10 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     setResourceMountUnit(null);
   };
 
-  const filteredBookFiles = bookFiles.filter((file) => fileTypeFilter === 'all' || file.type === fileTypeFilter);
+  const filteredBookFiles = bookFiles.filter((file) => {
+    if (fileTypeFilter === 'all') return true;
+    return normalizeBookResourceType(file.type) === fileTypeFilter;
+  });
 
   const bookFileCount = bookFiles.length;
 
@@ -2038,7 +2178,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
               type="button" 
               className="btn btn-primary btn-sm"
               onClick={handleSave}
-              disabled={!editedBook.publisher || editedBook.features.length === 0 || !(titleByLang.CN ?? editedBook.title).trim()}
+              disabled={!editedBook.publisher || editedBook.features.length === 0 || !(titleByLang.CN ?? editedBook.title).trim() || parseAuthorsInput(authorsInput).length === 0}
             >
               💾 保存
             </button>
@@ -2101,6 +2241,9 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                   valueByLang={titleByLang}
                   onChange={updateTitleByLang}
                   onAutoTranslate={runAutoTranslateTitle}
+                  sanitizeValue={sanitizeTitleName}
+                  maxLength={LIBRARY_FIELD_LIMITS.title}
+                  fieldHint={LIBRARY_FIELD_HINTS.title}
                   placeholder={`${LANG_OPTIONS.find((l) => l.key === titleLangTab)?.label ?? titleLangTab}书名`}
                   hint={
                     titleLangTab === 'CN' && !(titleByLang.CN ?? '').trim() ? (
@@ -2195,8 +2338,12 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                   <input
                     type="text"
                     value={editedBook.isbn}
-                    onChange={(e) => setEditedBook({ ...editedBook, isbn: e.target.value })}
+                    maxLength={LIBRARY_FIELD_LIMITS.isbn}
+                    onChange={(e) => setEditedBook({ ...editedBook, isbn: sanitizeIsbn(e.target.value) })}
                   />
+                  <div className="form-hint">
+                    {LIBRARY_FIELD_HINTS.isbn} · {editedBook.isbn.length}/{LIBRARY_FIELD_LIMITS.isbn}
+                  </div>
                 </div>
               </div>
 
@@ -2249,10 +2396,9 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                     <div key={cat.category} className="library-feature-group">
                       <div className="library-feature-group-title">{cat.category}</div>
                       <div className="library-feature-tags">
-                        {cat.tags
-                          .filter((tag) => !hiddenTags.includes(tag))
-                          .map((tag) => renderFeatureTag(tag, cat.category))}
-                        {customTags.map((tag) => renderFeatureTag(tag, cat.category, true))}
+                        {getCategoryFeatureTags(cat.tags, hiddenTags, customTags).map(({ tag, isCustom }) =>
+                          renderFeatureTag(tag, cat.category, isCustom),
+                        )}
                       </div>
                       <div className="library-custom-add">
                         <input
@@ -2260,12 +2406,22 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                           className="form-input"
                           placeholder="输入自定义标签"
                           value={newTagByCategory[cat.category] ?? ''}
-                          onChange={(e) => setNewTagByCategory((prev) => ({ ...prev, [cat.category]: e.target.value }))}
+                          maxLength={LIBRARY_FIELD_LIMITS.featureTag}
+                          onChange={(e) =>
+                            setNewTagByCategory((prev) => ({
+                              ...prev,
+                              [cat.category]: sanitizeFeatureTagInput(e.target.value),
+                            }))
+                          }
                           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomFeatureTag(cat.category))}
                         />
                         <button type="button" className="btn btn-secondary btn-sm" onClick={() => addCustomFeatureTag(cat.category)}>
                           + 添加
                         </button>
+                      </div>
+                      <div className="form-hint">
+                        {LIBRARY_FIELD_HINTS.featureTag}
+                        · {(newTagByCategory[cat.category] ?? '').length}/{LIBRARY_FIELD_LIMITS.featureTag}
                       </div>
                     </div>
                     );
@@ -2278,22 +2434,30 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
 
               <div className="form-group">
                 <label>作者/主编<span className="required">*</span></label>
-                <input 
-                  type="text" 
-                  value={editedBook.authors.join(', ')}
-                  onChange={(e) => setEditedBook({...editedBook, authors: e.target.value.split(',').map(a => a.trim())})}
+                <input
+                  type="text"
+                  value={authorsInput}
+                  maxLength={LIBRARY_FIELD_LIMITS.authors}
+                  onChange={(e) => setAuthorsInput(sanitizeAuthorsInput(e.target.value))}
                   placeholder="多个作者用逗号分隔"
                 />
+                <div className="form-hint">
+                  {LIBRARY_FIELD_HINTS.authors} · {authorsInput.length}/{LIBRARY_FIELD_LIMITS.authors}
+                </div>
               </div>
 
               <div className="form-group">
                 <label>书籍描述</label>
-                <textarea 
+                <textarea
                   value={editedBook.description}
-                  onChange={(e) => setEditedBook({...editedBook, description: e.target.value})}
+                  maxLength={LIBRARY_FIELD_LIMITS.description}
+                  onChange={(e) => setEditedBook({ ...editedBook, description: sanitizeDescription(e.target.value) })}
                   rows={3}
                   placeholder="简要描述书籍特点、适用人群等..."
                 />
+                <div className="form-hint">
+                  {LIBRARY_FIELD_HINTS.description} · {editedBook.description.length}/{LIBRARY_FIELD_LIMITS.description}
+                </div>
               </div>
             </div>
         </div>
@@ -2311,6 +2475,8 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                     <th style={{ minWidth: '140px' }}>单元</th>
                     <th style={{ minWidth: '120px' }}>有声阅读</th>
                     <th style={{ minWidth: '120px' }}>文化视频</th>
+                    <th style={{ minWidth: '120px' }}>情景视频</th>
+                    <th style={{ minWidth: '120px' }}>交际训练</th>
                     <th style={{ minWidth: '120px' }}>测试卷</th>
                     <th style={{ minWidth: '120px' }}>文化点读</th>
                     <th style={{ minWidth: '160px' }}>操作</th>
@@ -2319,7 +2485,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                 <tbody>
                   {bookUnits.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="library-chapter-empty">
+                      <td colSpan={8} className="library-chapter-empty">
                         暂无单元配置
                       </td>
                     </tr>
@@ -2336,6 +2502,8 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                         </td>
                         <td><ResourceIdCell ids={unit.mounted.audioReading} /></td>
                         <td><ResourceIdCell ids={unit.mounted.cultureVideo} /></td>
+                        <td><ResourceIdCell ids={unit.mounted.sceneVideo ?? []} /></td>
+                        <td><ResourceIdCell ids={unit.mounted.communTraining ?? []} /></td>
                         <td><ResourceIdCell ids={unit.mounted.exam} /></td>
                         <td><ResourceIdCell ids={unit.mounted.cultureRead} /></td>
                         <td className="library-action-cell">
@@ -2353,7 +2521,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
               <div>
                 <div className="library-info-box-title">单元级资源配置</div>
                 <div className="library-info-box-text">
-                  测试卷、有声阅读、文化视频、文化点读等资源需要在单元级别配置。点击「配置资源」为单元挂载对应资源。
+                  测试卷、有声阅读、文化视频、情景视频、交际训练、文化点读等资源需要在单元级别配置。点击「配置资源」为单元挂载对应资源。
                 </div>
               </div>
             </div>
@@ -2414,12 +2582,11 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                 className="form-input form-select"
                 value={fileTypeFilter}
                 onChange={(e) => setFileTypeFilter(e.target.value as typeof fileTypeFilter)}
-                style={{ minWidth: '140px' }}
+                style={{ minWidth: '160px' }}
               >
-                <option value="all">全部类型</option>
-                <option value="JWL">JWL</option>
-                <option value="JWR">JWR</option>
-                <option value="JWRT">JWRT</option>
+                {ALL_BOOK_RESOURCE_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -2442,7 +2609,11 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                   ) : (
                     filteredBookFiles.map((file) => (
                       <tr key={file.id}>
-                        <td><span className={`library-format-badge library-format-badge-${file.type.toLowerCase()}`}>{file.type}</span></td>
+                        <td>
+                          <span className={`library-format-badge ${bookResourceBadgeClass(file.type)}`}>
+                            {getBookResourceTypeLabel(file.type)}
+                          </span>
+                        </td>
                         <td>{file.fileName}</td>
                         <td className="td-mono">{file.fileSize}</td>
                         <td className="td-mono">{file.uploadedAt}</td>
@@ -2462,16 +2633,6 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                   )}
                 </tbody>
               </table>
-            </div>
-
-            <div className="library-info-box" style={{ marginTop: '16px' }}>
-              <div className="library-info-box-icon">💡</div>
-              <div>
-                <div className="library-info-box-title">单元级资源配置</div>
-                <div className="library-info-box-text">
-                  测试卷、有声阅读、文化视频、文化点读等资源需要在单元级别配置。请在「结构配置」Tab 中点击对应单元的「配置资源」按钮进行设置。
-                </div>
-              </div>
             </div>
           </div>
         </div>
