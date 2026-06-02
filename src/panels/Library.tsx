@@ -1727,6 +1727,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     return initial;
   });
   const [newTagByCategory, setNewTagByCategory] = useState<Record<string, string>>({});
+  const [hiddenTagsByCategory, setHiddenTagsByCategory] = useState<Record<string, string[]>>({});
   const [newPublisherName, setNewPublisherName] = useState('');
   const publisherGroups = useMemo(() => publishersByCategory(), []);
 
@@ -1783,16 +1784,23 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
       ...prev,
       features: prev.features.filter((f) => f !== tag),
     }));
-    if (!isCustom) return;
-    setCustomTagsByCategory((prev) => {
+    if (isCustom) {
+      setCustomTagsByCategory((prev) => {
+        const list = prev[category] ?? [];
+        if (!list.includes(tag)) return prev;
+        const next = list.filter((t) => t !== tag);
+        if (next.length === 0) {
+          const { [category]: _removed, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [category]: next };
+      });
+      return;
+    }
+    setHiddenTagsByCategory((prev) => {
       const list = prev[category] ?? [];
-      if (!list.includes(tag)) return prev;
-      const next = list.filter((t) => t !== tag);
-      if (next.length === 0) {
-        const { [category]: _removed, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [category]: next };
+      if (list.includes(tag)) return prev;
+      return { ...prev, [category]: [...list, tag] };
     });
   };
 
@@ -1802,20 +1810,18 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
       <label key={tag} className={`library-feature-tag ${selected ? 'selected' : ''}`}>
         <input type="checkbox" checked={selected} onChange={() => toggleFeature(tag)} />
         <span>{tag}</span>
-        {selected && (
-          <button
-            type="button"
-            className="library-feature-tag-remove"
-            aria-label={`移除 ${tag}`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              removeFeatureTag(tag, category, isCustom);
-            }}
-          >
-            ×
-          </button>
-        )}
+        <button
+          type="button"
+          className="library-feature-tag-remove"
+          aria-label={`删除 ${tag}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            removeFeatureTag(tag, category, isCustom);
+          }}
+        >
+          ×
+        </button>
       </label>
     );
   };
@@ -2238,11 +2244,14 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                 <div className="library-feature-picker">
                   {FEATURE_CATEGORIES.map((cat) => {
                     const customTags = customTagsByCategory[cat.category] ?? [];
+                    const hiddenTags = hiddenTagsByCategory[cat.category] ?? [];
                     return (
                     <div key={cat.category} className="library-feature-group">
                       <div className="library-feature-group-title">{cat.category}</div>
                       <div className="library-feature-tags">
-                        {cat.tags.map((tag) => renderFeatureTag(tag, cat.category))}
+                        {cat.tags
+                          .filter((tag) => !hiddenTags.includes(tag))
+                          .map((tag) => renderFeatureTag(tag, cat.category))}
                         {customTags.map((tag) => renderFeatureTag(tag, cat.category, true))}
                       </div>
                       <div className="library-custom-add">
