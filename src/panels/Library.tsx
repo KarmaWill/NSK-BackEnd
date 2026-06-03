@@ -22,9 +22,11 @@ import {
   EXTENDED_LEVEL_OPTIONS,
   FEATURE_CATEGORIES,
   PUBLISHERS,
+  PUBLISHER_CATEGORIES,
   formatHskRange,
   parseLegacyLevel,
   publishersByCategory,
+  type PublisherOption,
 } from '../config/bookCatalog';
 import {
   LIBRARY_FIELD_HINTS,
@@ -77,6 +79,7 @@ type Book = {
   features: string[];
   customFeatureTagsByCategory?: Record<string, string[]>;
   hiddenFeatureTagsByCategory?: Record<string, string[]>;
+  customPublishersByCategory?: Record<string, string[]>;
   formats?: BookFormat[];
   premium: boolean;
   coverUrl?: string;
@@ -100,6 +103,63 @@ function buildInitialCustomTagsByCategory(book: Book): Record<string, string[]> 
   const orphans = book.features.filter((f) => !ALL_FEATURE_TAGS.includes(f));
   if (orphans.length === 0) return {};
   return { 生活场景类: orphans };
+}
+
+function buildInitialCustomPublishersByCategory(book: Book): Record<string, string[]> {
+  if (book.customPublishersByCategory && Object.keys(book.customPublishersByCategory).length > 0) {
+    return { ...book.customPublishersByCategory };
+  }
+  if (book.publisher && !KNOWN_PUBLISHERS.has(book.publisher)) {
+    return { 自定义: [book.publisher] };
+  }
+  return {};
+}
+
+function buildInitialCustomPublisherCategories(book: Book): string[] {
+  const fromBook = book.customPublishersByCategory ? Object.keys(book.customPublishersByCategory) : [];
+  return fromBook.filter((cat) => !PUBLISHER_CATEGORIES.includes(cat));
+}
+
+function collectPublisherCategoryOptions(
+  customPublisherCategories: string[],
+  customPublishersByCategory: Record<string, string[]>,
+): string[] {
+  const seen = new Set<string>();
+  const options: string[] = [];
+  for (const cat of PUBLISHER_CATEGORIES) {
+    if (seen.has(cat)) continue;
+    seen.add(cat);
+    options.push(cat);
+  }
+  for (const cat of customPublisherCategories) {
+    if (seen.has(cat)) continue;
+    seen.add(cat);
+    options.push(cat);
+  }
+  for (const cat of Object.keys(customPublishersByCategory)) {
+    if (seen.has(cat)) continue;
+    seen.add(cat);
+    options.push(cat);
+  }
+  return options;
+}
+
+function mergePublisherGroups(
+  baseGroups: Map<string, PublisherOption[]>,
+  customPublishersByCategory: Record<string, string[]>,
+): Map<string, PublisherOption[]> {
+  const map = new Map(baseGroups);
+  for (const [category, names] of Object.entries(customPublishersByCategory)) {
+    const existing = map.get(category) ?? [];
+    const customOptions: PublisherOption[] = names.map((name) => ({
+      category,
+      name,
+      country: '',
+      representativeBooks: '',
+    }));
+    map.set(category, [...existing, ...customOptions]);
+  }
+  return map;
 }
 
 function getCategoryFeatureTags(
@@ -1212,23 +1272,21 @@ type AddVolumeModalProps = {
 
 function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: AddVolumeModalProps) {
   const [title, setTitle] = useState('');
-  const [isbn, setIsbn] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setTitle('');
-    setIsbn('');
   }, [open, series]);
 
   const handleCreate = () => {
-    if (!title.trim() || !isbn.trim()) return;
+    if (!title.trim()) return;
     onCreate({
       id: `book-${Date.now()}`,
       seriesId: series.id,
       volumeOrder: nextVolumeOrder,
       title: title.trim(),
       publisher: series.publisher,
-      isbn: isbn.trim(),
+      isbn: '',
       authors: ['待填写'],
       hskLevelMin: series.hskLevelMin,
       hskLevelMax: series.hskLevelMax,
@@ -1259,15 +1317,10 @@ function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: Ad
             <input className="form-input" value={title} maxLength={LIBRARY_FIELD_LIMITS.title} onChange={(e) => setTitle(sanitizeTitleName(e.target.value))} placeholder="如 快乐中文 第四册" />
             <div className="form-hint">{LIBRARY_FIELD_HINTS.title} · {title.length}/{LIBRARY_FIELD_LIMITS.title}</div>
           </div>
-          <div className="form-group">
-            <label>ISBN<span className="required">*</span></label>
-            <input className="form-input td-mono" value={isbn} maxLength={LIBRARY_FIELD_LIMITS.isbn} onChange={(e) => setIsbn(sanitizeIsbn(e.target.value))} placeholder="978-..." />
-            <div className="form-hint">{LIBRARY_FIELD_HINTS.isbn} · {isbn.length}/{LIBRARY_FIELD_LIMITS.isbn}</div>
-          </div>
         </div>
         <div className="modal-footer">
           <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
-          <button type="button" className="btn btn-primary" onClick={handleCreate} disabled={!title.trim() || !isbn.trim()}>
+          <button type="button" className="btn btn-primary" onClick={handleCreate} disabled={!title.trim()}>
             创建册次
           </button>
         </div>
@@ -1828,8 +1881,11 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
   const [volumeLangTab, setVolumeLangTab] = useState<LangKey>('CN');
   const [publisherLangTab, setPublisherLangTab] = useState<LangKey>('CN');
-  const [customPublishers, setCustomPublishers] = useState<string[]>(() =>
-    book.publisher && !KNOWN_PUBLISHERS.has(book.publisher) ? [book.publisher] : [],
+  const [customPublishersByCategory, setCustomPublishersByCategory] = useState<Record<string, string[]>>(() =>
+    buildInitialCustomPublishersByCategory(book),
+  );
+  const [customPublisherCategories, setCustomPublisherCategories] = useState<string[]>(() =>
+    buildInitialCustomPublisherCategories(book),
   );
   const [customTagsByCategory, setCustomTagsByCategory] = useState<Record<string, string[]>>(() =>
     buildInitialCustomTagsByCategory(book),
@@ -1840,14 +1896,48 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const [newTagByCategory, setNewTagByCategory] = useState<Record<string, string>>({});
   const [authorsInput, setAuthorsInput] = useState(() => sanitizeAuthorsInput(book.authors.join(', ')));
   const [newPublisherName, setNewPublisherName] = useState('');
+  const [newPublisherCategory, setNewPublisherCategory] = useState('');
+  const [newPublisherParentName, setNewPublisherParentName] = useState('');
   const publisherGroups = useMemo(() => publishersByCategory(), []);
+  const publisherCategoryOptions = useMemo(
+    () => collectPublisherCategoryOptions(customPublisherCategories, customPublishersByCategory),
+    [customPublisherCategories, customPublishersByCategory],
+  );
+  const mergedPublisherGroups = useMemo(
+    () => mergePublisherGroups(publisherGroups, customPublishersByCategory),
+    [publisherGroups, customPublishersByCategory],
+  );
 
   const selectedPublisher = PUBLISHERS.find((p) => p.name === editedBook.publisher);
 
+  const addCustomPublisherCategory = () => {
+    const name = newPublisherParentName.trim();
+    if (!name) return;
+    if (!PUBLISHER_CATEGORIES.includes(name) && !customPublisherCategories.includes(name)) {
+      setCustomPublisherCategories((prev) => [...prev, name]);
+    }
+    setNewPublisherCategory(name);
+    setNewPublisherParentName('');
+  };
+
   const addCustomPublisher = () => {
     const name = newPublisherName.trim();
-    if (!name) return;
-    setCustomPublishers((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    const category = newPublisherCategory.trim();
+    if (!name || !category) return;
+    const knownNames = new Set([
+      ...PUBLISHERS.map((p) => p.name),
+      ...Object.values(customPublishersByCategory).flat(),
+    ]);
+    if (knownNames.has(name)) {
+      handlePublisherChange(name);
+      setNewPublisherName('');
+      return;
+    }
+    setCustomPublishersByCategory((prev) => {
+      const list = prev[category] ?? [];
+      if (list.includes(name)) return prev;
+      return { ...prev, [category]: [...list, name] };
+    });
     setEditedBook((prev) => ({
       ...prev,
       publisher: name,
@@ -2060,6 +2150,7 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
       publisherByLang: resolvedPublisher,
       customFeatureTagsByCategory: customTagsByCategory,
       hiddenFeatureTagsByCategory: hiddenTagsByCategory,
+      customPublishersByCategory,
       title: resolvedTitleByLang.CN?.trim() || editedBook.title,
       titleEn: resolvedTitleByLang.EN?.trim() || '',
       publisher: resolvedPublisher.CN?.trim() || editedBook.publisher,
@@ -2284,33 +2375,57 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
                   onChange={(e) => handlePublisherChange(e.target.value)}
                 >
                   <option value="">请选择出版社</option>
-                  {[...publisherGroups.entries()].map(([category, pubs]) => (
+                  {[...mergedPublisherGroups.entries()].map(([category, pubs]) => (
                     <optgroup key={category} label={category}>
                       {pubs.map((p) => (
                         <option key={p.name} value={p.name}>{p.name}</option>
                       ))}
                     </optgroup>
                   ))}
-                  {customPublishers.length > 0 && (
-                    <optgroup label="自定义">
-                      {customPublishers.map((name) => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </optgroup>
-                  )}
                 </select>
-                <div className="library-custom-add" style={{ marginBottom: 10 }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="输入自定义出版社名称"
-                    value={newPublisherName}
-                    onChange={(e) => setNewPublisherName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomPublisher())}
-                  />
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomPublisher}>
-                    + 添加
-                  </button>
+                <div className="library-publisher-custom-section">
+                  <div className="form-hint" style={{ marginBottom: 8 }}>添加自定义出版社</div>
+                  <div className="library-custom-add" style={{ marginBottom: 8 }}>
+                    <select
+                      className="form-input form-select library-publisher-category-select"
+                      value={newPublisherCategory}
+                      onChange={(e) => setNewPublisherCategory(e.target.value)}
+                    >
+                      <option value="">选择父级目录</option>
+                      {publisherCategoryOptions.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="输入自定义出版社名称"
+                      value={newPublisherName}
+                      onChange={(e) => setNewPublisherName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomPublisher())}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={addCustomPublisher}
+                      disabled={!newPublisherName.trim() || !newPublisherCategory}
+                    >
+                      + 添加
+                    </button>
+                  </div>
+                  <div className="library-custom-add">
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="输入新父级目录名称"
+                      value={newPublisherParentName}
+                      onChange={(e) => setNewPublisherParentName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomPublisherCategory())}
+                    />
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomPublisherCategory}>
+                      + 添加目录
+                    </button>
+                  </div>
                 </div>
                 {selectedPublisher?.representativeBooks && (
                   <div className="form-hint" style={{ marginBottom: 10 }}>

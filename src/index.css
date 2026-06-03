@@ -2858,6 +2858,23 @@ input[type="range"].swm-range {
   flex-shrink: 0;
 }
 
+.library-publisher-custom-section {
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid var(--stone-dark);
+  border-radius: 10px;
+  background: var(--stone-lighter);
+}
+
+.library-publisher-category-select {
+  flex: 0 0 240px;
+  max-width: 280px;
+}
+
+.library-custom-add {
+  flex-wrap: wrap;
+}
+
 .library-multilang-panel {
   border: 1px solid var(--stone-dark);
   border-radius: 10px;
