@@ -1084,12 +1084,14 @@ const DEFAULT_SERIES_COVER_COLOR: SeriesCoverColor = SERIES_COVER_COLORS[0].valu
 
 type CreateSeriesModalProps = {
   open: boolean;
+  series?: BookSeries | null;
   defaultPublisher?: string;
   onClose: () => void;
-  onCreate: (series: BookSeries) => void;
+  onSubmit: (series: BookSeries) => void;
 };
 
-function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: CreateSeriesModalProps) {
+function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }: CreateSeriesModalProps) {
+  const isEdit = !!series;
   const [name, setName] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [publisher, setPublisher] = useState('');
@@ -1101,6 +1103,16 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
 
   useEffect(() => {
     if (!open) return;
+    if (series) {
+      setName(series.name);
+      setNameEn(series.nameEn ?? '');
+      setPublisher(series.publisher);
+      setHskLevelMin(series.hskLevelMin);
+      setHskLevelMax(series.hskLevelMax);
+      setDescription(series.description);
+      setCoverColor(series.coverColor ?? DEFAULT_SERIES_COVER_COLOR);
+      return;
+    }
     setName('');
     setNameEn('');
     setPublisher(defaultPublisher ?? '');
@@ -1108,13 +1120,13 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
     setHskLevelMax('HSK1级');
     setDescription('');
     setCoverColor(DEFAULT_SERIES_COVER_COLOR);
-  }, [open, defaultPublisher]);
+  }, [open, series, defaultPublisher]);
 
-  const handleCreate = () => {
+  const handleSubmit = () => {
     if (!name.trim() || !publisher) return;
-    onCreate({
-      id: `series-${Date.now()}`,
-      sortOrder: 0,
+    onSubmit({
+      id: series?.id ?? `series-${Date.now()}`,
+      sortOrder: series?.sortOrder ?? 0,
       name: name.trim(),
       nameEn: nameEn.trim() || undefined,
       publisher,
@@ -1128,10 +1140,10 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
   if (!open) return null;
 
   return (
-    <div className="modal-overlay open" onClick={onClose} role="dialog" aria-modal="true" aria-label="新建系列">
+    <div className="modal-overlay open" onClick={onClose} role="dialog" aria-modal="true" aria-label={isEdit ? '编辑系列' : '新建系列'}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         <div className="modal-header">
-          <div className="modal-title">新建系列</div>
+          <div className="modal-title">{isEdit ? '编辑系列' : '新建系列'}</div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
         </div>
         <div className="modal-body">
@@ -1251,10 +1263,10 @@ function CreateSeriesModal({ open, defaultPublisher, onClose, onCreate }: Create
           <button
             type="button"
             className="btn btn-primary"
-            onClick={handleCreate}
+            onClick={handleSubmit}
             disabled={!name.trim() || !publisher}
           >
-            创建系列
+            {isEdit ? '保存' : '创建系列'}
           </button>
         </div>
       </div>
@@ -1339,6 +1351,8 @@ export function Library() {
   const [toast, setToast] = useState<string | null>(null);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [createSeriesOpen, setCreateSeriesOpen] = useState(false);
+  const [editingSeries, setEditingSeries] = useState<BookSeries | null>(null);
+  const [deleteSeriesTarget, setDeleteSeriesTarget] = useState<BookSeries | null>(null);
   const [addVolumeOpen, setAddVolumeOpen] = useState(false);
 
   const publisherGroups = useMemo(() => publishersByCategory(), []);
@@ -1379,6 +1393,29 @@ export function Library() {
     ]);
     setCreateSeriesOpen(false);
     showToast(`已创建系列「${series.name}」`);
+  };
+
+  const handleUpdateSeries = (series: BookSeries) => {
+    setSeriesList((prev) => prev.map((item) => (item.id === series.id ? series : item)));
+    setEditingSeries(null);
+    showToast(`已更新系列「${series.name}」`);
+  };
+
+  const handleDeleteSeries = () => {
+    if (!deleteSeriesTarget) return;
+    const target = deleteSeriesTarget;
+    setSeriesList((prev) => prev.filter((item) => item.id !== target.id));
+    setBooks((prev) => prev.filter((book) => book.seriesId !== target.id));
+    if (selectedSeriesId === target.id) {
+      setSelectedSeriesId(null);
+      setView('series');
+    }
+    setDeleteSeriesTarget(null);
+    showToast(`已删除系列「${target.name}」`);
+  };
+
+  const openEditSeries = (series: BookSeries) => {
+    setEditingSeries(series);
   };
 
   const handleSeriesDragEnd = (event: DragEndEvent) => {
@@ -1714,6 +1751,8 @@ export function Library() {
                 id={series.id}
                 dragDisabled={!canReorderSeries}
                 onEnter={() => openSeries(series.id)}
+                onEdit={() => openEditSeries(series)}
+                onDelete={() => setDeleteSeriesTarget(series)}
                 footerStat={<>{stat.units} 单元 · {stat.lessons} 课</>}
               >
                 <div
@@ -1753,8 +1792,39 @@ export function Library() {
         open={createSeriesOpen}
         defaultPublisher={filterPublisher}
         onClose={() => setCreateSeriesOpen(false)}
-        onCreate={handleCreateSeries}
+        onSubmit={handleCreateSeries}
       />
+
+      <CreateSeriesModal
+        open={!!editingSeries}
+        series={editingSeries}
+        onClose={() => setEditingSeries(null)}
+        onSubmit={handleUpdateSeries}
+      />
+
+      <div
+        className={`modal-overlay${deleteSeriesTarget ? ' open' : ''}`}
+        onClick={() => setDeleteSeriesTarget(null)}
+        role="dialog"
+        aria-modal="true"
+        aria-label="删除系列"
+      >
+        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+          <div className="modal-header">
+            <div className="modal-title">删除系列</div>
+            <button type="button" className="modal-close" onClick={() => setDeleteSeriesTarget(null)} aria-label="关闭">✕</button>
+          </div>
+          <div className="modal-body">
+            <p style={{ margin: 0 }}>
+              确认删除系列「<strong>{deleteSeriesTarget?.name}</strong>」？该系列下的所有册次将一并删除，且不可恢复。
+            </p>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-ghost" onClick={() => setDeleteSeriesTarget(null)}>取消</button>
+            <button type="button" className="btn btn-danger" onClick={handleDeleteSeries}>确认删除</button>
+          </div>
+        </div>
+      </div>
     </>
   );
 }

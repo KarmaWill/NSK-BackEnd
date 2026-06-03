@@ -96,6 +96,8 @@ type SortableSeriesCardProps = {
   id: string;
   dragDisabled?: boolean;
   onEnter: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
   children: ReactNode;
   footerStat: ReactNode;
 };
@@ -104,6 +106,8 @@ export function SortableSeriesCard({
   id,
   dragDisabled,
   onEnter,
+  onEdit,
+  onDelete,
   children,
   footerStat,
 }: SortableSeriesCardProps) {
@@ -139,6 +143,28 @@ export function SortableSeriesCard({
       </div>
       <div className="library-series-card-aside">
         <span className="library-series-stat">{footerStat}</span>
+        <div className="library-series-card-actions">
+          <button
+            type="button"
+            className="library-series-action-btn library-series-edit-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+          >
+            编辑
+          </button>
+          <button
+            type="button"
+            className="library-series-action-btn library-series-delete-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            删除
+          </button>
+        </div>
         <button type="button" className="btn btn-primary library-series-enter-btn" onClick={onEnter}>
           进入系列
         </button>
