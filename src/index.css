@@ -2578,12 +2578,12 @@ input[type="range"].swm-range {
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
-  padding: 18px 20px;
+  padding: 12px 14px;
   border-left: 1px solid var(--stone-dark);
   background: var(--stone-lighter);
-  min-width: 180px;
+  min-width: 148px;
 }
 
 .library-series-card-actions {
@@ -2594,10 +2594,10 @@ input[type="range"].swm-range {
 
 .library-series-action-btn {
   flex: 1;
-  min-height: 44px;
+  min-height: 38px;
   min-width: 0;
-  padding: 0 12px;
-  font-size: 13px;
+  padding: 0 10px;
+  font-size: 12px;
   font-weight: 600;
   border: none;
   border-radius: 10px;
@@ -2715,11 +2715,191 @@ input[type="range"].swm-range {
 }
 
 .library-series-enter-btn {
-  min-height: 44px;
-  min-width: 120px;
-  padding: 0 20px;
-  font-size: 14px;
+  min-height: 38px;
+  min-width: 104px;
+  padding: 0 14px;
+  font-size: 13px;
   font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ─── Inline add dropdown (出版社 / 标签) ─── */
+.library-inline-select {
+  position: relative;
+  max-width: 480px;
+}
+
+.library-inline-select.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.library-inline-select-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 36px 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--white);
+}
+
+.library-inline-select-placeholder {
+  color: var(--ink-light);
+}
+
+.library-inline-select-value {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-inline-select-chevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -2px;
+  border-right: 2px solid var(--ink-light);
+  border-bottom: 2px solid var(--ink-light);
+  transform: translateY(-50%) rotate(45deg);
+  pointer-events: none;
+}
+
+.library-inline-select-panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: 100%;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border: 1px solid var(--stone-dark);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.library-inline-select-list {
+  overflow-y: auto;
+  max-height: 220px;
+  padding: 6px 0;
+}
+
+.library-inline-select-group-label {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-light);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.library-inline-select-option {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.library-inline-select-option:hover,
+.library-inline-select-option.is-selected {
+  background: var(--stone);
+}
+
+.library-inline-select-option.is-selected {
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.library-inline-select-divider {
+  height: 1px;
+  background: var(--stone-dark);
+  flex-shrink: 0;
+}
+
+.library-inline-select-add-trigger {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--stone-dark);
+  border-radius: 8px;
+  background: var(--stone-lighter);
+  color: var(--ink-light);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.library-inline-select-add-trigger:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-pale);
+}
+
+.library-inline-select-add-panel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.library-inline-select-add-input {
+  width: 100%;
+}
+
+.library-inline-select-add-hint {
+  margin: 0;
+}
+
+.library-inline-select-add-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.library-inline-select-add-actions .btn-primary {
+  flex: 1;
+}
+
+.library-inline-add-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.library-inline-add-extras .form-input,
+.library-inline-add-extras .form-select {
+  width: 100%;
+}
+
+.library-inline-add-extras-row {
+  display: flex;
+  gap: 8px;
+}
+
+.library-inline-add-extras-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.library-inline-add-extras-row .btn {
   flex-shrink: 0;
 }
 
