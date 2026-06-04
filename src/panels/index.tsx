@@ -30,6 +30,7 @@ import { NewsConfig } from './NewsConfig';
 import { OpsBanner } from './OpsBanner';
 import { LearningAssessment } from './LearningAssessment';
 import { DiagnosticAssessment } from './DiagnosticAssessment';
+import { VocabAssessment } from './VocabAssessment';
 import { HskCompose } from './HskCompose';
 
 type PanelProps = {
@@ -60,13 +61,7 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   'hsk-paper': () => <HskPaper />,
   'hsk-exam': () => <HskExam />,
   'hsk-diagnostic': () => <DiagnosticAssessment />,
-  'hsk-vocab-assess': () => (
-    <LearningAssessment
-      title="词汇测评"
-      subtitle="C-Lingo 官网 · 词汇测评配置"
-      configKey="hsk-vocab-assess"
-    />
-  ),
+  'hsk-vocab-assess': () => <VocabAssessment />,
   'hsk-speaking-rater': () => (
     <LearningAssessment
       title="口语Rater"
