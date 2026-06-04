@@ -2814,7 +2814,10 @@ input[type="range"].swm-range {
 .library-feature-picker {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+}
+
+.library-feature-category-block {
   padding: 14px;
   border: 1px solid var(--stone-dark);
   border-radius: 10px;
@@ -2822,52 +2825,38 @@ input[type="range"].swm-range {
 }
 
 .library-feature-group-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--ink-light);
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  color: var(--ink);
+  margin-bottom: 10px;
 }
 
-.library-feature-tags {
+.library-feature-selected-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 10px;
 }
 
-.library-feature-tag {
+.library-feature-selected-tag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 6px 10px 6px 12px;
   border-radius: 20px;
-  border: 1px solid var(--stone-dark);
-  background: var(--white);
+  border: 1px solid var(--brand);
+  background: var(--brand-pale);
+  color: var(--brand);
   font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  user-select: none;
-}
-
-.library-feature-tag input {
-  display: none;
-}
-
-.library-feature-tag.selected {
-  border-color: var(--primary);
-  background: var(--primary-l);
-  color: var(--primary);
   font-weight: 500;
 }
 
-.library-feature-tag-remove {
+.library-feature-selected-tag-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
-  margin-left: 2px;
   padding: 0;
   border: none;
   border-radius: 50%;
@@ -2879,13 +2868,13 @@ input[type="range"].swm-range {
   flex-shrink: 0;
 }
 
-.library-feature-tag-remove:hover {
+.library-feature-selected-tag-remove:hover {
   background: var(--rose-l, #fde8ea);
   color: var(--rose);
 }
 
-.library-feature-tag:hover {
-  border-color: var(--ink-light);
+.library-feature-category-block .library-publisher-custom-section {
+  margin-bottom: 0;
 }
 
 .library-custom-add {

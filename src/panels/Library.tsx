@@ -96,13 +96,49 @@ function bookLevel(book: Pick<Book, 'hskLevelMin' | 'hskLevelMax'>) {
   return formatHskRange(book.hskLevelMin, book.hskLevelMax);
 }
 
-function buildInitialCustomTagsByCategory(book: Book): Record<string, string[]> {
-  if (book.customFeatureTagsByCategory && Object.keys(book.customFeatureTagsByCategory).length > 0) {
-    return { ...book.customFeatureTagsByCategory };
+function buildInitialGlobalFeatureTags(sourceBooks: Book[]): Record<string, string[]> {
+  const merged: Record<string, string[]> = {};
+
+  const append = (category: string, tag: string) => {
+    const list = merged[category] ?? [];
+    if (list.includes(tag)) return;
+    merged[category] = [...list, tag];
+  };
+
+  for (const book of sourceBooks) {
+    if (book.customFeatureTagsByCategory) {
+      for (const [category, tags] of Object.entries(book.customFeatureTagsByCategory)) {
+        for (const tag of tags) append(category, tag);
+      }
+    }
+    for (const tag of book.features) {
+      if (ALL_FEATURE_TAGS.includes(tag)) continue;
+      const presetCategory = FEATURE_CATEGORIES.find((c) => c.tags.includes(tag))?.category;
+      append(presetCategory ?? '生活场景类', tag);
+    }
   }
-  const orphans = book.features.filter((f) => !ALL_FEATURE_TAGS.includes(f));
-  if (orphans.length === 0) return {};
-  return { 生活场景类: orphans };
+
+  return merged;
+}
+
+function getFeatureTagsForCategory(
+  category: string,
+  presetTags: string[],
+  globalCustomTags: Record<string, string[]>,
+): string[] {
+  const seen = new Set<string>();
+  const items: string[] = [];
+  for (const tag of presetTags) {
+    if (seen.has(tag)) continue;
+    seen.add(tag);
+    items.push(tag);
+  }
+  for (const tag of globalCustomTags[category] ?? []) {
+    if (seen.has(tag)) continue;
+    seen.add(tag);
+    items.push(tag);
+  }
+  return items;
 }
 
 function buildInitialCustomPublishersByCategory(book: Book): Record<string, string[]> {
@@ -160,26 +196,6 @@ function mergePublisherGroups(
     map.set(category, [...existing, ...customOptions]);
   }
   return map;
-}
-
-function getCategoryFeatureTags(
-  presetTags: string[],
-  hiddenTags: string[],
-  customTags: string[],
-): Array<{ tag: string; isCustom: boolean }> {
-  const seen = new Set<string>();
-  const items: Array<{ tag: string; isCustom: boolean }> = [];
-  for (const tag of presetTags) {
-    if (hiddenTags.includes(tag) || seen.has(tag)) continue;
-    seen.add(tag);
-    items.push({ tag, isCustom: false });
-  }
-  for (const tag of customTags) {
-    if (seen.has(tag)) continue;
-    seen.add(tag);
-    items.push({ tag, isCustom: true });
-  }
-  return items;
 }
 
 type BookResourceFlags = {
@@ -1344,6 +1360,9 @@ function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: Ad
 export function Library() {
   const [seriesList, setSeriesList] = useState<BookSeries[]>(INITIAL_SERIES);
   const [books, setBooks] = useState<Book[]>(MOCK_BOOKS);
+  const [globalFeatureTagsByCategory, setGlobalFeatureTagsByCategory] = useState<Record<string, string[]>>(
+    () => buildInitialGlobalFeatureTags(MOCK_BOOKS),
+  );
   const [view, setView] = useState<ViewMode>('series');
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [filterPublisher, setFilterPublisher] = useState('');
@@ -1481,6 +1500,8 @@ export function Library() {
         <BookEditor
           book={editingBook}
           seriesName={selectedSeries?.name}
+          globalFeatureTagsByCategory={globalFeatureTagsByCategory}
+          onGlobalFeatureTagsChange={setGlobalFeatureTagsByCategory}
           onSave={(updated) => {
             setBooks(books.map(b => b.id === updated.id ? updated : b));
             setEditingBook(updated);
@@ -1900,11 +1921,20 @@ function LibraryMultilangPanel({
 type BookEditorProps = {
   book: Book;
   seriesName?: string;
+  globalFeatureTagsByCategory: Record<string, string[]>;
+  onGlobalFeatureTagsChange: (next: Record<string, string[]>) => void;
   onSave: (book: Book) => void;
   onCancel: () => void;
 };
 
-function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
+function BookEditor({
+  book,
+  seriesName,
+  globalFeatureTagsByCategory,
+  onGlobalFeatureTagsChange,
+  onSave,
+  onCancel,
+}: BookEditorProps) {
   const [editedBook, setEditedBook] = useState<Book>(() => {
     const base = book.hskLevelMin
       ? book
@@ -1957,13 +1987,8 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
   const [customPublisherCategories, setCustomPublisherCategories] = useState<string[]>(() =>
     buildInitialCustomPublisherCategories(book),
   );
-  const [customTagsByCategory, setCustomTagsByCategory] = useState<Record<string, string[]>>(() =>
-    buildInitialCustomTagsByCategory(book),
-  );
-  const [hiddenTagsByCategory, setHiddenTagsByCategory] = useState<Record<string, string[]>>(() =>
-    book.hiddenFeatureTagsByCategory ? { ...book.hiddenFeatureTagsByCategory } : {},
-  );
-  const [newTagByCategory, setNewTagByCategory] = useState<Record<string, string>>({});
+  const [featurePickerValue, setFeaturePickerValue] = useState<Record<string, string>>({});
+  const [newGlobalTagByCategory, setNewGlobalTagByCategory] = useState<Record<string, string>>({});
   const [authorsInput, setAuthorsInput] = useState(() => sanitizeAuthorsInput(book.authors.join(', ')));
   const [newPublisherName, setNewPublisherName] = useState('');
   const [newPublisherCategory, setNewPublisherCategory] = useState('');
@@ -2019,95 +2044,50 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
     setNewPublisherName('');
   };
 
-  const addCustomFeatureTag = (category: string) => {
-    const tag = sanitizeFeatureTagInput(newTagByCategory[category] ?? '');
+  const selectFeatureTag = (category: string, tag: string) => {
     if (!tag) return;
-    const preset = FEATURE_CATEGORIES.find((c) => c.category === category)?.tags ?? [];
-
-    if (preset.includes(tag)) {
-      setHiddenTagsByCategory((prev) => {
-        const hidden = prev[category] ?? [];
-        if (!hidden.includes(tag)) return prev;
-        const next = hidden.filter((t) => t !== tag);
-        if (next.length === 0) {
-          const { [category]: _removed, ...rest } = prev;
-          return rest;
-        }
-        return { ...prev, [category]: next };
-      });
-    } else {
-      setCustomTagsByCategory((prev) => {
-        const list = prev[category] ?? [];
-        if (list.includes(tag)) return prev;
-        return { ...prev, [category]: [...list, tag] };
-      });
-    }
-
     setEditedBook((prev) => ({
       ...prev,
       features: prev.features.includes(tag) ? prev.features : [...prev.features, tag],
     }));
-    setNewTagByCategory((prev) => ({ ...prev, [category]: '' }));
+    setFeaturePickerValue((prev) => ({ ...prev, [category]: '' }));
   };
 
-  const updateHskRange = (field: 'hskLevelMin' | 'hskLevelMax', value: string) => {
-    setEditedBook((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const toggleFeature = (tag: string) => {
-    setEditedBook((prev) => ({
-      ...prev,
-      features: prev.features.includes(tag)
-        ? prev.features.filter((f) => f !== tag)
-        : [...prev.features, tag],
-    }));
-  };
-
-  const removeFeatureTag = (tag: string, category: string, isCustom: boolean) => {
+  const removeBookFeatureTag = (tag: string) => {
     setEditedBook((prev) => ({
       ...prev,
       features: prev.features.filter((f) => f !== tag),
     }));
-    if (isCustom) {
-      setCustomTagsByCategory((prev) => {
-        const list = prev[category] ?? [];
-        if (!list.includes(tag)) return prev;
-        const next = list.filter((t) => t !== tag);
-        if (next.length === 0) {
-          const { [category]: _removed, ...rest } = prev;
-          return rest;
-        }
-        return { ...prev, [category]: next };
-      });
-      return;
-    }
-    setHiddenTagsByCategory((prev) => {
-      const list = prev[category] ?? [];
-      if (list.includes(tag)) return prev;
-      return { ...prev, [category]: [...list, tag] };
-    });
   };
 
-  const renderFeatureTag = (tag: string, category: string, isCustom = false) => {
-    const selected = editedBook.features.includes(tag);
-    return (
-      <label key={tag} className={`library-feature-tag ${selected ? 'selected' : ''}`}>
-        <input type="checkbox" checked={selected} onChange={() => toggleFeature(tag)} />
-        <span>{tag}</span>
-        <button
-          type="button"
-          className="library-feature-tag-remove"
-          aria-label={`删除 ${tag}`}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            removeFeatureTag(tag, category, isCustom);
-          }}
-        >
-          ×
-        </button>
-      </label>
-    );
+  const addGlobalFeatureTag = (category: string) => {
+    const tag = sanitizeFeatureTagInput(newGlobalTagByCategory[category] ?? '');
+    if (!tag) return;
+
+    const presetTags = FEATURE_CATEGORIES.find((c) => c.category === category)?.tags ?? [];
+    const existingTags = getFeatureTagsForCategory(category, presetTags, globalFeatureTagsByCategory);
+    if (existingTags.includes(tag)) {
+      setEditedBook((prev) => ({
+        ...prev,
+        features: prev.features.includes(tag) ? prev.features : [...prev.features, tag],
+      }));
+      setNewGlobalTagByCategory((prev) => ({ ...prev, [category]: '' }));
+      return;
+    }
+
+    onGlobalFeatureTagsChange({
+      ...globalFeatureTagsByCategory,
+      [category]: [...(globalFeatureTagsByCategory[category] ?? []), tag],
+    });
+    setEditedBook((prev) => ({
+      ...prev,
+      features: prev.features.includes(tag) ? prev.features : [...prev.features, tag],
+    }));
+    setNewGlobalTagByCategory((prev) => ({ ...prev, [category]: '' }));
+  };
+
+  const updateHskRange = (field: 'hskLevelMin' | 'hskLevelMax', value: string) => {
+    setEditedBook((prev) => ({ ...prev, [field]: value }));
   };
 
   const titleByLang = editedBook.titleByLang ?? resolveTitleByLang(editedBook.title, editedBook.titleEn);
@@ -2218,8 +2198,6 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
       titleByLang: resolvedTitleByLang,
       volumeLabelByLang: resolvedVolume,
       publisherByLang: resolvedPublisher,
-      customFeatureTagsByCategory: customTagsByCategory,
-      hiddenFeatureTagsByCategory: hiddenTagsByCategory,
       customPublishersByCategory,
       title: resolvedTitleByLang.CN?.trim() || editedBook.title,
       titleEn: resolvedTitleByLang.EN?.trim() || '',
@@ -2573,42 +2551,80 @@ function BookEditor({ book, seriesName, onSave, onCancel }: BookEditorProps) {
 
               <div className="form-group">
                 <label>功能模块标签<span className="required">*</span></label>
+                <div className="form-hint" style={{ marginBottom: 12 }}>
+                  标签为全库共用；在此新增后，所有书籍的下拉选项中均可见。
+                </div>
                 <div className="library-feature-picker">
                   {FEATURE_CATEGORIES.map((cat) => {
-                    const customTags = customTagsByCategory[cat.category] ?? [];
-                    const hiddenTags = hiddenTagsByCategory[cat.category] ?? [];
+                    const allTags = getFeatureTagsForCategory(
+                      cat.category,
+                      cat.tags,
+                      globalFeatureTagsByCategory,
+                    );
+                    const selectedInCategory = editedBook.features.filter((tag) => allTags.includes(tag));
+                    const newTagInput = newGlobalTagByCategory[cat.category] ?? '';
                     return (
-                    <div key={cat.category} className="library-feature-group">
-                      <div className="library-feature-group-title">{cat.category}</div>
-                      <div className="library-feature-tags">
-                        {getCategoryFeatureTags(cat.tags, hiddenTags, customTags).map(({ tag, isCustom }) =>
-                          renderFeatureTag(tag, cat.category, isCustom),
+                      <div key={cat.category} className="library-feature-category-block">
+                        <div className="library-feature-group-title">{cat.category}</div>
+                        <select
+                          className="form-input form-select"
+                          style={{ maxWidth: 480, marginBottom: 10 }}
+                          value={featurePickerValue[cat.category] ?? ''}
+                          onChange={(e) => selectFeatureTag(cat.category, e.target.value)}
+                        >
+                          <option value="">请选择标签</option>
+                          {allTags.map((tag) => (
+                            <option key={tag} value={tag}>{tag}</option>
+                          ))}
+                        </select>
+                        {selectedInCategory.length > 0 && (
+                          <div className="library-feature-selected-tags">
+                            {selectedInCategory.map((tag) => (
+                              <span key={tag} className="library-feature-selected-tag">
+                                {tag}
+                                <button
+                                  type="button"
+                                  className="library-feature-selected-tag-remove"
+                                  aria-label={`移除 ${tag}`}
+                                  onClick={() => removeBookFeatureTag(tag)}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
                         )}
+                        <div className="library-publisher-custom-section">
+                          <div className="form-hint" style={{ marginBottom: 8 }}>添加全局标签</div>
+                          <div className="library-custom-add">
+                            <input
+                              type="text"
+                              className="form-input"
+                              placeholder={`输入${cat.category}标签，如 非华裔`}
+                              value={newTagInput}
+                              maxLength={LIBRARY_FIELD_LIMITS.featureTag}
+                              onChange={(e) =>
+                                setNewGlobalTagByCategory((prev) => ({
+                                  ...prev,
+                                  [cat.category]: sanitizeFeatureTagInput(e.target.value),
+                                }))
+                              }
+                              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addGlobalFeatureTag(cat.category))}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => addGlobalFeatureTag(cat.category)}
+                              disabled={!newTagInput.trim()}
+                            >
+                              + 添加
+                            </button>
+                          </div>
+                          <div className="form-hint">
+                            {LIBRARY_FIELD_HINTS.featureTag} · {newTagInput.length}/{LIBRARY_FIELD_LIMITS.featureTag}
+                          </div>
+                        </div>
                       </div>
-                      <div className="library-custom-add">
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="输入自定义标签"
-                          value={newTagByCategory[cat.category] ?? ''}
-                          maxLength={LIBRARY_FIELD_LIMITS.featureTag}
-                          onChange={(e) =>
-                            setNewTagByCategory((prev) => ({
-                              ...prev,
-                              [cat.category]: sanitizeFeatureTagInput(e.target.value),
-                            }))
-                          }
-                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomFeatureTag(cat.category))}
-                        />
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => addCustomFeatureTag(cat.category)}>
-                          + 添加
-                        </button>
-                      </div>
-                      <div className="form-hint">
-                        {LIBRARY_FIELD_HINTS.featureTag}
-                        · {(newTagByCategory[cat.category] ?? '').length}/{LIBRARY_FIELD_LIMITS.featureTag}
-                      </div>
-                    </div>
                     );
                   })}
                 </div>
