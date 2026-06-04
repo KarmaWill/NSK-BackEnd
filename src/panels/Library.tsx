@@ -1368,6 +1368,7 @@ export function Library() {
   const [createSeriesOpen, setCreateSeriesOpen] = useState(false);
   const [editingSeries, setEditingSeries] = useState<BookSeries | null>(null);
   const [deleteSeriesTarget, setDeleteSeriesTarget] = useState<BookSeries | null>(null);
+  const [deleteSeriesConfirmText, setDeleteSeriesConfirmText] = useState('');
   const [addVolumeOpen, setAddVolumeOpen] = useState(false);
 
   const publisherGroups = useMemo(() => publishersByCategory(), []);
@@ -1416,8 +1417,19 @@ export function Library() {
     showToast(`已更新系列「${series.name}」`);
   };
 
+  const closeDeleteSeries = () => {
+    setDeleteSeriesTarget(null);
+    setDeleteSeriesConfirmText('');
+  };
+
+  const openDeleteSeries = (series: BookSeries) => {
+    setDeleteSeriesTarget(series);
+    setDeleteSeriesConfirmText('');
+  };
+
   const handleDeleteSeries = () => {
     if (!deleteSeriesTarget) return;
+    if (deleteSeriesConfirmText !== deleteSeriesTarget.name) return;
     const target = deleteSeriesTarget;
     setSeriesList((prev) => prev.filter((item) => item.id !== target.id));
     setBooks((prev) => prev.filter((book) => book.seriesId !== target.id));
@@ -1425,7 +1437,7 @@ export function Library() {
       setSelectedSeriesId(null);
       setView('series');
     }
-    setDeleteSeriesTarget(null);
+    closeDeleteSeries();
     showToast(`已删除系列「${target.name}」`);
   };
 
@@ -1769,7 +1781,7 @@ export function Library() {
                 dragDisabled={!canReorderSeries}
                 onEnter={() => openSeries(series.id)}
                 onEdit={() => openEditSeries(series)}
-                onDelete={() => setDeleteSeriesTarget(series)}
+                onDelete={() => openDeleteSeries(series)}
                 footerStat={<>{stat.units} 单元 · {stat.lessons} 课</>}
               >
                 <div
@@ -1821,24 +1833,49 @@ export function Library() {
 
       <div
         className={`modal-overlay${deleteSeriesTarget ? ' open' : ''}`}
-        onClick={() => setDeleteSeriesTarget(null)}
+        onClick={closeDeleteSeries}
         role="dialog"
         aria-modal="true"
         aria-label="删除系列"
       >
-        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 430 }}>
           <div className="modal-header">
             <div className="modal-title">删除系列</div>
-            <button type="button" className="modal-close" onClick={() => setDeleteSeriesTarget(null)} aria-label="关闭">✕</button>
+            <button type="button" className="modal-close" onClick={closeDeleteSeries} aria-label="关闭">✕</button>
           </div>
           <div className="modal-body">
-            <p style={{ margin: 0 }}>
-              确认删除系列「<strong>{deleteSeriesTarget?.name}</strong>」？该系列下的所有册次将一并删除，且不可恢复。
-            </p>
+            {deleteSeriesTarget && (
+              <>
+                <p style={{ margin: '0 0 8px' }}>
+                  该系列下的所有册次将一并删除，且不可恢复。请输入系列名称{' '}
+                  <strong>{deleteSeriesTarget.name}</strong> 以确认删除。
+                </p>
+                <input
+                  className="form-input"
+                  value={deleteSeriesConfirmText}
+                  placeholder={deleteSeriesTarget.name}
+                  onChange={(e) => setDeleteSeriesConfirmText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && deleteSeriesConfirmText === deleteSeriesTarget.name) {
+                      e.preventDefault();
+                      handleDeleteSeries();
+                    }
+                  }}
+                  autoFocus
+                />
+              </>
+            )}
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-ghost" onClick={() => setDeleteSeriesTarget(null)}>取消</button>
-            <button type="button" className="btn btn-danger" onClick={handleDeleteSeries}>确认删除</button>
+            <button type="button" className="btn btn-ghost" onClick={closeDeleteSeries}>取消</button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={!deleteSeriesTarget || deleteSeriesConfirmText !== deleteSeriesTarget.name}
+              onClick={handleDeleteSeries}
+            >
+              确认删除
+            </button>
           </div>
         </div>
       </div>

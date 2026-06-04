@@ -29,6 +29,7 @@ import { MediaLib } from './MediaLib';
 import { NewsConfig } from './NewsConfig';
 import { OpsBanner } from './OpsBanner';
 import { LearningAssessment } from './LearningAssessment';
+import { HskCompose } from './HskCompose';
 
 type PanelProps = {
   onNavigate: (id: PanelId) => void;
@@ -58,17 +59,34 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   'hsk-paper': () => <HskPaper />,
   'hsk-exam': () => <HskExam />,
   'hsk-diagnostic': () => (
-    <LearningAssessment title="诊断测试" subtitle="C-Lingo 官网 · HSK 诊断测试配置" />
+    <LearningAssessment
+      title="入门诊断"
+      subtitle="C-Lingo 官网 · 入门诊断测评配置"
+      configKey="hsk-diagnostic"
+    />
   ),
   'hsk-vocab-assess': () => (
-    <LearningAssessment title="词汇测评" subtitle="C-Lingo 官网 · 词汇测评配置" />
+    <LearningAssessment
+      title="词汇测评"
+      subtitle="C-Lingo 官网 · 词汇测评配置"
+      configKey="hsk-vocab-assess"
+    />
   ),
   'hsk-speaking-rater': () => (
-    <LearningAssessment title="口语Rater" subtitle="C-Lingo 官网 · 口语评分 Rater 配置" />
+    <LearningAssessment
+      title="口语Rater"
+      subtitle="C-Lingo 官网 · 口语评分 Rater 配置"
+      configKey="hsk-speaking-rater"
+    />
   ),
   'hsk-writing-rater': () => (
-    <LearningAssessment title="写作Rater" subtitle="C-Lingo 官网 · 写作评分 Rater 配置" />
+    <LearningAssessment
+      title="写作Rater"
+      subtitle="C-Lingo 官网 · 写作评分 Rater 配置"
+      configKey="hsk-writing-rater"
+    />
   ),
+  'hsk-compose': (p) => <HskCompose onNavigate={p.onNavigate} />,
   culture: () => <Culture />,
   library: () => <Library />,
   users: () => <Users />,
@@ -78,13 +96,25 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   'news-config': () => <NewsConfig />,
   'ops-banner': () => <OpsBanner />,
   'assess-mi': () => (
-    <LearningAssessment title="多元智能测评" subtitle="C-Lingo 官网 · 多元智能测评配置" />
+    <LearningAssessment
+      title="多元智能测评"
+      subtitle="C-Lingo 官网 · 多元智能测评配置"
+      configKey="assess-mi"
+    />
   ),
   'assess-style': () => (
-    <LearningAssessment title="学习风格测评" subtitle="C-Lingo 官网 · 学习风格测评配置" />
+    <LearningAssessment
+      title="学习风格测评"
+      subtitle="C-Lingo 官网 · 学习风格测评配置"
+      configKey="assess-style"
+    />
   ),
   'assess-mbti': () => (
-    <LearningAssessment title="MBTI测评" subtitle="C-Lingo 官网 · MBTI 测评配置" />
+    <LearningAssessment
+      title="MBTI测评"
+      subtitle="C-Lingo 官网 · MBTI 测评配置"
+      configKey="assess-mbti"
+    />
   ),
   qtype: () => <Qtype />,
   logs: () => <Logs />,

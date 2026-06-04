@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PanelId } from '../types';
 import { COURSE_LIBS_UPDATED_EVENT, loadCourseLibs, type CourseLibRow } from '../stores/courseLibs';
 import {
@@ -8,7 +8,14 @@ import {
   type ProductCode,
 } from '../lib/api';
 import { ADMIN_PROFILE_UPDATED_EVENT, loadAdminProfile } from '../stores/adminProfile';
-import { isTabletAppProduct } from '../config/productNav';
+import {
+  getDefaultExpandedGroupIds,
+  getItemLabel,
+  getNavBlocks,
+  TABLET_HSK_GROUP,
+  type NavGroupNode,
+  type NavItemNode,
+} from '../config/navTree';
 import { FoxAvatar } from './FoxAvatar';
 import { AdminProfileModal } from './AdminProfileModal';
 
@@ -27,14 +34,11 @@ const ICONS: Record<string, JSX.Element> = {
   'audio-reading': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>),
   'audio-reading-mgmt': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>),
   questions: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M9 12h6M9 16h6M7 8h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>),
-  multilang: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>),
   medialib: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/><polygon points="10 12 15 15 15 9 10 12"/></svg>),
   'ai-roles': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>),
   'ai-capabilities': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M12 2l2.2 4.6 5 .7-3.6 3.5.9 4.9L12 13.8 7.5 15.7l.9-4.9L4.8 7.3l5-.7L12 2z"/><path d="M4 21h16"/></svg>),
   'ai-free': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>),
   'ai-scene': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>),
-  'ai-eval': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M12 2a3 3 0 003 3V5a3 3 0 01-6 0V5a3 3 0 013-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>),
-  'ai-api': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>),
   culture: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>),
   library: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>),
   hsk: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
@@ -46,6 +50,7 @@ const ICONS: Record<string, JSX.Element> = {
   qtype: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><rect x="2" y="2" width="9" height="9" rx="1.5"/><rect x="13" y="2" width="9" height="9" rx="1.5"/><rect x="2" y="13" width="9" height="9" rx="1.5"/><path d="M17.5 13v9M13 17.5h9"/></svg>),
   logs: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>),
   sysconfig: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>),
+  'course-config': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>),
 };
 
 export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCourseLibChange, username }: Props) {
@@ -54,15 +59,23 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
   const [profile, setProfile] = useState(() => loadAdminProfile());
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [courseLibs, setCourseLibs] = useState<CourseLibRow[]>(() => loadCourseLibs());
-  const [hskExpanded, setHskExpanded] = useState(false);
-  const isAdmin = role === 'admin';
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() =>
+    getDefaultExpandedGroupIds(getActiveProduct()),
+  );
   const roleLabel = role === 'admin' ? '管理员' : '课研';
-  const isTabletApp = isTabletAppProduct(product);
+
+  const navBlocks = useMemo(() => getNavBlocks(product, role), [product, role]);
+
   useEffect(() => {
-    const onProduct = () => setProduct(getActiveProduct());
+    const onProduct = () => {
+      const code = getActiveProduct();
+      setProduct(code);
+      setExpandedGroups(getDefaultExpandedGroupIds(code));
+    };
     window.addEventListener('clingo-product-changed', onProduct);
     return () => window.removeEventListener('clingo-product-changed', onProduct);
   }, []);
+
   useEffect(() => {
     const syncProfile = () => setProfile(loadAdminProfile());
     window.addEventListener(ADMIN_PROFILE_UPDATED_EVENT, syncProfile);
@@ -72,6 +85,7 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
       window.removeEventListener('storage', syncProfile);
     };
   }, []);
+
   useEffect(() => {
     const sync = () => {
       const latest = loadCourseLibs();
@@ -88,45 +102,87 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
     };
   }, [activeCourseLibId, onActiveCourseLibChange]);
 
-  const nav = (id: PanelId, label: string, badge?: { text: string; className?: string }, extraClass?: string) => (
-    <div
-      key={id}
-      className={`nav-item ${activePanel === id ? 'active' : ''} ${extraClass ?? ''}`}
-      onClick={() => onNavigate(id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onNavigate(id)}
-    >
-      {ICONS[id] ?? ICONS['dashboard']}
-      {label}
-      {badge && <span className={`nav-badge ${badge.className ?? ''}`}>{badge.text}</span>}
-    </div>
-  );
-
-  const hskNavBlock = () => (
-    <div className="course-tree">
-      <div className="course-tree-node">
+  const nav = useCallback(
+    (node: NavItemNode) => {
+      const id = node.panel;
+      const label = getItemLabel(node);
+      return (
         <div
-          className={`nav-item ${activePanel === 'hsk' || activePanel === 'hsk-question-bank' || activePanel === 'hsk-paper' || activePanel === 'hsk-exam' ? 'active' : ''}`}
+          key={id}
+          className={`nav-item ${activePanel === id ? 'active' : ''} ${node.childClass ?? ''}`}
+          onClick={() => onNavigate(id)}
           role="button"
           tabIndex={0}
-          onClick={() => setHskExpanded(!hskExpanded)}
-          onKeyDown={(e) => e.key === 'Enter' && setHskExpanded(!hskExpanded)}
+          onKeyDown={(e) => e.key === 'Enter' && onNavigate(id)}
         >
-          <span className="course-lib-dot">{hskExpanded ? '▼' : '▶'}</span>
-          {ICONS['hsk']}
-          HSK考试管理
+          {ICONS[id] ?? ICONS.hsk}
+          {label}
+          {node.badge && <span className={`nav-badge ${node.badge.className ?? ''}`}>{node.badge.text}</span>}
         </div>
-        {hskExpanded && (
-          <div className="course-lib-children">
-            {nav('hsk-question-bank', '题库管理', undefined, 'course-child-item')}
-            {nav('hsk-paper', '试卷管理', undefined, 'course-child-item')}
-            {nav('hsk-exam', '考试管理', undefined, 'course-child-item')}
+      );
+    },
+    [activePanel, onNavigate],
+  );
+
+  const renderGroup = (group: NavGroupNode) => {
+    const expanded = expandedGroups[group.id] ?? group.defaultExpanded ?? false;
+    const isActive = group.activePanels.includes(activePanel);
+    const iconKey = group.iconPanel ?? 'hsk';
+    return (
+      <div key={group.id} className="course-tree">
+        <div className="course-tree-node">
+          <div
+            className={`nav-item ${isActive ? 'active' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.id]: !expanded }))}
+            onKeyDown={(e) => e.key === 'Enter' && setExpandedGroups((prev) => ({ ...prev, [group.id]: !expanded }))}
+          >
+            <span className="course-lib-dot">{expanded ? '▼' : '▶'}</span>
+            {ICONS[iconKey]}
+            {group.label}
           </div>
-        )}
+          {expanded && <div className="course-lib-children">{group.children.map(nav)}</div>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCourseLibs = () => (
+    <div className="nav-section" key="tablet-course-libs">
+      <div className="nav-label nav-label-row">
+        <span>课程库</span>
+      </div>
+      {nav({ type: 'item', panel: 'course-config' })}
+      <div className="course-lib-list course-tree">
+        {courseLibs.map((lib) => (
+          <div key={lib.id} className="course-tree-node">
+            <div
+              className={`course-lib-item ${activeCourseLibId === lib.id ? 'active' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
+              onKeyDown={(e) => e.key === 'Enter' && onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
+            >
+              <span className="course-lib-dot">{activeCourseLibId === lib.id ? '▼' : '▶'}</span>
+              <span className="course-lib-name">{lib.name}</span>
+            </div>
+            {activeCourseLibId === lib.id && (
+              <div className="course-lib-children">
+                {lib.modules.catalog && nav({ type: 'item', panel: 'catalog', childClass: 'course-child-item' })}
+                {lib.modules.resources && nav({ type: 'item', panel: 'resources', badge: { text: '77' }, childClass: 'course-child-item' })}
+                {lib.modules['audio-reading'] && nav({ type: 'item', panel: 'audio-reading', childClass: 'course-child-item' })}
+                {lib.modules.questions && nav({ type: 'item', panel: 'questions', badge: { text: '54' }, childClass: 'course-child-item' })}
+                {lib.modules['ai-capabilities'] && nav({ type: 'item', panel: 'ai-capabilities', childClass: 'course-child-item' })}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
+
+  const renderTabletProfessionalExtras = () => renderGroup(TABLET_HSK_GROUP);
 
   return (
     <aside className="sidebar">
@@ -156,145 +212,29 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
 
       <div className="role-switcher">
         <span className="role-label">角色：</span>
-        <select
-          className="role-select"
-          value={role}
-          onChange={(e) => setRole(e.target.value as 'admin' | 'editor')}
-        >
+        <select className="role-select" value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'editor')}>
           <option value="admin">管理员</option>
           <option value="editor">课研</option>
         </select>
       </div>
 
       <nav className="sidebar-nav">
-        <div className="nav-section">
-          <div className="nav-label">概览</div>
-          {nav('dashboard', '数据仪表盘')}
-        </div>
-
-        <div className="nav-section">
-          <div className="nav-label">资源库</div>
-          {nav('medialib', '资源库')}
-          {!isTabletApp && nav('database', '数据库管理')}
-        </div>
-
-        {isTabletApp && (
-        <div className="nav-section">
-          <div className="nav-label">数据库</div>
-          {nav('database', '数据库管理')}
-        </div>
-        )}
-
-        {isTabletApp && (
-        <div className="nav-section">
-          <div className="nav-label nav-label-row">
-            <span>课程库</span>
-          </div>
-          {nav('course-config', '课程库配置')}
-          <div className="course-lib-list course-tree">
-            {courseLibs.map((lib) => (
-              <div key={lib.id} className="course-tree-node">
-                <div
-                  className={`course-lib-item ${activeCourseLibId === lib.id ? 'active' : ''}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
-                  onKeyDown={(e) => e.key === 'Enter' && onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
-                >
-                  <span className="course-lib-dot">{activeCourseLibId === lib.id ? '▼' : '▶'}</span>
-                  <span className="course-lib-name">{lib.name}</span>
-                </div>
-                {activeCourseLibId === lib.id && (
-                  <div className="course-lib-children">
-                    {lib.modules.catalog && nav('catalog', '目录管理', undefined, 'course-child-item')}
-                    {lib.modules.resources && nav('resources', '学习资源', { text: '77' }, 'course-child-item')}
-                    {lib.modules['audio-reading'] && nav('audio-reading', '有声阅读配置', undefined, 'course-child-item')}
-                    {lib.modules.questions && nav('questions', '题库管理', { text: '54' }, 'course-child-item')}
-                    {lib.modules['ai-capabilities'] && nav('ai-capabilities', '课程AI配置', undefined, 'course-child-item')}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        )}
-
-        {isTabletApp ? (
-          <>
-            <div className="nav-section">
-              <div className="nav-label">AI 配置</div>
-              {nav('ai-roles', 'AI 角色配置')}
-              {nav('ai-free', '自由对话训练')}
-              {nav('ai-scene', '场景训练管理')}
+        {navBlocks.map((block) => {
+          if (block.type === 'tablet-course-libs') {
+            return renderCourseLibs();
+          }
+          const showTabletHsk =
+            product === 'tablet_app' && block.type === 'section' && block.label === '专业内容管理';
+          return (
+            <div key={block.label} className="nav-section" id={block.label === '系统管理' ? 'admin-section' : undefined}>
+              <div className="nav-label">{block.label}</div>
+              {block.children.map((child) =>
+                child.type === 'group' ? renderGroup(child) : nav(child),
+              )}
+              {showTabletHsk && renderTabletProfessionalExtras()}
             </div>
-
-            <div className="nav-section">
-              <div className="nav-label">专业内容管理</div>
-              {nav('audio-reading-mgmt', '有声阅读管理')}
-              {nav('library', '书籍教材管理')}
-              {hskNavBlock()}
-              {nav('culture', '文化视频管理')}
-            </div>
-
-            <div className="nav-section">
-              <div className="nav-label">用户 & 运营</div>
-              {nav('users', '用户管理', { text: '2.4k', className: 'ok' })}
-              {nav('feedback', '用户反馈池')}
-              {nav('premium', 'Premium 管理')}
-              {nav('notify', '通知推送', { text: '3', className: 'warn' })}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="nav-section">
-              <div className="nav-label">用户 & 运营</div>
-              {nav('users', '用户管理', { text: '2.4k', className: 'ok' })}
-              {nav('feedback', '用户反馈池')}
-              {nav('premium', 'Premium 管理')}
-              {nav('notify', '通知推送', { text: '3', className: 'warn' })}
-              {nav('ops-banner', 'Banner 配置')}
-              {nav('news-config', '新闻配置')}
-            </div>
-
-            <div className="nav-section">
-              <div className="nav-label">AI 配置</div>
-              {nav('ai-roles', 'AI 角色配置')}
-            </div>
-
-            <div className="nav-section">
-              <div className="nav-label">内容配置</div>
-              {nav('audio-reading-mgmt', '有声阅读')}
-              {nav('culture', '视频中心')}
-            </div>
-
-            <div className="nav-section">
-              <div className="nav-label">HSK 考试管理</div>
-              {nav('hsk-question-bank', '题库管理')}
-              {nav('hsk-paper', '试卷管理')}
-              {nav('hsk-exam', '考试管理')}
-              {nav('hsk-diagnostic', '诊断测试')}
-              {nav('hsk-vocab-assess', '词汇测评')}
-              {nav('hsk-speaking-rater', '口语Rater')}
-              {nav('hsk-writing-rater', '写作Rater')}
-            </div>
-
-            <div className="nav-section">
-              <div className="nav-label">学习测评</div>
-              {nav('assess-mi', '多元智能测评')}
-              {nav('assess-style', '学习风格测评')}
-              {nav('assess-mbti', 'MBTI测评')}
-            </div>
-          </>
-        )}
-
-        {isTabletApp && isAdmin && (
-          <div className="nav-section" id="admin-section">
-            <div className="nav-label">系统管理</div>
-            {nav('qtype', '题型模板配置')}
-            {nav('logs', '操作日志')}
-            {nav('sysconfig', '系统设置')}
-          </div>
-        )}
+          );
+        })}
       </nav>
 
       <div className="sidebar-footer">

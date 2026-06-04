@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageTabPanel, PageTabs } from '../components/PageTabs';
 import { HskQuestionConfig } from './HskQuestionConfig';
 
 type QuestionType = {
@@ -93,7 +94,13 @@ function getSectionData(level: number, sec: SectionType): QuestionType[] {
   return base[sec] || QTYPES[4][sec] || [];
 }
 
+const EXAM_TABS = [
+  { id: 'templates', label: '试卷模板' },
+  { id: 'rules', label: '考试规范' },
+] as const;
+
 export function HskExam() {
+  const [activeTab, setActiveTab] = useState<string>('rules');
   const [curLevel, setCurLevel] = useState(4);
   const [collapsed, setCollapsed] = useState<Record<SectionType, boolean>>({
     listening: false,
@@ -135,23 +142,8 @@ export function HskExam() {
     );
   }
 
-  return (
+  const rulesPanel = (
     <>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div className="page-title">考试管理</div>
-          <div className="page-subtitle">配置 HSK 各级别模考题型、题目分布与评分规则</div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" className="btn" onClick={() => showToast('已保存为草稿')}>
-            💾 保存草稿
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => showToast('配置已发布上线 ✓')}>
-            📤 发布
-          </button>
-        </div>
-      </div>
-
       <div className="hsk-level-header">
         <div className="hsk-lh-top">
           <div className="hsk-lh-title">
@@ -279,11 +271,49 @@ export function HskExam() {
         );
       })}
 
-      {toast && (
-        <div className="hsk-toast show">
-          {toast}
+      {toast && <div className="hsk-toast show">{toast}</div>}
+    </>
+  );
+
+  return (
+    <>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div className="page-title">考试管理</div>
+          <div className="page-subtitle">试卷模板 · 考试规范与题型预览</div>
         </div>
-      )}
+        {activeTab === 'rules' && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" className="btn" onClick={() => showToast('已保存为草稿')}>
+              💾 保存草稿
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => showToast('配置已发布上线 ✓')}>
+              📤 发布
+            </button>
+          </div>
+        )}
+      </div>
+
+      <PageTabs tabs={[...EXAM_TABS]} activeTab={activeTab} onTabChange={setActiveTab}>
+        <PageTabPanel id="templates" activeTab={activeTab}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">试卷模板列表</div>
+            </div>
+            <div className="card-body">
+              <p className="text-muted" style={{ margin: 0 }}>
+                定义 HSK1–6 / 自定义模板：各题型数量、总分、时长与适用场景。保存后可作为「试卷管理」组卷基础。
+              </p>
+              <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={() => showToast('新建模板')}>
+                + 新建试卷模板
+              </button>
+            </div>
+          </div>
+        </PageTabPanel>
+        <PageTabPanel id="rules" activeTab={activeTab}>
+          {rulesPanel}
+        </PageTabPanel>
+      </PageTabs>
     </>
   );
 }

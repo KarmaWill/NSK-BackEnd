@@ -26,6 +26,7 @@ export type PanelId =
   | 'hsk-vocab-assess'
   | 'hsk-speaking-rater'
   | 'hsk-writing-rater'
+  | 'hsk-compose'
   | 'users'
   | 'feedback'
   | 'premium'
@@ -67,6 +68,7 @@ export const NAV_LABELS: Record<PanelId, string> = {
   'hsk-vocab-assess': '词汇测评',
   'hsk-speaking-rater': '口语Rater',
   'hsk-writing-rater': '写作Rater',
+  'hsk-compose': '自由组卷',
   users: '用户管理',
   feedback: '用户反馈池',
   premium: 'Premium 管理',

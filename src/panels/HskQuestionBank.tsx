@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageTabPanel, PageTabs } from '../components/PageTabs';
 import { HskQuestionConfig } from './HskQuestionConfig';
 
 type SectionType = 'listening' | 'reading' | 'writing';
@@ -41,7 +42,51 @@ const MOCK_QUESTION_TYPES: QuestionTypeItem[] = [
   { id: 'W04', name: '命题作文', section: 'writing', description: '根据命题写短文，AI评分', hskLevels: [4, 5, 6], questionCount: 15, totalQuestions: 30, difficulty: '★★★★★', lastModified: '2024-02-28', isPublished: false },
 ];
 
+const QUESTION_BANK_TABS = [
+  { id: 'types', label: '题型管理' },
+  { id: 'questions', label: '题目列表' },
+  { id: 'tags', label: '题型标签' },
+] as const;
+
+function QuestionListPlaceholder() {
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div className="card-title">题目列表</div>
+      </div>
+      <div className="card-body">
+        <p className="text-muted" style={{ margin: '0 0 12px' }}>
+          展示题目 ID、所属题型、挂载资源（课程/试卷/视频）等；支持筛选与批量操作。
+        </p>
+        <button type="button" className="btn btn-primary btn-sm">+ 新建题目</button>
+      </div>
+    </div>
+  );
+}
+
+function QuestionTagPlaceholder() {
+  const presetTags = ['2选1', '3选1', '4选1'];
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div className="card-title">题型标签</div>
+      </div>
+      <div className="card-body">
+        <p className="text-muted" style={{ margin: '0 0 12px' }}>
+          管理选项式题型标签，用于自由组卷时的模块化拼盘与筛选。
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {presetTags.map((tag) => (
+            <span key={tag} className="library-feature-selected-tag">{tag}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function HskQuestionBank() {
+  const [activeTab, setActiveTab] = useState<string>('types');
   const [questionTypes, setQuestionTypes] = useState<QuestionTypeItem[]>(MOCK_QUESTION_TYPES);
   const [selectedSection, setSelectedSection] = useState<SectionType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,23 +146,8 @@ export function HskQuestionBank() {
     }
   };
 
-  return (
+  const typesPanel = (
     <>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div className="page-title">题库管理</div>
-          <div className="page-subtitle">管理 HSK 各类题型，配置题目内容、选项、解析等</div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" className="btn btn-secondary" onClick={() => showToast('导入题库功能开发中')}>
-            📥 导入题库
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => showToast('新建题型功能开发中')}>
-            ➕ 新建题型
-          </button>
-        </div>
-      </div>
-
       {/* 筛选栏 */}
       <div className="paper-filter-bar">
         <div className="filter-group">
@@ -253,11 +283,40 @@ export function HskQuestionBank() {
         </table>
       </div>
 
-      {toast && (
-        <div className="hsk-toast show">
-          {toast}
+      {toast && <div className="hsk-toast show">{toast}</div>}
+    </>
+  );
+
+  return (
+    <>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div className="page-title">题库管理</div>
+          <div className="page-subtitle">题型管理 · 题目列表 · 题型标签（全库共用）</div>
         </div>
-      )}
+        {activeTab === 'types' && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => showToast('导入题库功能开发中')}>
+              📥 导入题库
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => showToast('新建题型功能开发中')}>
+              ➕ 新建题型
+            </button>
+          </div>
+        )}
+      </div>
+
+      <PageTabs tabs={[...QUESTION_BANK_TABS]} activeTab={activeTab} onTabChange={setActiveTab}>
+        <PageTabPanel id="types" activeTab={activeTab}>
+          {typesPanel}
+        </PageTabPanel>
+        <PageTabPanel id="questions" activeTab={activeTab}>
+          <QuestionListPlaceholder />
+        </PageTabPanel>
+        <PageTabPanel id="tags" activeTab={activeTab}>
+          <QuestionTagPlaceholder />
+        </PageTabPanel>
+      </PageTabs>
     </>
   );
 }

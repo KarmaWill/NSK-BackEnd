@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PageTabPanel, PageTabs } from '../components/PageTabs';
 
 type Paper = {
   id: string;
@@ -27,7 +28,13 @@ const MOCK_PAPERS: Paper[] = [
   { id: 'RT-002', name: '下学期期末总复习', hskLevel: 4, listening: 35, reading: 40, writing: 25, totalScore: 100, duration: 80, isPublished: true, linkedCourses: 6, lastModified: '2024-03-05' },
 ];
 
+const PAPER_TABS = [
+  { id: 'list', label: '试卷列表' },
+  { id: 'compose', label: '基于模板组卷' },
+] as const;
+
 export function HskPaper() {
+  const [activeTab, setActiveTab] = useState<string>('list');
   const [papers, setPapers] = useState<Paper[]>(MOCK_PAPERS);
   const [selectedHskLevel, setSelectedHskLevel] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,23 +74,8 @@ export function HskPaper() {
     return classes[level] || 'hsk-badge-1';
   };
 
-  return (
+  const listPanel = (
     <>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div className="page-title">试卷管理</div>
-          <div className="page-subtitle">管理测试模块，配置给图书单元测试、体系课程单元测等</div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" className="btn btn-secondary" onClick={() => showToast('打开批量操作面板')}>
-            📦 批量操作
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => showToast('打开新建测试页面')}>
-            ➕ 新建测试
-          </button>
-        </div>
-      </div>
-
       {/* 筛选栏 */}
       <div className="paper-filter-bar">
         <div className="filter-group">
@@ -217,11 +209,46 @@ export function HskPaper() {
         </table>
       </div>
 
-      {toast && (
-        <div className="hsk-toast show">
-          {toast}
+      {toast && <div className="hsk-toast show">{toast}</div>}
+    </>
+  );
+
+  return (
+    <>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div className="page-title">试卷管理</div>
+          <div className="page-subtitle">试卷列表 · 基于模板组卷</div>
         </div>
-      )}
+        {activeTab === 'list' && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => showToast('打开批量操作面板')}>
+              📦 批量操作
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => showToast('打开新建测试页面')}>
+              ➕ 新建测试
+            </button>
+          </div>
+        )}
+      </div>
+
+      <PageTabs tabs={[...PAPER_TABS]} activeTab={activeTab} onTabChange={setActiveTab}>
+        <PageTabPanel id="list" activeTab={activeTab}>
+          {listPanel}
+        </PageTabPanel>
+        <PageTabPanel id="compose" activeTab={activeTab}>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">基于模板组卷</div>
+            </div>
+            <div className="card-body">
+              <p className="text-muted" style={{ margin: 0 }}>
+                选择试卷模板后从题库选题组成具体试卷。请先在「考试管理 → 试卷模板」创建模板结构。
+              </p>
+            </div>
+          </div>
+        </PageTabPanel>
+      </PageTabs>
     </>
   );
 }
