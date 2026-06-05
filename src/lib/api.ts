@@ -150,15 +150,25 @@ export async function listUsers(params?: { role?: string; q?: string }): Promise
 export type CmsNewsRow = {
   id: string;
   title: string;
+  cardTitle?: string | null;
+  heroTitle?: string | null;
   summary: string | null;
   body: string | null;
   imageUrl: string | null;
+  coverImageUrl?: string | null;
+  coverImageHoverUrl?: string | null;
+  heroImageUrl?: string | null;
+  featuredBadge?: string | null;
+  imageAlt?: string | null;
+  displaySlots?: string[] | null;
   category: string | null;
   slug: string | null;
   linkUrl: string | null;
   sortOrder: number;
   status: string;
   publishedAt: string | null;
+  scheduledPublishAt?: string | null;
+  featuredReserveOnSchedule?: boolean | null;
   createdAt: string;
   updatedAt: string;
 };

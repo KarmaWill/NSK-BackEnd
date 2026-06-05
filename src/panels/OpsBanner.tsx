@@ -9,13 +9,20 @@ import {
   type ProductCode,
 } from '../lib/api';
 
-const emptyForm = {
+const emptyForm: {
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+  linkUrl: string;
+  placement: string;
+  status: 'DRAFT' | 'PUBLISHED';
+} = {
   title: '',
   subtitle: '',
   imageUrl: '',
   linkUrl: '',
   placement: 'home_slogan',
-  status: 'DRAFT' as const,
+  status: 'DRAFT',
 };
 
 export function OpsBanner() {
