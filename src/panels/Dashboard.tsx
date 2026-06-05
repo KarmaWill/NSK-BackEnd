@@ -30,7 +30,7 @@ const quickActions = [
 
 export function Dashboard({ onNavigate }: Props) {
   return (
-    <div className="dashboard-shell">
+    <div className="dashboard-shell dashboard-shell-fill">
       <section className="dashboard-hero">
         <div className="dashboard-hero-copy">
           <div className="dashboard-eyebrow">C-Lingo AIOS</div>
@@ -120,34 +120,29 @@ export function Dashboard({ onNavigate }: Props) {
           </div>
         </div>
 
-        <div className="dashboard-card">
-          <div className="dashboard-card-header">
+        <div className="dashboard-card dashboard-card-side">
+          <div className="dashboard-card-header dashboard-card-header-compact">
             <div>
-              <div className="dashboard-card-title">内容健康度</div>
-              <div className="dashboard-card-subtitle">发布、审核与翻译状态</div>
+              <div className="dashboard-card-title">内容中心</div>
+              <div className="dashboard-card-subtitle">健康度 · 资产状态 · 快捷入口</div>
             </div>
           </div>
-          <div className="dashboard-health-ring">
-            <div>
-              <strong>84%</strong>
-              <span>Ready</span>
-            </div>
-          </div>
-          <div className="dashboard-health-list">
-            <div><span>已发布内容</span><b>72%</b></div>
-            <div><span>待审核题目</span><b>3</b></div>
-            <div><span>待翻译条目</span><b>12</b></div>
-          </div>
-        </div>
 
-        <div className="dashboard-card">
-          <div className="dashboard-card-header">
-            <div>
-              <div className="dashboard-card-title">内容概况</div>
-              <div className="dashboard-card-subtitle">关键模块资产状态</div>
+          <div className="dashboard-content-top">
+            <div className="dashboard-health-ring dashboard-health-ring-sm">
+              <div>
+                <strong>84%</strong>
+                <span>Ready</span>
+              </div>
+            </div>
+            <div className="dashboard-health-list dashboard-health-list-inline">
+              <div><span>已发布</span><b>72%</b></div>
+              <div><span>待审核</span><b>3</b></div>
+              <div><span>待翻译</span><b>12</b></div>
             </div>
           </div>
-          <div className="dashboard-table-wrap">
+
+          <div className="dashboard-table-wrap dashboard-table-wrap-compact">
             <table>
               <tbody>
                 {contentRows.map((row) => (
@@ -160,11 +155,12 @@ export function Dashboard({ onNavigate }: Props) {
               </tbody>
             </table>
           </div>
-          <div className="dashboard-card-actions">
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => onNavigate('catalog')}>目录管理</button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('ai-roles')}>AI 角色</button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('resources')}>学习资源</button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('questions')}>题库</button>
+
+          <div className="dashboard-card-actions dashboard-card-actions-compact">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => onNavigate('catalog')}>目录管理</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('ai-roles')}>AI 角色</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('resources')}>学习资源</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('questions')}>题库</button>
           </div>
         </div>
       </section>

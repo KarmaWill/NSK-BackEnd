@@ -67,8 +67,8 @@ export default function App() {
             setUser(null);
           }}
         />
-        <div className="content">
-          <div className="page active">
+        <div className={`content${activePanel === 'dashboard' ? ' content-dashboard' : ''}`}>
+          <div className={`page active${activePanel === 'dashboard' ? ' page-dashboard' : ''}`}>
             <PanelContent
               panelId={activePanel}
               onNavigate={setActivePanel}
