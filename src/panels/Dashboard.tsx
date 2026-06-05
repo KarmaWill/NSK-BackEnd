@@ -20,6 +20,14 @@ const contentRows = [
   { module: 'AI 场景', count: '6', status: '已启用', tone: 'published' },
 ];
 
+const quickActions = [
+  { label: 'AI 角色', panel: 'ai-roles' as PanelId },
+  { label: '目录管理', panel: 'catalog' as PanelId },
+  { label: '用户', panel: 'users' as PanelId },
+  { label: 'HSK 配置', panel: 'hsk' as PanelId },
+  { label: 'API 设置', panel: 'ai-api' as PanelId },
+];
+
 export function Dashboard({ onNavigate }: Props) {
   return (
     <div className="dashboard-shell">
@@ -95,6 +103,21 @@ export function Dashboard({ onNavigate }: Props) {
               <em>+9.7% 本周</em>
             </div>
           </div>
+          <div className="dashboard-quick-bar">
+            <span className="dashboard-quick-label">快速操作</span>
+            <div className="dashboard-quick-links">
+              {quickActions.map((action) => (
+                <button
+                  key={action.panel}
+                  type="button"
+                  className="dashboard-quick-link"
+                  onClick={() => onNavigate(action.panel)}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="dashboard-card">
@@ -142,22 +165,6 @@ export function Dashboard({ onNavigate }: Props) {
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('ai-roles')}>AI 角色</button>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('resources')}>学习资源</button>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => onNavigate('questions')}>题库</button>
-          </div>
-        </div>
-
-        <div className="dashboard-card dashboard-card-dark">
-          <div className="dashboard-card-header">
-            <div>
-              <div className="dashboard-card-title">快速操作</div>
-              <div className="dashboard-card-subtitle">高频任务入口</div>
-            </div>
-          </div>
-          <div className="dashboard-action-grid">
-            <button type="button" onClick={() => onNavigate('ai-roles')}>配置 AI 角色<span>口语老师设定</span></button>
-            <button type="button" onClick={() => onNavigate('catalog')}>目录管理<span>课程主线维护</span></button>
-            <button type="button" onClick={() => onNavigate('users')}>查看用户<span>学习数据追踪</span></button>
-            <button type="button" onClick={() => onNavigate('hsk')}>HSK 配置<span>考试资源配置</span></button>
-            <button type="button" onClick={() => onNavigate('ai-api')}>API 设置<span>模型与接口</span></button>
           </div>
         </div>
       </section>
