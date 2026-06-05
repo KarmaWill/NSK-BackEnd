@@ -1,43 +1,132 @@
-const users = [
-  { name: 'Alice W.', reg: '2026-01-10', days: 24, completed: '3/6', ai: 156, member: 'Premium' },
-  { name: 'Bob K.', reg: '2026-01-15', days: 18, completed: '2/6', ai: 89, member: '免费' },
-  { name: 'Carol M.', reg: '2026-01-20', days: 12, completed: '1/6', ai: 45, member: 'Premium' },
-  { name: 'David L.', reg: '2026-01-22', days: 8, completed: '1/6', ai: 32, member: '免费' },
-];
+import { useEffect, useState } from 'react';
+import { listUsers, type ApiUserRow } from '../lib/api';
+
+function formatDate(iso: string) {
+  try {
+    return iso.slice(0, 10);
+  } catch {
+    return iso;
+  }
+}
 
 export function Users() {
+  const [rows, setRows] = useState<ApiUserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [q, setQ] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await listUsers({
+        q: q.trim() || undefined,
+        role: roleFilter || undefined,
+      });
+      setRows(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载失败');
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [roleFilter]);
+
+  const userCount = rows.filter((r) => r.role === 'USER').length;
+  const adminCount = rows.filter((r) => r.role === 'ADMIN').length;
+
   return (
     <>
       <div className="page-header">
         <div>
           <div className="page-title">用户管理</div>
-          <div className="page-subtitle">查看与管理学习用户</div>
+          <div className="page-subtitle">来自 API 的真实注册用户（含官网 account 注册）</div>
         </div>
       </div>
       <div className="stats-row stats-row-3" style={{ marginBottom: 16 }}>
-        <div className="stat-card"><div className="stat-icon grey">👥</div><div><div className="stat-val">2,418</div><div className="stat-label">总注册用户</div></div></div>
-        <div className="stat-card"><div className="stat-icon amber">⭐</div><div><div className="stat-val">342</div><div className="stat-label">Premium 用户</div></div></div>
-        <div className="stat-card"><div className="stat-icon green">🔥</div><div><div className="stat-val">18</div><div className="stat-label">平均连续天数</div></div></div>
+        <div className="stat-card">
+          <div className="stat-icon grey">👥</div>
+          <div>
+            <div className="stat-val">{userCount}</div>
+            <div className="stat-label">普通用户</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon amber">🛡</div>
+          <div>
+            <div className="stat-val">{adminCount}</div>
+            <div className="stat-label">管理员</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon green">💬</div>
+          <div>
+            <div className="stat-val">{rows.reduce((n, r) => n + r._count.feedbacks, 0)}</div>
+            <div className="stat-label">反馈总数</div>
+          </div>
+        </div>
       </div>
       <div className="card">
         <div className="card-header">
           <div className="card-title">用户列表</div>
-          <input type="text" className="form-input" placeholder="搜索用户..." style={{ width: 260 }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select
+              className="form-input"
+              style={{ width: 140 }}
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+            >
+              <option value="">全部角色</option>
+              <option value="USER">USER</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="搜索用户名..."
+              style={{ width: 200 }}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && load()}
+            />
+            <button type="button" className="btn btn-outline" onClick={load}>
+              搜索
+            </button>
+          </div>
         </div>
         <div className="card-body">
+          {loading && <p className="text-muted">加载中…</p>}
+          {error && <p style={{ color: 'crimson' }}>{error}</p>}
+          {!loading && !rows.length && <p className="text-muted">暂无用户</p>}
           <table>
             <thead>
-              <tr><th>用户</th><th>注册时间</th><th>学习天数</th><th>完成课程</th><th>AI对话次数</th><th>会员类型</th></tr>
+              <tr>
+                <th>用户名</th>
+                <th>角色</th>
+                <th>注册时间</th>
+                <th>反馈数</th>
+              </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u.name}>
-                  <td><b>{u.name}</b></td>
-                  <td className="text-muted">{u.reg}</td>
-                  <td>🔥 {u.days}天</td>
-                  <td>{u.completed}</td>
-                  <td>{u.ai}</td>
-                  <td><span className={`badge ${u.member === 'Premium' ? 'badge-amber' : 'badge-muted'}`}>{u.member}</span></td>
+              {rows.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <b>{u.username}</b>
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${u.role === 'ADMIN' ? 'badge-amber' : 'badge-muted'}`}
+                    >
+                      {u.role}
+                    </span>
+                  </td>
+                  <td className="text-muted">{formatDate(u.createdAt)}</td>
+                  <td>{u._count.feedbacks}</td>
                 </tr>
               ))}
             </tbody>

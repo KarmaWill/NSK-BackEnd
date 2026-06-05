@@ -130,6 +130,11 @@ const HSK_WEB_BLOCKS: NavBlock[] = [
     children: [item('audio-reading-mgmt', { label: '有声阅读' }), item('culture', { label: '视频中心' })],
   },
   { type: 'section', label: '考试与测评', children: [WEB_EXAM_BANK_GROUP, WEB_ASSESS_HUB_GROUP] },
+  {
+    type: 'section',
+    label: '系统管理',
+    children: [item('sysconfig')],
+  },
 ];
 
 function tabletBlocks(role: 'admin' | 'editor'): NavBlock[] {

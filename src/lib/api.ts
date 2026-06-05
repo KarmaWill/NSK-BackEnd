@@ -130,3 +130,108 @@ export async function upsertProductConfig(
     body: JSON.stringify({ key, value }),
   });
 }
+
+export type ApiUserRow = {
+  id: string;
+  username: string;
+  role: string;
+  createdAt: string;
+  _count: { feedbacks: number };
+};
+
+export async function listUsers(params?: { role?: string; q?: string }): Promise<ApiUserRow[]> {
+  const qs = new URLSearchParams();
+  if (params?.role) qs.set('role', params.role);
+  if (params?.q) qs.set('q', params.q);
+  const q = qs.toString();
+  return apiFetch<ApiUserRow[]>(`/api/users${q ? `?${q}` : ''}`);
+}
+
+export type CmsNewsRow = {
+  id: string;
+  title: string;
+  summary: string | null;
+  body: string | null;
+  imageUrl: string | null;
+  category: string | null;
+  slug: string | null;
+  linkUrl: string | null;
+  sortOrder: number;
+  status: string;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CmsBannerRow = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  placement: string;
+  sortOrder: number;
+  status: string;
+  startAt: string | null;
+  endAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function listCmsNews(productCode: ProductCode, admin = true): Promise<CmsNewsRow[]> {
+  const qs = new URLSearchParams({ productCode });
+  if (admin) qs.set('admin', '1');
+  return apiFetch<CmsNewsRow[]>(`/api/cms/news?${qs}`);
+}
+
+export async function createCmsNews(
+  productCode: ProductCode,
+  data: Partial<CmsNewsRow> & { title: string },
+): Promise<CmsNewsRow> {
+  return apiFetch<CmsNewsRow>('/api/cms/news', {
+    method: 'POST',
+    body: JSON.stringify({ productCode, ...data }),
+  });
+}
+
+export async function updateCmsNews(id: string, data: Partial<CmsNewsRow>): Promise<CmsNewsRow> {
+  return apiFetch<CmsNewsRow>(`/api/cms/news/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCmsNews(id: string): Promise<void> {
+  await apiFetch(`/api/cms/news/${id}`, { method: 'DELETE' });
+}
+
+export async function listCmsBanners(
+  productCode: ProductCode,
+  opts?: { placement?: string; admin?: boolean },
+): Promise<CmsBannerRow[]> {
+  const qs = new URLSearchParams({ productCode });
+  if (opts?.placement) qs.set('placement', opts.placement);
+  if (opts?.admin !== false) qs.set('admin', '1');
+  return apiFetch<CmsBannerRow[]>(`/api/cms/banners?${qs}`);
+}
+
+export async function createCmsBanner(
+  productCode: ProductCode,
+  data: Partial<CmsBannerRow> & { title: string },
+): Promise<CmsBannerRow> {
+  return apiFetch<CmsBannerRow>('/api/cms/banners', {
+    method: 'POST',
+    body: JSON.stringify({ productCode, ...data }),
+  });
+}
+
+export async function updateCmsBanner(id: string, data: Partial<CmsBannerRow>): Promise<CmsBannerRow> {
+  return apiFetch<CmsBannerRow>(`/api/cms/banners/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCmsBanner(id: string): Promise<void> {
+  await apiFetch(`/api/cms/banners/${id}`, { method: 'DELETE' });
+}
