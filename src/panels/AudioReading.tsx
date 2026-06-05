@@ -171,7 +171,7 @@ function loadRows() {
   }
 }
 
-export function AudioReading({ pageTitle = '有声阅读配置' }: { pageTitle?: string } = {}) {
+export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: string } = {}) {
   const [rows, setRows] = useState<ReadingRow[]>(() => loadRows());
   const [refreshing, setRefreshing] = useState(false);
   const [toastText, setToastText] = useState('');

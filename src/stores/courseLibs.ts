@@ -18,7 +18,7 @@ export const MODULE_OPTIONS: Array<{ key: CourseModuleKey; label: string }> = [
   { key: 'catalog', label: '目录管理' },
   { key: 'resources', label: '学习资源' },
   { key: 'medialib', label: '资源库' },
-  { key: 'audio-reading', label: '有声阅读配置' },
+  { key: 'audio-reading', label: '有声阅读' },
   { key: 'questions', label: '题库管理' },
   { key: 'ai-capabilities', label: '课程AI配置' },
 ];
@@ -37,7 +37,7 @@ const nowStamp = () => new Date().toLocaleString('zh-CN', { hour12: false });
 export const DEFAULT_COURSE_LIBS: CourseLibRow[] = [
   {
     id: 'CL-001',
-    name: 'NSK体系课程',
+    name: 'AI Class Studio',
     bizAttr: '体系课',
     modules: { ...DEFAULT_MODULES },
     status: 'enabled',
@@ -55,7 +55,17 @@ export function loadCourseLibs(): CourseLibRow[] {
     const normalized = parsed
       .map((item) => normalizeCourseLib(item))
       .filter(Boolean) as CourseLibRow[];
-    return normalized.length ? normalized : DEFAULT_COURSE_LIBS;
+    const list = normalized.length ? normalized : DEFAULT_COURSE_LIBS;
+    let migrated = false;
+    const renamed = list.map((lib) => {
+      if (lib.name === 'NSK体系课程') {
+        migrated = true;
+        return { ...lib, name: 'AI Class Studio', updatedAt: nowStamp() };
+      }
+      return lib;
+    });
+    if (migrated) saveCourseLibs(renamed);
+    return renamed;
   } catch {
     return DEFAULT_COURSE_LIBS;
   }

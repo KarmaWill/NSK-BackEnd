@@ -49,7 +49,7 @@ export const NAV_LABELS: Record<PanelId, string> = {
   database: '数据库管理',
   catalog: '目录管理',
   resources: '学习资源',
-  'audio-reading': '有声阅读配置',
+  'audio-reading': '有声阅读',
   'audio-reading-mgmt': '有声阅读',
   questions: '题库管理',
   'ai-roles': 'AI 角色配置',
