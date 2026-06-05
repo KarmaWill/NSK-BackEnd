@@ -24,9 +24,54 @@ type LibraryInlineAddSelectProps = {
   maxLength?: number;
   addHint?: ReactNode;
   renderAddExtras?: () => ReactNode;
+  canDeleteOption?: (value: string) => boolean;
+  onDeleteOption?: (value: string) => void;
+  deleteConfirmHint?: (label: string) => ReactNode;
   disabled?: boolean;
   style?: CSSProperties;
 };
+
+function OptionRow({
+  opt,
+  selected,
+  canDelete,
+  onPick,
+  onDeleteClick,
+}: {
+  opt: InlineAddSelectOption;
+  selected: boolean;
+  canDelete: boolean;
+  onPick: () => void;
+  onDeleteClick: () => void;
+}) {
+  return (
+    <div className={`library-inline-select-option-row${selected ? ' is-selected' : ''}`}>
+      <button
+        type="button"
+        role="option"
+        aria-selected={selected}
+        className={`library-inline-select-option${selected ? ' is-selected' : ''}`}
+        onClick={onPick}
+      >
+        {opt.label}
+      </button>
+      {canDelete && (
+        <button
+          type="button"
+          className="library-inline-select-option-delete"
+          aria-label={`删除 ${opt.label}`}
+          title="删除"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDeleteClick();
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function LibraryInlineAddSelect({
   value,
@@ -42,15 +87,21 @@ export function LibraryInlineAddSelect({
   maxLength,
   addHint,
   renderAddExtras,
+  canDeleteOption,
+  onDeleteOption,
+  deleteConfirmHint,
   disabled,
   style,
 }: LibraryInlineAddSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
+  const deleteInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [addMode, setAddMode] = useState(false);
   const [addInput, setAddInput] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<InlineAddSelectOption | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   const flatOptions = groups
     ? groups.flatMap((g) => g.options)
@@ -65,6 +116,8 @@ export function LibraryInlineAddSelect({
         setOpen(false);
         setAddMode(false);
         setAddInput('');
+        setDeleteTarget(null);
+        setDeleteConfirmText('');
       }
     };
     document.addEventListener('mousedown', onDocClick);
@@ -77,14 +130,24 @@ export function LibraryInlineAddSelect({
     }
   }, [addMode]);
 
+  useEffect(() => {
+    if (deleteTarget && deleteInputRef.current) {
+      deleteInputRef.current.focus();
+    }
+  }, [deleteTarget]);
+
   const closePanel = () => {
     setOpen(false);
     setAddMode(false);
     setAddInput('');
+    setDeleteTarget(null);
+    setDeleteConfirmText('');
   };
 
   const openAddMode = () => {
     if (!onAdd) return;
+    setDeleteTarget(null);
+    setDeleteConfirmText('');
     setAddMode(true);
     setAddInput('');
   };
@@ -92,6 +155,11 @@ export function LibraryInlineAddSelect({
   const cancelAdd = () => {
     setAddMode(false);
     setAddInput('');
+  };
+
+  const cancelDelete = () => {
+    setDeleteTarget(null);
+    setDeleteConfirmText('');
   };
 
   const confirmAdd = () => {
@@ -103,10 +171,27 @@ export function LibraryInlineAddSelect({
     closePanel();
   };
 
+  const confirmDelete = () => {
+    if (!deleteTarget || !onDeleteOption) return;
+    if (deleteConfirmText !== deleteTarget.label) return;
+    onDeleteOption(deleteTarget.value);
+    closePanel();
+  };
+
   const handlePick = (picked: string) => {
     onSelect(picked);
     closePanel();
   };
+
+  const openDeleteConfirm = (opt: InlineAddSelectOption) => {
+    setAddMode(false);
+    setAddInput('');
+    setDeleteTarget(opt);
+    setDeleteConfirmText('');
+  };
+
+  const canDelete = (opt: InlineAddSelectOption) =>
+    !!onDeleteOption && !!canDeleteOption?.(opt.value);
 
   return (
     <div
@@ -127,8 +212,16 @@ export function LibraryInlineAddSelect({
             cancelAdd();
             return;
           }
+          if (open && deleteTarget) {
+            cancelDelete();
+            return;
+          }
           setOpen((prev) => !prev);
-          if (!open) setAddMode(false);
+          if (!open) {
+            setAddMode(false);
+            setDeleteTarget(null);
+            setDeleteConfirmText('');
+          }
         }}
       >
         <span className={value ? 'library-inline-select-value' : 'library-inline-select-placeholder'}>
@@ -139,7 +232,49 @@ export function LibraryInlineAddSelect({
 
       {open && (
         <div className="library-inline-select-panel" id={listId} role="listbox">
-          {addMode ? (
+          {deleteTarget ? (
+            <div className="library-inline-select-delete-panel">
+              <div className="library-inline-select-delete-title">确认删除</div>
+              <p className="library-inline-select-delete-hint">
+                {deleteConfirmHint ? (
+                  deleteConfirmHint(deleteTarget.label)
+                ) : (
+                  <>请输入 <strong>{deleteTarget.label}</strong> 以确认删除，此操作不可恢复。</>
+                )}
+              </p>
+              <input
+                ref={deleteInputRef}
+                type="text"
+                className="form-input"
+                placeholder={deleteTarget.label}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && deleteConfirmText === deleteTarget.label) {
+                    e.preventDefault();
+                    confirmDelete();
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelDelete();
+                  }
+                }}
+              />
+              <div className="library-inline-select-delete-actions">
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  disabled={deleteConfirmText !== deleteTarget.label}
+                  onClick={confirmDelete}
+                >
+                  确认删除
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cancelDelete}>
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : addMode ? (
             <div className="library-inline-select-add-panel">
               {renderAddExtras?.()}
               <input
@@ -181,31 +316,27 @@ export function LibraryInlineAddSelect({
                   <div key={group.label} className="library-inline-select-group">
                     <div className="library-inline-select-group-label">{group.label}</div>
                     {group.options.map((opt) => (
-                      <button
+                      <OptionRow
                         key={opt.value}
-                        type="button"
-                        role="option"
-                        aria-selected={value === opt.value}
-                        className={`library-inline-select-option${value === opt.value ? ' is-selected' : ''}`}
-                        onClick={() => handlePick(opt.value)}
-                      >
-                        {opt.label}
-                      </button>
+                        opt={opt}
+                        selected={value === opt.value}
+                        canDelete={canDelete(opt)}
+                        onPick={() => handlePick(opt.value)}
+                        onDeleteClick={() => openDeleteConfirm(opt)}
+                      />
                     ))}
                   </div>
                 ))}
                 {!groups &&
                   (options ?? []).map((opt) => (
-                    <button
+                    <OptionRow
                       key={opt.value}
-                      type="button"
-                      role="option"
-                      aria-selected={value === opt.value}
-                      className={`library-inline-select-option${value === opt.value ? ' is-selected' : ''}`}
-                      onClick={() => handlePick(opt.value)}
-                    >
-                      {opt.label}
-                    </button>
+                      opt={opt}
+                      selected={value === opt.value}
+                      canDelete={canDelete(opt)}
+                      onPick={() => handlePick(opt.value)}
+                      onDeleteClick={() => openDeleteConfirm(opt)}
+                    />
                   ))}
               </div>
               {onAdd && (

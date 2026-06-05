@@ -81,6 +81,7 @@ type Book = {
   customFeatureTagsByCategory?: Record<string, string[]>;
   hiddenFeatureTagsByCategory?: Record<string, string[]>;
   customPublishersByCategory?: Record<string, string[]>;
+  hiddenPublishers?: string[];
   formats?: BookFormat[];
   premium: boolean;
   coverUrl?: string;
@@ -126,16 +127,18 @@ function getFeatureTagsForCategory(
   category: string,
   presetTags: string[],
   globalCustomTags: Record<string, string[]>,
+  hiddenTags: Record<string, string[]> = {},
 ): string[] {
+  const hidden = new Set(hiddenTags[category] ?? []);
   const seen = new Set<string>();
   const items: string[] = [];
   for (const tag of presetTags) {
-    if (seen.has(tag)) continue;
+    if (seen.has(tag) || hidden.has(tag)) continue;
     seen.add(tag);
     items.push(tag);
   }
   for (const tag of globalCustomTags[category] ?? []) {
-    if (seen.has(tag)) continue;
+    if (seen.has(tag) || hidden.has(tag)) continue;
     seen.add(tag);
     items.push(tag);
   }
@@ -711,7 +714,6 @@ function UnitResourceMountModal({ unit, onClose, onSave }: UnitResourceMountModa
           ))}
         </div>
         <div className="modal-footer">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
           <button type="button" className="btn btn-primary" onClick={() => onSave(draft)}>完成配置</button>
         </div>
       </div>
@@ -1359,6 +1361,7 @@ export function Library() {
   const [globalFeatureTagsByCategory, setGlobalFeatureTagsByCategory] = useState<Record<string, string[]>>(
     () => buildInitialGlobalFeatureTags(MOCK_BOOKS),
   );
+  const [hiddenFeatureTagsByCategory, setHiddenFeatureTagsByCategory] = useState<Record<string, string[]>>({});
   const [view, setView] = useState<ViewMode>('series');
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [filterPublisher, setFilterPublisher] = useState('');
@@ -1510,6 +1513,8 @@ export function Library() {
           seriesName={selectedSeries?.name}
           globalFeatureTagsByCategory={globalFeatureTagsByCategory}
           onGlobalFeatureTagsChange={setGlobalFeatureTagsByCategory}
+          hiddenFeatureTagsByCategory={hiddenFeatureTagsByCategory}
+          onHiddenFeatureTagsChange={setHiddenFeatureTagsByCategory}
           onSave={(updated) => {
             setBooks(books.map(b => b.id === updated.id ? updated : b));
             setEditingBook(updated);
@@ -1956,6 +1961,8 @@ type BookEditorProps = {
   seriesName?: string;
   globalFeatureTagsByCategory: Record<string, string[]>;
   onGlobalFeatureTagsChange: (next: Record<string, string[]>) => void;
+  hiddenFeatureTagsByCategory: Record<string, string[]>;
+  onHiddenFeatureTagsChange: (next: Record<string, string[]>) => void;
   onSave: (book: Book) => void;
   onCancel: () => void;
 };
@@ -1965,6 +1972,8 @@ function BookEditor({
   seriesName,
   globalFeatureTagsByCategory,
   onGlobalFeatureTagsChange,
+  hiddenFeatureTagsByCategory,
+  onHiddenFeatureTagsChange,
   onSave,
   onCancel,
 }: BookEditorProps) {
@@ -2020,6 +2029,7 @@ function BookEditor({
   const [customPublisherCategories, setCustomPublisherCategories] = useState<string[]>(() =>
     buildInitialCustomPublisherCategories(book),
   );
+  const [hiddenPublishers, setHiddenPublishers] = useState<string[]>(() => book.hiddenPublishers ?? []);
   const [authorsInput, setAuthorsInput] = useState(() => sanitizeAuthorsInput(book.authors.join(', ')));
   const [newPublisherCategory, setNewPublisherCategory] = useState('');
   const [newPublisherParentName, setNewPublisherParentName] = useState('');
@@ -2034,11 +2044,15 @@ function BookEditor({
   );
   const publisherSelectGroups = useMemo(
     () =>
-      [...mergedPublisherGroups.entries()].map(([label, pubs]) => ({
-        label,
-        options: pubs.map((p) => ({ value: p.name, label: p.name })),
-      })),
-    [mergedPublisherGroups],
+      [...mergedPublisherGroups.entries()]
+        .map(([label, pubs]) => ({
+          label,
+          options: pubs
+            .filter((p) => !hiddenPublishers.includes(p.name))
+            .map((p) => ({ value: p.name, label: p.name })),
+        }))
+        .filter((group) => group.options.length > 0),
+    [mergedPublisherGroups, hiddenPublishers],
   );
 
   const selectedPublisher = PUBLISHERS.find((p) => p.name === editedBook.publisher);
@@ -2080,6 +2094,31 @@ function BookEditor({
     }));
   };
 
+  const isCustomPublisher = (name: string) =>
+    Object.values(customPublishersByCategory).some((list) => list.includes(name));
+
+  const removePublisher = (name: string) => {
+    if (isCustomPublisher(name)) {
+      setCustomPublishersByCategory((prev) => {
+        const next = { ...prev };
+        for (const cat of Object.keys(next)) {
+          next[cat] = next[cat].filter((n) => n !== name);
+          if (next[cat].length === 0) delete next[cat];
+        }
+        return next;
+      });
+    } else {
+      setHiddenPublishers((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    }
+    if (editedBook.publisher === name) {
+      setEditedBook((prev) => ({
+        ...prev,
+        publisher: '',
+        publisherByLang: resolveTitleByLang(''),
+      }));
+    }
+  };
+
   const selectFeatureTag = (tag: string) => {
     if (!tag) return;
     setEditedBook((prev) => ({
@@ -2095,12 +2134,36 @@ function BookEditor({
     }));
   };
 
+  const removeFeatureTag = (category: string, tag: string) => {
+    const presetTags = FEATURE_CATEGORIES.find((c) => c.category === category)?.tags ?? [];
+    const isCustom = (globalFeatureTagsByCategory[category] ?? []).includes(tag);
+
+    if (isCustom) {
+      onGlobalFeatureTagsChange({
+        ...globalFeatureTagsByCategory,
+        [category]: (globalFeatureTagsByCategory[category] ?? []).filter((t) => t !== tag),
+      });
+    } else if (presetTags.includes(tag)) {
+      onHiddenFeatureTagsChange({
+        ...hiddenFeatureTagsByCategory,
+        [category]: [...new Set([...(hiddenFeatureTagsByCategory[category] ?? []), tag])],
+      });
+    }
+
+    removeBookFeatureTag(tag);
+  };
+
   const addGlobalFeatureTag = (category: string, tag: string) => {
     const sanitized = sanitizeFeatureTagInput(tag);
     if (!sanitized) return;
 
     const presetTags = FEATURE_CATEGORIES.find((c) => c.category === category)?.tags ?? [];
-    const existingTags = getFeatureTagsForCategory(category, presetTags, globalFeatureTagsByCategory);
+    const existingTags = getFeatureTagsForCategory(
+      category,
+      presetTags,
+      globalFeatureTagsByCategory,
+      hiddenFeatureTagsByCategory,
+    );
     if (existingTags.includes(sanitized)) {
       setEditedBook((prev) => ({
         ...prev,
@@ -2260,6 +2323,7 @@ function BookEditor({
       volumeLabelByLang: resolvedVolume,
       publisherByLang: resolvedPublisher,
       customPublishersByCategory,
+      hiddenPublishers,
       title: resolvedTitleByLang.CN?.trim() || editedBook.title,
       titleEn: resolvedTitleByLang.EN?.trim() || '',
       publisher: resolvedPublisher.CN?.trim() || editedBook.publisher,
@@ -2487,6 +2551,11 @@ function BookEditor({
                   onAdd={addCustomPublisher}
                   canConfirmAdd={(name) => !!name.trim() && !!newPublisherCategory.trim()}
                   renderAddExtras={renderPublisherAddExtras}
+                  canDeleteOption={() => true}
+                  onDeleteOption={removePublisher}
+                  deleteConfirmHint={(label) => (
+                    <>请输入 <strong>{label}</strong> 以确认删除该出版社，此操作不可恢复。</>
+                  )}
                   style={{ marginBottom: 10 }}
                 />
                 {selectedPublisher?.representativeBooks && (
@@ -2574,6 +2643,7 @@ function BookEditor({
                       cat.category,
                       cat.tags,
                       globalFeatureTagsByCategory,
+                      hiddenFeatureTagsByCategory,
                     );
                     const selectedInCategory = editedBook.features.filter((tag) => allTags.includes(tag));
                     return (
@@ -2589,6 +2659,11 @@ function BookEditor({
                           onAdd={(tag) => addGlobalFeatureTag(cat.category, tag)}
                           sanitizeAdd={sanitizeFeatureTagInput}
                           maxLength={LIBRARY_FIELD_LIMITS.featureTag}
+                          canDeleteOption={() => true}
+                          onDeleteOption={(tag) => removeFeatureTag(cat.category, tag)}
+                          deleteConfirmHint={(label) => (
+                            <>请输入 <strong>{label}</strong> 以确认删除该标签，此操作对全库生效且不可恢复。</>
+                          )}
                           addHint={
                             <>
                               {LIBRARY_FIELD_HINTS.featureTag} · 全库共用

@@ -2727,8 +2727,9 @@ input[type="range"].swm-range {
 }
 
 .library-series-enter-btn {
+  width: 100%;
   min-height: 38px;
-  min-width: 104px;
+  min-width: 0;
   padding: 0 14px;
   font-size: 13px;
   font-weight: 600;
@@ -2816,8 +2817,8 @@ input[type="range"].swm-range {
 }
 
 .library-inline-select-option {
-  display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 10px 14px;
   border: none;
   background: transparent;
@@ -2826,6 +2827,67 @@ input[type="range"].swm-range {
   color: var(--ink);
   cursor: pointer;
   transition: background 0.12s;
+}
+
+.library-inline-select-option-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+}
+
+.library-inline-select-option-row:hover,
+.library-inline-select-option-row.is-selected {
+  background: var(--stone);
+}
+
+.library-inline-select-option-row.is-selected .library-inline-select-option {
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.library-inline-select-option-delete {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-light);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.library-inline-select-option-delete:hover {
+  background: var(--rose-l);
+  color: var(--rose);
+}
+
+.library-inline-select-delete-panel {
+  padding: 12px;
+}
+
+.library-inline-select-delete-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.library-inline-select-delete-hint {
+  font-size: 12px;
+  color: var(--ink-light);
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.library-inline-select-delete-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .library-inline-select-option:hover,
