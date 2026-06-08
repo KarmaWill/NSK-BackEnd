@@ -38,6 +38,7 @@ import {
   sanitizeFeatureTagInput,
   sanitizeIsbn,
   sanitizeTitleName,
+  sanitizeVersion,
 } from '../utils/libraryFieldValidation';
 import {
   LANG_OPTIONS,
@@ -74,6 +75,7 @@ type Book = {
   publisher: string;
   publisherByLang?: TitleByLang;
   isbn: string;
+  version: string;
   authors: string[];
   hskLevelMin: string;
   hskLevelMax: string;
@@ -287,6 +289,40 @@ function cloneMounted(mounted: UnitMountedResources): UnitMountedResources {
   };
 }
 
+type BookResourceBundle = {
+  units: BookUnitRow[];
+  files: BookFileResource[];
+};
+
+function cloneBookResourceBundle(bundle: BookResourceBundle): BookResourceBundle {
+  return {
+    units: bundle.units.map((u) => ({
+      ...u,
+      mounted: cloneMounted(u.mounted),
+      lessons: u.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
+    })),
+    files: [...bundle.files],
+  };
+}
+
+function createEmptyBookResourceBundle(): BookResourceBundle {
+  return { units: [], files: [] };
+}
+
+function clearBookResourceLinks(bundle: BookResourceBundle): BookResourceBundle {
+  return {
+    units: bundle.units.map((u) => ({
+      ...u,
+      mounted: createEmptyMounted(),
+      lessons: u.lessons.map((l) => ({
+        ...l,
+        resources: createEmptyResources(),
+      })),
+    })),
+    files: [],
+  };
+}
+
 const MOCK_BOOK_UNITS: BookUnitRow[] = [
   {
     id: 'unit-1',
@@ -359,6 +395,25 @@ const INITIAL_BOOK_FILES: BookFileResource[] = [
   { id: 'file-3', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
   { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00', meta: '页码 12-18' },
 ];
+
+function createDefaultBookResourceBundle(): BookResourceBundle {
+  return cloneBookResourceBundle({
+    units: MOCK_BOOK_UNITS.map((u) => ({
+      ...u,
+      mounted: cloneMounted(u.mounted),
+      lessons: u.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
+    })),
+    files: [...INITIAL_BOOK_FILES],
+  });
+}
+
+function buildInitialBookResources(sourceBooks: Book[]): Record<string, BookResourceBundle> {
+  const map: Record<string, BookResourceBundle> = {};
+  for (const book of sourceBooks) {
+    map[book.id] = createDefaultBookResourceBundle();
+  }
+  return map;
+}
 
 type AvailableBookFile = {
   poolId: string;
@@ -960,6 +1015,7 @@ const MOCK_BOOKS: Book[] = [
     titleEn: 'Happy Chinese Book 1',
     publisher: '人民教育出版社',
     isbn: '978-7-107-37765-5',
+    version: '1.0',
     authors: ['李晓琪', '刘晓雨', '王淑红'],
     hskLevelMin: 'HSK1级',
     hskLevelMax: 'HSK2级',
@@ -982,6 +1038,7 @@ const MOCK_BOOKS: Book[] = [
     titleEn: 'Happy Chinese Book 2',
     publisher: '人民教育出版社',
     isbn: '978-7-107-37766-2',
+    version: '1.0',
     authors: ['李晓琪', '刘晓雨', '王淑红'],
     hskLevelMin: 'HSK2级',
     hskLevelMax: 'HSK3级',
@@ -1004,6 +1061,7 @@ const MOCK_BOOKS: Book[] = [
     titleEn: 'Happy Chinese Book 3',
     publisher: '人民教育出版社',
     isbn: '978-7-107-37767-9',
+    version: '1.0',
     authors: ['李晓琪', '刘晓雨', '王淑红'],
     hskLevelMin: 'HSK3级',
     hskLevelMax: 'HSK3级',
@@ -1026,6 +1084,7 @@ const MOCK_BOOKS: Book[] = [
     titleEn: 'HSK Standard Course 1',
     publisher: '北京语言大学出版社',
     isbn: '978-7-5619-4019-6',
+    version: '2.0',
     authors: ['姜丽萍'],
     hskLevelMin: 'HSK1级',
     hskLevelMax: 'HSK1级',
@@ -1048,6 +1107,7 @@ const MOCK_BOOKS: Book[] = [
     titleEn: 'Business Chinese for International Trade',
     publisher: '商务印书馆 (香港)',
     isbn: '978-7-100-18234-1',
+    version: '1.0',
     authors: ['张明', '李华'],
     hskLevelMin: 'HSK4级',
     hskLevelMax: 'HSK5级',
@@ -1070,6 +1130,7 @@ const MOCK_BOOKS: Book[] = [
     titleEn: 'Experiencing Beijing Life',
     publisher: '外语教学与研究出版社',
     isbn: '978-7-5600-9234-8',
+    version: '1.0',
     authors: ['王芳'],
     hskLevelMin: 'HSK2级',
     hskLevelMax: 'HSK3级',
@@ -1288,76 +1349,12 @@ function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }
   );
 }
 
-type AddVolumeModalProps = {
-  open: boolean;
-  series: BookSeries;
-  nextVolumeOrder: number;
-  onClose: () => void;
-  onCreate: (book: Book) => void;
-};
-
-function AddVolumeModal({ open, series, nextVolumeOrder, onClose, onCreate }: AddVolumeModalProps) {
-  const [title, setTitle] = useState('');
-
-  useEffect(() => {
-    if (!open) return;
-    setTitle('');
-  }, [open, series]);
-
-  const handleCreate = () => {
-    if (!title.trim()) return;
-    onCreate({
-      id: `book-${Date.now()}`,
-      seriesId: series.id,
-      volumeOrder: nextVolumeOrder,
-      title: title.trim(),
-      publisher: series.publisher,
-      isbn: '',
-      authors: ['待填写'],
-      hskLevelMin: series.hskLevelMin,
-      hskLevelMax: series.hskLevelMax,
-      features: ['综合 (听说读写并重)'],
-      premium: false,
-      description: '',
-      unitCount: 0,
-      lessonCount: 0,
-      vocabularyCount: 0,
-      characterCount: 0,
-      lastModified: new Date().toISOString().slice(0, 10),
-      isPublished: false,
-    });
-  };
-
-  if (!open) return null;
-
-  return (
-    <div className="modal-overlay open" onClick={onClose} role="dialog" aria-modal="true" aria-label="添加册次">
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-        <div className="modal-header">
-          <div className="modal-title">添加册次 · {series.name}</div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
-        </div>
-        <div className="modal-body">
-          <div className="form-group">
-            <label>书名（中文）<span className="required">*</span></label>
-            <input className="form-input" value={title} maxLength={LIBRARY_FIELD_LIMITS.title} onChange={(e) => setTitle(sanitizeTitleName(e.target.value))} placeholder="如 快乐中文 第四册" />
-            <div className="form-hint">{LIBRARY_FIELD_HINTS.title} · {title.length}/{LIBRARY_FIELD_LIMITS.title}</div>
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
-          <button type="button" className="btn btn-primary" onClick={handleCreate} disabled={!title.trim()}>
-            创建册次
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function Library() {
   const [seriesList, setSeriesList] = useState<BookSeries[]>(INITIAL_SERIES);
   const [books, setBooks] = useState<Book[]>(MOCK_BOOKS);
+  const [bookResourcesById, setBookResourcesById] = useState<Record<string, BookResourceBundle>>(() =>
+    buildInitialBookResources(MOCK_BOOKS),
+  );
   const [globalFeatureTagsByCategory, setGlobalFeatureTagsByCategory] = useState<Record<string, string[]>>(
     () => buildInitialGlobalFeatureTags(MOCK_BOOKS),
   );
@@ -1372,7 +1369,10 @@ export function Library() {
   const [editingSeries, setEditingSeries] = useState<BookSeries | null>(null);
   const [deleteSeriesTarget, setDeleteSeriesTarget] = useState<BookSeries | null>(null);
   const [deleteSeriesConfirmText, setDeleteSeriesConfirmText] = useState('');
-  const [addVolumeOpen, setAddVolumeOpen] = useState(false);
+  const [isCreatingBook, setIsCreatingBook] = useState(false);
+  const [deleteBookTarget, setDeleteBookTarget] = useState<Book | null>(null);
+  const [deleteBookConfirmText, setDeleteBookConfirmText] = useState('');
+  const [deleteBookBlocked, setDeleteBookBlocked] = useState(false);
 
   const publisherGroups = useMemo(() => publishersByCategory(), []);
 
@@ -1436,6 +1436,13 @@ export function Library() {
     const target = deleteSeriesTarget;
     setSeriesList((prev) => prev.filter((item) => item.id !== target.id));
     setBooks((prev) => prev.filter((book) => book.seriesId !== target.id));
+    setBookResourcesById((prev) => {
+      const next = { ...prev };
+      for (const book of books) {
+        if (book.seriesId === target.id) delete next[book.id];
+      }
+      return next;
+    });
     if (selectedSeriesId === target.id) {
       setSelectedSeriesId(null);
       setView('series');
@@ -1469,18 +1476,83 @@ export function Library() {
     });
   };
 
-  const handleAddVolume = (book: Book) => {
-    setBooks((prev) => [...prev, book]);
-    setAddVolumeOpen(false);
-    showToast(`已添加 ${book.title}`);
+  const openNewBookEditor = () => {
+    if (!selectedSeries) return;
+    const seriesBooks = books.filter((b) => b.seriesId === selectedSeries.id);
+    const nextVolumeOrder = seriesBooks.length + 1;
+    setEditingBook({
+      id: `book-${Date.now()}`,
+      seriesId: selectedSeries.id,
+      volumeOrder: nextVolumeOrder,
+      title: '',
+      publisher: selectedSeries.publisher,
+      isbn: '',
+      version: '',
+      authors: [],
+      hskLevelMin: selectedSeries.hskLevelMin,
+      hskLevelMax: selectedSeries.hskLevelMax,
+      features: [],
+      premium: false,
+      description: '',
+      unitCount: 0,
+      lessonCount: 0,
+      vocabularyCount: 0,
+      characterCount: 0,
+      lastModified: new Date().toISOString().slice(0, 10),
+      isPublished: false,
+    });
+    setIsCreatingBook(true);
+    setView('edit');
   };
 
   const togglePublishStatus = (id: string) => {
-    setBooks(books.map(b =>
-      b.id === id ? { ...b, isPublished: !b.isPublished } : b
-    ));
-    const book = books.find(b => b.id === id);
-    showToast(`已${book?.isPublished ? '下架' : '上架'} ${book?.title}`);
+    const book = books.find((b) => b.id === id);
+    if (!book) return;
+    const nextPublished = !book.isPublished;
+    setBooks((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, isPublished: nextPublished } : b)),
+    );
+    if (book.isPublished && !nextPublished) {
+      setBookResourcesById((prev) => ({
+        ...prev,
+        [id]: clearBookResourceLinks(prev[id] ?? createEmptyBookResourceBundle()),
+      }));
+      showToast(`已下架 ${book.title}，关联资源已解除`);
+      return;
+    }
+    showToast(`已上架 ${book.title}`);
+  };
+
+  const requestDeleteBook = (book: Book) => {
+    if (book.isPublished) {
+      setDeleteBookBlocked(true);
+      setDeleteBookTarget(book);
+      setDeleteBookConfirmText('');
+      return;
+    }
+    setDeleteBookBlocked(false);
+    setDeleteBookTarget(book);
+    setDeleteBookConfirmText('');
+  };
+
+  const closeDeleteBook = () => {
+    setDeleteBookTarget(null);
+    setDeleteBookConfirmText('');
+    setDeleteBookBlocked(false);
+  };
+
+  const handleDeleteBook = () => {
+    if (!deleteBookTarget || deleteBookBlocked) return;
+    if (deleteBookConfirmText !== deleteBookTarget.title) return;
+    const target = deleteBookTarget;
+    setBooks((prev) => prev.filter((b) => b.id !== target.id));
+    setBookResourcesById((prev) => {
+      const next = { ...prev };
+      delete next[target.id];
+      return next;
+    });
+    closeDeleteBook();
+    showToast(`已删除《${target.title}》，关联资源已解除`);
   };
 
   const openSeries = (seriesId: string) => {
@@ -1491,6 +1563,7 @@ export function Library() {
 
   const openBookEditor = (book: Book) => {
     setEditingBook(book);
+    setIsCreatingBook(false);
     setView('edit');
   };
 
@@ -1502,6 +1575,7 @@ export function Library() {
 
   const backToBooks = () => {
     setEditingBook(null);
+    setIsCreatingBook(false);
     setView('books');
   };
 
@@ -1510,16 +1584,26 @@ export function Library() {
       <>
         <BookEditor
           book={editingBook}
+          isNew={isCreatingBook}
           seriesName={selectedSeries?.name}
+          resourceBundle={
+            bookResourcesById[editingBook.id] ??
+            (isCreatingBook ? createEmptyBookResourceBundle() : createDefaultBookResourceBundle())
+          }
           globalFeatureTagsByCategory={globalFeatureTagsByCategory}
           onGlobalFeatureTagsChange={setGlobalFeatureTagsByCategory}
           hiddenFeatureTagsByCategory={hiddenFeatureTagsByCategory}
           onHiddenFeatureTagsChange={setHiddenFeatureTagsByCategory}
-          onSave={(updated) => {
-            setBooks(books.map(b => b.id === updated.id ? updated : b));
-            setEditingBook(updated);
+          onSave={(updated, resources) => {
+            const wasCreating = isCreatingBook;
+            setBooks((prev) => {
+              const exists = prev.some((b) => b.id === updated.id);
+              return exists ? prev.map((b) => (b.id === updated.id ? updated : b)) : [...prev, updated];
+            });
+            setBookResourcesById((prev) => ({ ...prev, [updated.id]: resources }));
+            setIsCreatingBook(false);
             backToBooks();
-            showToast(`已保存 ${updated.title}`);
+            showToast(wasCreating ? `已创建 ${updated.title}` : `已保存 ${updated.title}`);
           }}
           onCancel={backToBooks}
         />
@@ -1569,7 +1653,7 @@ export function Library() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" className="btn btn-primary" onClick={() => setAddVolumeOpen(true)}>
+            <button type="button" className="btn btn-primary" onClick={openNewBookEditor}>
               ➕ 添加册次
             </button>
           </div>
@@ -1602,7 +1686,7 @@ export function Library() {
                 <th style={{ width: '100px', whiteSpace: 'nowrap' }}>级别</th>
                 <th style={{ width: '180px' }}>功能模块</th>
                 <th style={{ width: '100px' }}>状态</th>
-                <th style={{ width: '160px', whiteSpace: 'nowrap' }}>操作</th>
+                <th style={{ width: '220px', whiteSpace: 'nowrap' }}>操作</th>
               </tr>
             </thead>
             {filteredBooks.length === 0 ? (
@@ -1675,6 +1759,13 @@ export function Library() {
                             >
                               ✏️ 编辑
                             </button>
+                            <button
+                              type="button"
+                              className="action-btn delete"
+                              onClick={() => requestDeleteBook(book)}
+                            >
+                              🗑 删除
+                            </button>
                           </div>
                         </td>
                       </>
@@ -1688,13 +1779,66 @@ export function Library() {
 
         {toast && <div className="hsk-toast show">{toast}</div>}
 
-        <AddVolumeModal
-          open={addVolumeOpen}
-          series={selectedSeries}
-          nextVolumeOrder={seriesBooks.length + 1}
-          onClose={() => setAddVolumeOpen(false)}
-          onCreate={handleAddVolume}
-        />
+        <div
+          className={`modal-overlay${deleteBookTarget ? ' open' : ''}`}
+          onClick={closeDeleteBook}
+          role="dialog"
+          aria-modal="true"
+          aria-label="删除册次"
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div className="modal-title">{deleteBookBlocked ? '无法删除' : '删除册次'}</div>
+              <button type="button" className="modal-close" onClick={closeDeleteBook} aria-label="关闭">✕</button>
+            </div>
+            <div className="modal-body">
+              {deleteBookTarget && deleteBookBlocked && (
+                <p style={{ margin: 0 }}>
+                  该书籍当前处于上架状态。请先将其下架，方可删除。
+                </p>
+              )}
+              {deleteBookTarget && !deleteBookBlocked && (
+                <>
+                  <p style={{ margin: '0 0 12px' }}>
+                    确认删除《{deleteBookTarget.title}》吗？删除后数据不可恢复，且系统将同步解除该书关联的所有资源。
+                  </p>
+                  <label className="form-label">请输入书籍名称以确认删除</label>
+                  <input
+                    className="form-input"
+                    value={deleteBookConfirmText}
+                    placeholder={deleteBookTarget.title}
+                    onChange={(e) => setDeleteBookConfirmText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === 'Enter' &&
+                        deleteBookConfirmText === deleteBookTarget.title
+                      ) {
+                        e.preventDefault();
+                        handleDeleteBook();
+                      }
+                    }}
+                    autoFocus
+                  />
+                </>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={closeDeleteBook}>
+                {deleteBookBlocked ? '知道了' : '取消'}
+              </button>
+              {!deleteBookBlocked && (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={!deleteBookTarget || deleteBookConfirmText !== deleteBookTarget.title}
+                  onClick={handleDeleteBook}
+                >
+                  确认删除
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </>
     );
   }
@@ -1958,18 +2102,22 @@ function LibraryMultilangPanel({
 
 type BookEditorProps = {
   book: Book;
+  isNew?: boolean;
   seriesName?: string;
+  resourceBundle: BookResourceBundle;
   globalFeatureTagsByCategory: Record<string, string[]>;
   onGlobalFeatureTagsChange: (next: Record<string, string[]>) => void;
   hiddenFeatureTagsByCategory: Record<string, string[]>;
   onHiddenFeatureTagsChange: (next: Record<string, string[]>) => void;
-  onSave: (book: Book) => void;
+  onSave: (book: Book, resources: BookResourceBundle) => void;
   onCancel: () => void;
 };
 
 function BookEditor({
   book,
+  isNew = false,
   seriesName,
+  resourceBundle,
   globalFeatureTagsByCategory,
   onGlobalFeatureTagsChange,
   hiddenFeatureTagsByCategory,
@@ -2001,17 +2149,14 @@ function BookEditor({
       publisherByLang,
       title: titleByLang.CN ?? base.title,
       titleEn: titleByLang.EN ?? base.titleEn,
+      version: base.version ?? '',
     };
   });
   const [activeTab, setActiveTab] = useState<'basic' | 'structure' | 'content' | 'resources'>('basic');
   const [bookUnits, setBookUnits] = useState<BookUnitRow[]>(() =>
-    MOCK_BOOK_UNITS.map((u) => ({
-      ...u,
-      mounted: cloneMounted(u.mounted),
-      lessons: u.lessons.map((l) => ({ ...l, resources: { ...l.resources } })),
-    })),
+    cloneBookResourceBundle(resourceBundle).units,
   );
-  const [bookFiles, setBookFiles] = useState<BookFileResource[]>(INITIAL_BOOK_FILES);
+  const [bookFiles, setBookFiles] = useState<BookFileResource[]>(() => [...resourceBundle.files]);
   const [fileTypeFilter, setFileTypeFilter] = useState<'all' | BookResourceType>('all');
   const [resourceMountUnit, setResourceMountUnit] = useState<BookUnitRow | null>(null);
   const [addBookResourceOpen, setAddBookResourceOpen] = useState(false);
@@ -2305,6 +2450,7 @@ function BookEditor({
 
   const handleSave = () => {
     if (!editedBook.publisher || editedBook.features.length === 0) return;
+    if (!editedBook.isbn.trim() || !editedBook.version.trim()) return;
     const parsedAuthors = parseAuthorsInput(authorsInput);
     if (parsedAuthors.length === 0) return;
     const resolved = resolveTitleByLang(editedBook.title, editedBook.titleEn, editedBook.titleByLang);
@@ -2317,20 +2463,28 @@ function BookEditor({
       editedBook.volumeLabelByLang,
     );
     const resolvedPublisher = resolveTitleByLang(editedBook.publisher, undefined, editedBook.publisherByLang);
-    onSave({
-      ...editedBook,
-      titleByLang: resolvedTitleByLang,
-      volumeLabelByLang: resolvedVolume,
-      publisherByLang: resolvedPublisher,
-      customPublishersByCategory,
-      hiddenPublishers,
-      title: resolvedTitleByLang.CN?.trim() || editedBook.title,
-      titleEn: resolvedTitleByLang.EN?.trim() || '',
-      publisher: resolvedPublisher.CN?.trim() || editedBook.publisher,
-      isbn: sanitizeIsbn(editedBook.isbn),
-      authors: parsedAuthors,
-      description: sanitizeDescription(editedBook.description),
-    });
+    const resources: BookResourceBundle = {
+      units: bookUnits,
+      files: bookFiles,
+    };
+    onSave(
+      {
+        ...editedBook,
+        titleByLang: resolvedTitleByLang,
+        volumeLabelByLang: resolvedVolume,
+        publisherByLang: resolvedPublisher,
+        customPublishersByCategory,
+        hiddenPublishers,
+        title: resolvedTitleByLang.CN?.trim() || editedBook.title,
+        titleEn: resolvedTitleByLang.EN?.trim() || '',
+        publisher: resolvedPublisher.CN?.trim() || editedBook.publisher,
+        isbn: sanitizeIsbn(editedBook.isbn),
+        version: sanitizeVersion(editedBook.version),
+        authors: parsedAuthors,
+        description: sanitizeDescription(editedBook.description),
+      },
+      resources,
+    );
   };
 
   const openUnitResourceMount = (unit: BookUnitRow) => {
@@ -2422,7 +2576,7 @@ function BookEditor({
               ← 返回
             </button>
             <span>
-              编辑书籍：{book.title}
+              {isNew ? '新增数据' : `编辑书籍：${book.title}`}
               {seriesName && (
                 <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--ink-light)', marginLeft: 8 }}>
                   · {seriesName} 第 {book.volumeOrder} 册
@@ -2442,7 +2596,14 @@ function BookEditor({
               type="button" 
               className="btn btn-primary btn-sm"
               onClick={handleSave}
-              disabled={!editedBook.publisher || editedBook.features.length === 0 || !(titleByLang.CN ?? editedBook.title).trim() || parseAuthorsInput(authorsInput).length === 0}
+              disabled={
+                !editedBook.publisher ||
+                editedBook.features.length === 0 ||
+                !(titleByLang.CN ?? editedBook.title).trim() ||
+                !editedBook.isbn.trim() ||
+                !editedBook.version.trim() ||
+                parseAuthorsInput(authorsInput).length === 0
+              }
             >
               💾 保存
             </button>
@@ -2589,6 +2750,21 @@ function BookEditor({
                   />
                   <div className="form-hint">
                     {LIBRARY_FIELD_HINTS.isbn} · {editedBook.isbn.length}/{LIBRARY_FIELD_LIMITS.isbn}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>版本号<span className="required">*</span></label>
+                  <input
+                    type="text"
+                    value={editedBook.version}
+                    maxLength={LIBRARY_FIELD_LIMITS.version}
+                    placeholder="如 1.0"
+                    onChange={(e) =>
+                      setEditedBook({ ...editedBook, version: sanitizeVersion(e.target.value) })
+                    }
+                  />
+                  <div className="form-hint">
+                    {LIBRARY_FIELD_HINTS.version} · {editedBook.version.length}/{LIBRARY_FIELD_LIMITS.version}
                   </div>
                 </div>
               </div>
