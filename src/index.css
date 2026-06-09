@@ -2858,6 +2858,10 @@ input[type="range"].swm-range {
   font-size: 13px;
   font-weight: 600;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 /* ─── Inline add dropdown (出版社 / 标签) ─── */

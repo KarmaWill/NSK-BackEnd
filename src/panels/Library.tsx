@@ -2632,8 +2632,6 @@ function BookEditor({
     return normalizeBookResourceType(file.type) === fileTypeFilter;
   });
 
-  const bookFileCount = bookFiles.length;
-
   const handleAddBookResources = (files: BookFileResource[]) => {
     setBookFiles((prev) => [...prev, ...files]);
     setAddBookResourceOpen(false);
@@ -2774,7 +2772,6 @@ function BookEditor({
             onClick={() => setActiveTab('resources')}
           >
             📝 资源挂载
-            {bookFileCount > 0 && <span className="badge">{bookFileCount}</span>}
           </button>
         </div>
       </div>
