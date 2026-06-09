@@ -1,6 +1,16 @@
-const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
-  'http://localhost:3000';
+/** 开发模式默认走 Vite 同源代理 /api → localhost:3000，局域网访问 iPad 也能连 Mac 上的后端 */
+function resolveApiBase(): string {
+  const env = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
+  if (env) return env;
+  if (import.meta.env.DEV) return '';
+  return 'http://localhost:3000';
+}
+
+const API_BASE = resolveApiBase();
+
+export function usesDevApiProxy(): boolean {
+  return import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL;
+}
 
 export type ProductCode = 'hsk_web' | 'tablet_app';
 
@@ -13,7 +23,21 @@ const TOKEN_KEY = 'clingo-admin-token';
 const PRODUCT_KEY = 'clingo-active-product';
 
 export function getApiBase(): string {
-  return API_BASE;
+  if (API_BASE) return API_BASE;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'http://localhost:3000';
+}
+
+function formatFetchError(err: unknown, path: string): Error {
+  if (err instanceof Error && /failed to fetch|networkerror|load failed/i.test(err.message)) {
+    const target = `${getApiBase()}${path}`;
+    const hint = usesDevApiProxy()
+      ? '请确认 API 后端已在 Mac 本机 3000 端口运行（Vite 会把 /api 转发过去）。'
+      : `请确认 API 可访问：${getApiBase()}`;
+    return new Error(`无法连接 API（${target}）。${hint}`);
+  }
+  if (err instanceof Error) return err;
+  return new Error('登录失败');
 }
 
 export function getToken(): string | null {
@@ -52,11 +76,18 @@ export async function apiFetch<T>(
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  const url = API_BASE ? `${API_BASE}${path}` : path;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (err) {
+    throw formatFetchError(err, path);
+  }
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -68,6 +99,10 @@ export async function apiFetch<T>(
 export type AuthUser = { id: string; username: string; role: string };
 
 export async function login(username: string, password: string): Promise<AuthUser> {
+  if (import.meta.env.DEV && import.meta.env.VITE_DEV_SKIP_AUTH === '1') {
+    setToken('dev-local-token');
+    return { id: 'dev-local', username, role: 'ADMIN' };
+  }
   const data = await apiFetch<{
     token: string;
     user: AuthUser;

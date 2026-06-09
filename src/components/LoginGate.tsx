@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { login, type AuthUser } from '../lib/api';
+import { getApiBase, login, usesDevApiProxy, type AuthUser } from '../lib/api';
 
 type Props = {
   onSuccess: (user: AuthUser) => void;
@@ -43,7 +43,8 @@ export function LoginGate({ onSuccess }: Props) {
         <form onSubmit={handleSubmit} className="login-gate-card card">
           <h1 className="login-gate-title">管理后台</h1>
           <p className="login-gate-subtitle">
-            连接 API 后端 · 本地默认 http://localhost:3000
+            API：{getApiBase()}
+            {usesDevApiProxy() ? ' · 开发代理 → localhost:3000' : ''}
           </p>
           {error && <div className="login-gate-error">{error}</div>}
           <div className="form-group mb-16">

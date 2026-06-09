@@ -10,10 +10,22 @@ export default defineConfig({
   server: {
     host: lan ? '0.0.0.0' : 'localhost',
     strictPort: false,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     host: lan ? '0.0.0.0' : 'localhost',
     strictPort: false,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     rollupOptions: {

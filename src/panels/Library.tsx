@@ -64,10 +64,16 @@ type BookSeries = {
   coverColor?: string;
 };
 
+type CustomVolumeOption = {
+  order: number;
+  label: string;
+};
+
 type Book = {
   id: string;
   seriesId: string;
   volumeOrder: number;
+  customVolumeOptions?: CustomVolumeOption[];
   title: string;
   titleEn?: string;
   titleByLang?: TitleByLang;
@@ -95,6 +101,19 @@ type Book = {
   lastModified: string;
   isPublished: boolean;
 };
+
+function buildInitialCustomVolumeOptions(book: Book): CustomVolumeOption[] {
+  if (book.customVolumeOptions?.length) return [...book.customVolumeOptions];
+  if (book.volumeOrder > 12) {
+    const cn = book.volumeLabelByLang?.CN ?? formatVolumeLabelCn(book.volumeOrder);
+    return [{ order: book.volumeOrder, label: cn }];
+  }
+  return [];
+}
+
+function isPresetVolumeOrder(order: number) {
+  return order >= 1 && order <= 12;
+}
 
 function bookLevel(book: Pick<Book, 'hskLevelMin' | 'hskLevelMax'>) {
   return formatHskRange(book.hskLevelMin, book.hskLevelMax);
@@ -2044,7 +2063,15 @@ type LibraryMultilangPanelProps = {
   sanitizeValue?: (value: string) => string;
   maxLength?: number;
   fieldHint?: string;
+  /** 需点击确认后才写入书籍数据（便于多语言单独提交后端） */
+  requireConfirm?: boolean;
+  onConfirm?: (values: TitleByLang) => void;
+  confirmHint?: string;
 };
+
+function titleByLangEqual(a: TitleByLang, b: TitleByLang) {
+  return LANG_OPTIONS.every(({ key }) => (a[key] ?? '') === (b[key] ?? ''));
+}
 
 function LibraryMultilangPanel({
   langTab,
@@ -2057,10 +2084,52 @@ function LibraryMultilangPanel({
   sanitizeValue,
   maxLength,
   fieldHint,
+  requireConfirm = false,
+  onConfirm,
+  confirmHint = '确认后将写入本书数据，随整体保存提交后端',
 }: LibraryMultilangPanelProps) {
-  const currentValue = valueByLang[langTab] ?? '';
+  const [draftByLang, setDraftByLang] = useState<TitleByLang>(valueByLang);
+  const displayByLang = requireConfirm ? draftByLang : valueByLang;
+  const isDirty = requireConfirm && !titleByLangEqual(draftByLang, valueByLang);
+  const savedKey = JSON.stringify(valueByLang);
+
+  useEffect(() => {
+    if (requireConfirm) setDraftByLang(valueByLang);
+  }, [requireConfirm, savedKey, valueByLang]);
+
+  const applyValue = (lang: LangKey, raw: string) => {
+    const nextValue = sanitizeValue ? sanitizeValue(raw) : raw;
+    if (requireConfirm) {
+      setDraftByLang((prev) => ({ ...prev, [lang]: nextValue }));
+      return;
+    }
+    onChange(lang, nextValue);
+  };
+
+  const handleAutoTranslate = () => {
+    if (requireConfirm) {
+      const seed = (draftByLang.CN ?? draftByLang[langTab] ?? '').trim();
+      if (!seed) return;
+      const next = autoTranslateTitleByLang(seed);
+      const sanitized = sanitizeValue
+        ? (Object.fromEntries(
+            Object.entries(next).map(([key, val]) => [key, sanitizeValue(val ?? '')]),
+          ) as TitleByLang)
+        : next;
+      setDraftByLang(sanitized);
+      return;
+    }
+    onAutoTranslate();
+  };
+
+  const handleConfirm = () => {
+    if (!requireConfirm || !onConfirm || !isDirty) return;
+    onConfirm(draftByLang);
+  };
+
+  const currentValue = displayByLang[langTab] ?? '';
   return (
-    <div className="library-multilang-panel">
+    <div className={`library-multilang-panel${isDirty ? ' is-dirty' : ''}`}>
       <div className="library-multilang-toolbar">
         <div className="library-multilang-tabs">
           {LANG_OPTIONS.map((o) => (
@@ -2074,7 +2143,7 @@ function LibraryMultilangPanel({
             </button>
           ))}
         </div>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onAutoTranslate}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={handleAutoTranslate}>
           自动翻译
         </button>
       </div>
@@ -2083,10 +2152,7 @@ function LibraryMultilangPanel({
         className="form-input"
         value={currentValue}
         maxLength={maxLength}
-        onChange={(e) => {
-          const next = sanitizeValue ? sanitizeValue(e.target.value) : e.target.value;
-          onChange(langTab, next);
-        }}
+        onChange={(e) => applyValue(langTab, e.target.value)}
         placeholder={placeholder ?? `${LANG_OPTIONS.find((l) => l.key === langTab)?.label ?? langTab}`}
       />
       {hint}
@@ -2094,6 +2160,21 @@ function LibraryMultilangPanel({
         <div className="form-hint" style={{ marginTop: hint ? 8 : 0 }}>
           {fieldHint}
           {maxLength != null ? ` · ${currentValue.length}/${maxLength}` : ''}
+        </div>
+      )}
+      {requireConfirm && (
+        <div className="library-multilang-footer">
+          <span className="form-hint library-multilang-confirm-hint">
+            {isDirty ? '有未确认的多语言修改' : confirmHint}
+          </span>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={!isDirty}
+            onClick={handleConfirm}
+          >
+            确认保存
+          </button>
         </div>
       )}
     </div>
@@ -2167,6 +2248,9 @@ function BookEditor({
   const catalogImportInputRef = useRef<HTMLInputElement>(null);
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
   const [volumeLangTab, setVolumeLangTab] = useState<LangKey>('CN');
+  const [customVolumeOptions, setCustomVolumeOptions] = useState<CustomVolumeOption[]>(() =>
+    buildInitialCustomVolumeOptions(book),
+  );
   const [publisherLangTab, setPublisherLangTab] = useState<LangKey>('CN');
   const [customPublishersByCategory, setCustomPublishersByCategory] = useState<Record<string, string[]>>(() =>
     buildInitialCustomPublishersByCategory(book),
@@ -2199,6 +2283,18 @@ function BookEditor({
         .filter((group) => group.options.length > 0),
     [mergedPublisherGroups, hiddenPublishers],
   );
+
+  const volumeSelectOptions = useMemo(() => {
+    const preset = Array.from({ length: 12 }, (_, i) => {
+      const order = i + 1;
+      return { value: String(order), label: formatVolumeLabelCn(order) };
+    });
+    const custom = customVolumeOptions.map((item) => ({
+      value: String(item.order),
+      label: item.label,
+    }));
+    return [...preset, ...custom].sort((a, b) => Number(a.value) - Number(b.value));
+  }, [customVolumeOptions]);
 
   const selectedPublisher = PUBLISHERS.find((p) => p.name === editedBook.publisher);
 
@@ -2427,14 +2523,45 @@ function BookEditor({
   };
 
   const handleVolumeOrderChange = (volumeOrder: number) => {
+    const custom = customVolumeOptions.find((item) => item.order === volumeOrder);
+    const cnLabel = custom?.label ?? formatVolumeLabelCn(volumeOrder);
     setEditedBook((prev) => ({
       ...prev,
       volumeOrder,
       volumeLabelByLang: {
         ...(prev.volumeLabelByLang ?? resolveTitleByLang(formatVolumeLabelCn(prev.volumeOrder))),
-        CN: formatVolumeLabelCn(volumeOrder),
+        CN: cnLabel,
       },
     }));
+  };
+
+  const addCustomVolume = (label: string) => {
+    const trimmed = sanitizeTitleName(label);
+    if (!trimmed) return;
+    const maxOrder = Math.max(
+      12,
+      editedBook.volumeOrder,
+      ...customVolumeOptions.map((item) => item.order),
+    );
+    const nextOrder = maxOrder + 1;
+    setCustomVolumeOptions((prev) => [...prev, { order: nextOrder, label: trimmed }]);
+    setEditedBook((prev) => ({
+      ...prev,
+      volumeOrder: nextOrder,
+      volumeLabelByLang: {
+        ...(prev.volumeLabelByLang ?? resolveTitleByLang(formatVolumeLabelCn(prev.volumeOrder))),
+        CN: trimmed,
+      },
+    }));
+  };
+
+  const removeCustomVolume = (value: string) => {
+    const order = Number(value);
+    if (!Number.isFinite(order) || isPresetVolumeOrder(order)) return;
+    setCustomVolumeOptions((prev) => prev.filter((item) => item.order !== order));
+    if (editedBook.volumeOrder === order) {
+      handleVolumeOrderChange(1);
+    }
   };
 
   const handlePublisherChange = (publisher: string) => {
@@ -2457,11 +2584,10 @@ function BookEditor({
     const resolvedTitleByLang = Object.fromEntries(
       Object.entries(resolved).map(([key, val]) => [key, sanitizeTitleName(val ?? '')]),
     ) as TitleByLang;
-    const resolvedVolume = resolveTitleByLang(
-      formatVolumeLabelCn(editedBook.volumeOrder),
-      undefined,
-      editedBook.volumeLabelByLang,
-    );
+    const volumeCnSeed =
+      customVolumeOptions.find((item) => item.order === editedBook.volumeOrder)?.label ??
+      formatVolumeLabelCn(editedBook.volumeOrder);
+    const resolvedVolume = resolveTitleByLang(volumeCnSeed, undefined, editedBook.volumeLabelByLang);
     const resolvedPublisher = resolveTitleByLang(editedBook.publisher, undefined, editedBook.publisherByLang);
     const resources: BookResourceBundle = {
       units: bookUnits,
@@ -2482,6 +2608,7 @@ function BookEditor({
         version: sanitizeVersion(editedBook.version),
         authors: parsedAuthors,
         description: sanitizeDescription(editedBook.description),
+        customVolumeOptions,
       },
       resources,
     );
@@ -2680,23 +2807,37 @@ function BookEditor({
 
               <div className="form-group">
                 <label>册次<span className="required">*</span></label>
-                <select
-                  className="form-input form-select"
-                  style={{ maxWidth: 320, marginBottom: 10 }}
-                  value={editedBook.volumeOrder}
-                  onChange={(e) => handleVolumeOrderChange(Number(e.target.value))}
-                >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>第 {n} 册</option>
-                  ))}
-                </select>
+                <LibraryInlineAddSelect
+                  value={String(editedBook.volumeOrder)}
+                  placeholder="请选择册次"
+                  options={volumeSelectOptions}
+                  addLabel="+ 新建册次"
+                  addPlaceholder="输入册次名称，如 第 13 册"
+                  onSelect={(value) => handleVolumeOrderChange(Number(value))}
+                  onAdd={addCustomVolume}
+                  sanitizeAdd={sanitizeTitleName}
+                  maxLength={LIBRARY_FIELD_LIMITS.title}
+                  addHint={LIBRARY_FIELD_HINTS.title}
+                  canDeleteOption={(value) => !isPresetVolumeOrder(Number(value))}
+                  onDeleteOption={removeCustomVolume}
+                  deleteConfirmHint={(label) => (
+                    <>请输入 <strong>{label}</strong> 以确认删除该册次选项，此操作不可恢复。</>
+                  )}
+                  style={{ maxWidth: 360, marginBottom: 10 }}
+                />
                 <LibraryMultilangPanel
                   langTab={volumeLangTab}
                   onLangTabChange={setVolumeLangTab}
                   valueByLang={volumeLabelByLang}
                   onChange={updateVolumeLabelByLang}
                   onAutoTranslate={runAutoTranslateVolume}
-                  placeholder={`${LANG_OPTIONS.find((l) => l.key === volumeLangTab)?.label ?? volumeLangTab}册次名称`}
+                  requireConfirm
+                  onConfirm={(next) => {
+                    setEditedBook((prev) => ({ ...prev, volumeLabelByLang: next }));
+                    showEditorToast('册次多语言已确认，保存书籍时将提交后端');
+                  }}
+                  confirmHint="选定册次后在此维护各语言译名；编辑或自动翻译后请点击确认保存"
+                  placeholder={`${LANG_OPTIONS.find((l) => l.key === volumeLangTab)?.label ?? volumeLangTab}册次译名`}
                 />
               </div>
 
@@ -2730,6 +2871,16 @@ function BookEditor({
                   valueByLang={publisherByLang}
                   onChange={updatePublisherByLang}
                   onAutoTranslate={runAutoTranslatePublisher}
+                  requireConfirm
+                  onConfirm={(next) => {
+                    setEditedBook((prev) => ({
+                      ...prev,
+                      publisherByLang: next,
+                      publisher: next.CN?.trim() || prev.publisher,
+                    }));
+                    showEditorToast('出版社多语言已确认，保存书籍时将提交后端');
+                  }}
+                  confirmHint="编辑或自动翻译后，请点击确认保存再提交后端"
                   placeholder={`${LANG_OPTIONS.find((l) => l.key === publisherLangTab)?.label ?? publisherLangTab}出版社名称`}
                   hint={
                     publisherLangTab === 'CN' && !editedBook.publisher ? (

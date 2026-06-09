@@ -3315,6 +3315,28 @@ input[type="range"].swm-range {
   box-sizing: border-box;
 }
 
+.library-multilang-panel.is-dirty {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.15);
+}
+
+.library-multilang-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--stone-dark);
+  flex-wrap: wrap;
+}
+
+.library-multilang-confirm-hint {
+  flex: 1;
+  min-width: 180px;
+  margin: 0;
+}
+
 /* 资源挂载表格样式 */
 .paper-table-container {
   overflow-x: auto;
