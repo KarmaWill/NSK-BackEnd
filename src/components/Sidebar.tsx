@@ -27,6 +27,29 @@ type Props = {
   username: string;
 };
 
+function TreeExpandChevron({
+  expanded,
+  label,
+  onToggle,
+}: {
+  expanded: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`tree-expand-chevron${expanded ? ' is-expanded' : ''}`}
+      aria-expanded={expanded}
+      aria-label={expanded ? `收起${label}` : `展开${label}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+    />
+  );
+}
+
 const ICONS: Record<string, JSX.Element> = {
   dashboard: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>),
   catalog: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M3 6h18M3 12h18M3 18h18"/><rect x="3" y="3" width="3" height="18" rx="1" fill="currentColor" stroke="none" opacity={0.3}/></svg>),
@@ -61,6 +84,9 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
   const [courseLibs, setCourseLibs] = useState<CourseLibRow[]>(() => loadCourseLibs());
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() =>
     getDefaultExpandedGroupIds(getActiveProduct()),
+  );
+  const [expandedCourseLibs, setExpandedCourseLibs] = useState<Record<string, boolean>>(() =>
+    activeCourseLibId ? { [activeCourseLibId]: true } : {},
   );
   const roleLabel = role === 'admin' ? '管理员' : '课研';
 
@@ -102,6 +128,24 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
     };
   }, [activeCourseLibId, onActiveCourseLibChange]);
 
+  useEffect(() => {
+    if (!activeCourseLibId) return;
+    setExpandedCourseLibs((prev) => ({ ...prev, [activeCourseLibId]: true }));
+  }, [activeCourseLibId]);
+
+  const toggleGroupExpanded = (groupId: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupId]: !(prev[groupId] ?? false) }));
+  };
+
+  const toggleCourseLibExpanded = (libId: string) => {
+    setExpandedCourseLibs((prev) => ({ ...prev, [libId]: !(prev[libId] ?? false) }));
+  };
+
+  const selectCourseLib = (libId: string) => {
+    onActiveCourseLibChange(libId);
+    setExpandedCourseLibs((prev) => ({ ...prev, [libId]: true }));
+  };
+
   const nav = useCallback(
     (node: NavItemNode) => {
       const id = node.panel;
@@ -128,19 +172,30 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
     const expanded = expandedGroups[group.id] ?? group.defaultExpanded ?? false;
     const isActive = group.activePanels.includes(activePanel);
     const iconKey = group.iconPanel ?? 'hsk';
+    const firstPanel = group.children.find((child): child is NavItemNode => child.type === 'item')?.panel;
     return (
       <div key={group.id} className="course-tree">
         <div className="course-tree-node">
-          <div
-            className={`nav-item ${isActive ? 'active' : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.id]: !expanded }))}
-            onKeyDown={(e) => e.key === 'Enter' && setExpandedGroups((prev) => ({ ...prev, [group.id]: !expanded }))}
-          >
-            <span className="course-lib-dot">{expanded ? '▼' : '▶'}</span>
+          <div className={`nav-item tree-row ${isActive ? 'active' : ''}`}>
             {ICONS[iconKey]}
-            {group.label}
+            <span
+              className="tree-row-label"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (firstPanel) onNavigate(firstPanel);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && firstPanel) onNavigate(firstPanel);
+              }}
+            >
+              {group.label}
+            </span>
+            <TreeExpandChevron
+              expanded={expanded}
+              label={group.label}
+              onToggle={() => toggleGroupExpanded(group.id)}
+            />
           </div>
           {expanded && <div className="course-lib-children">{group.children.map(nav)}</div>}
         </div>
@@ -155,19 +210,28 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
       </div>
       {nav({ type: 'item', panel: 'course-config' })}
       <div className="course-lib-list course-tree">
-        {courseLibs.map((lib) => (
+        {courseLibs.map((lib) => {
+          const isActive = activeCourseLibId === lib.id;
+          const expanded = expandedCourseLibs[lib.id] ?? false;
+          return (
           <div key={lib.id} className="course-tree-node">
-            <div
-              className={`course-lib-item ${activeCourseLibId === lib.id ? 'active' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
-              onKeyDown={(e) => e.key === 'Enter' && onActiveCourseLibChange(activeCourseLibId === lib.id ? '' : lib.id)}
-            >
-              <span className="course-lib-dot">{activeCourseLibId === lib.id ? '▼' : '▶'}</span>
-              <span className="course-lib-name">{lib.name}</span>
+            <div className={`course-lib-item tree-row ${isActive ? 'active' : ''}`}>
+              <span
+                className="course-lib-name tree-row-label"
+                role="button"
+                tabIndex={0}
+                onClick={() => selectCourseLib(lib.id)}
+                onKeyDown={(e) => e.key === 'Enter' && selectCourseLib(lib.id)}
+              >
+                {lib.name}
+              </span>
+              <TreeExpandChevron
+                expanded={expanded}
+                label={lib.name}
+                onToggle={() => toggleCourseLibExpanded(lib.id)}
+              />
             </div>
-            {activeCourseLibId === lib.id && (
+            {expanded && (
               <div className="course-lib-children">
                 {lib.modules.catalog && nav({ type: 'item', panel: 'catalog', childClass: 'course-child-item' })}
                 {lib.modules.resources && nav({ type: 'item', panel: 'resources', badge: { text: '77' }, childClass: 'course-child-item' })}
@@ -177,7 +241,8 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

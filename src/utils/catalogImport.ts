@@ -205,3 +205,39 @@ export function parseCatalogWorkbook(data: ArrayBuffer, options?: ParseCatalogOp
 
   return parseFlatCatalog(rows, options?.bookTitle ?? '全书');
 }
+
+const CATALOG_IMPORT_ALLOWED_EXT = ['.xlsx', '.xls'] as const;
+const CATALOG_IMPORT_BLOCKED_EXT = [
+  '.doc',
+  '.docx',
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.zip',
+  '.rar',
+  '.7z',
+] as const;
+
+function fileExtension(name: string) {
+  const lower = name.toLowerCase();
+  const dot = lower.lastIndexOf('.');
+  return dot >= 0 ? lower.slice(dot) : '';
+}
+
+export function validateCatalogImportFile(file: File): { ok: true } | { ok: false; message: string } {
+  const ext = fileExtension(file.name);
+  if ((CATALOG_IMPORT_BLOCKED_EXT as readonly string[]).includes(ext)) {
+    return {
+      ok: false,
+      message: `不支持 ${ext} 文件，请上传 Excel 表格（.xlsx / .xls）`,
+    };
+  }
+  if (!(CATALOG_IMPORT_ALLOWED_EXT as readonly string[]).includes(ext)) {
+    return { ok: false, message: '仅支持 .xlsx / .xls 格式的 Excel 文件' };
+  }
+  return { ok: true };
+}

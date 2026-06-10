@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import type { DragEndEvent } from '@dnd-kit/core';
-import { parseCatalogWorkbook } from '../utils/catalogImport';
+import { parseCatalogWorkbook, validateCatalogImportFile, type ParsedCatalogUnit } from '../utils/catalogImport';
 import {
   BookSortableTableBody,
   SeriesSortableGrid,
@@ -74,6 +74,7 @@ type Book = {
   seriesId: string;
   volumeOrder: number;
   customVolumeOptions?: CustomVolumeOption[];
+  hiddenVolumeOrders?: number[];
   title: string;
   titleEn?: string;
   titleByLang?: TitleByLang;
@@ -113,6 +114,41 @@ function buildInitialCustomVolumeOptions(book: Book): CustomVolumeOption[] {
 
 function isPresetVolumeOrder(order: number) {
   return order >= 1 && order <= 12;
+}
+
+function buildVolumeSelectOptions(
+  hiddenVolumeOrders: number[],
+  customVolumeOptions: CustomVolumeOption[],
+) {
+  const preset = Array.from({ length: 12 }, (_, i) => {
+    const order = i + 1;
+    if (hiddenVolumeOrders.includes(order)) return null;
+    return { value: String(order), label: formatVolumeLabelCn(order) };
+  }).filter((item): item is { value: string; label: string } => item !== null);
+  const custom = customVolumeOptions.map((item) => ({
+    value: String(item.order),
+    label: item.label,
+  }));
+  return [...preset, ...custom].sort((a, b) => Number(a.value) - Number(b.value));
+}
+
+function buildBookUnitsFromCatalog(parsed: ParsedCatalogUnit[], previous: BookUnitRow[]): BookUnitRow[] {
+  return parsed.map((unit) => {
+    const existing = previous.find((row) => row.order === unit.order);
+    return {
+      id: existing?.id ?? `unit-${unit.order}`,
+      order: unit.order,
+      title: unit.title,
+      titleEn: existing?.titleEn,
+      mounted: existing ? cloneMounted(existing.mounted) : createEmptyMounted(),
+      lessons: unit.lessons.map((lesson, index) => ({
+        id: `lesson-${unit.order}-${index + 1}`,
+        title: lesson.title,
+        page: lesson.page,
+        resources: createEmptyResources(),
+      })),
+    };
+  });
 }
 
 function bookLevel(book: Pick<Book, 'hskLevelMin' | 'hskLevelMax'>) {
@@ -1497,12 +1533,10 @@ export function Library() {
 
   const openNewBookEditor = () => {
     if (!selectedSeries) return;
-    const seriesBooks = books.filter((b) => b.seriesId === selectedSeries.id);
-    const nextVolumeOrder = seriesBooks.length + 1;
     setEditingBook({
       id: `book-${Date.now()}`,
       seriesId: selectedSeries.id,
-      volumeOrder: nextVolumeOrder,
+      volumeOrder: 0,
       title: '',
       publisher: selectedSeries.publisher,
       isbn: '',
@@ -2214,16 +2248,16 @@ function BookEditor({
           return { ...book, hskLevelMin: legacy.min, hskLevelMax: legacy.max };
         })();
     const titleByLang = resolveTitleByLang(base.title, base.titleEn, base.titleByLang);
-    const volumeLabelByLang = resolveTitleByLang(
-      formatVolumeLabelCn(base.volumeOrder),
-      undefined,
-      base.volumeLabelByLang,
-    );
+    const volumeLabelByLang =
+      base.volumeOrder > 0
+        ? resolveTitleByLang(formatVolumeLabelCn(base.volumeOrder), undefined, base.volumeLabelByLang)
+        : resolveTitleByLang('', undefined, base.volumeLabelByLang);
     const publisherByLang = resolveTitleByLang(base.publisher, undefined, base.publisherByLang);
     const legacyFormat = (base as Book & { format?: string }).format;
     const formats = base.formats ?? (legacyFormat ? [legacyFormat as BookFormat] : []);
     return {
       ...base,
+      volumeOrder: isNew ? 0 : base.volumeOrder,
       formats,
       titleByLang,
       volumeLabelByLang,
@@ -2243,6 +2277,8 @@ function BookEditor({
   const [addBookResourceOpen, setAddBookResourceOpen] = useState(false);
   const [catalogImportOpen, setCatalogImportOpen] = useState(false);
   const [catalogImportFileName, setCatalogImportFileName] = useState('');
+  const [catalogImportLoading, setCatalogImportLoading] = useState(false);
+  const [catalogImportParsed, setCatalogImportParsed] = useState<ParsedCatalogUnit[] | null>(null);
   const [editorToast, setEditorToast] = useState<string | null>(null);
   const [fileToRemove, setFileToRemove] = useState<BookFileResource | null>(null);
   const catalogImportInputRef = useRef<HTMLInputElement>(null);
@@ -2251,6 +2287,7 @@ function BookEditor({
   const [customVolumeOptions, setCustomVolumeOptions] = useState<CustomVolumeOption[]>(() =>
     buildInitialCustomVolumeOptions(book),
   );
+  const [hiddenVolumeOrders, setHiddenVolumeOrders] = useState<number[]>(() => book.hiddenVolumeOrders ?? []);
   const [publisherLangTab, setPublisherLangTab] = useState<LangKey>('CN');
   const [customPublishersByCategory, setCustomPublishersByCategory] = useState<Record<string, string[]>>(() =>
     buildInitialCustomPublishersByCategory(book),
@@ -2284,17 +2321,10 @@ function BookEditor({
     [mergedPublisherGroups, hiddenPublishers],
   );
 
-  const volumeSelectOptions = useMemo(() => {
-    const preset = Array.from({ length: 12 }, (_, i) => {
-      const order = i + 1;
-      return { value: String(order), label: formatVolumeLabelCn(order) };
-    });
-    const custom = customVolumeOptions.map((item) => ({
-      value: String(item.order),
-      label: item.label,
-    }));
-    return [...preset, ...custom].sort((a, b) => Number(a.value) - Number(b.value));
-  }, [customVolumeOptions]);
+  const volumeSelectOptions = useMemo(
+    () => buildVolumeSelectOptions(hiddenVolumeOrders, customVolumeOptions),
+    [hiddenVolumeOrders, customVolumeOptions],
+  );
 
   const selectedPublisher = PUBLISHERS.find((p) => p.name === editedBook.publisher);
 
@@ -2555,13 +2585,36 @@ function BookEditor({
     }));
   };
 
-  const removeCustomVolume = (value: string) => {
+  const removeVolumeOption = (value: string) => {
     const order = Number(value);
-    if (!Number.isFinite(order) || isPresetVolumeOrder(order)) return;
-    setCustomVolumeOptions((prev) => prev.filter((item) => item.order !== order));
-    if (editedBook.volumeOrder === order) {
-      handleVolumeOrderChange(1);
+    if (!Number.isFinite(order) || order <= 0) return;
+
+    const nextHidden =
+      isPresetVolumeOrder(order) && !hiddenVolumeOrders.includes(order)
+        ? [...hiddenVolumeOrders, order]
+        : hiddenVolumeOrders;
+    const nextCustom = isPresetVolumeOrder(order)
+      ? customVolumeOptions
+      : customVolumeOptions.filter((item) => item.order !== order);
+
+    if (isPresetVolumeOrder(order)) {
+      setHiddenVolumeOrders(nextHidden);
+    } else {
+      setCustomVolumeOptions(nextCustom);
     }
+
+    if (editedBook.volumeOrder !== order) return;
+
+    const remaining = buildVolumeSelectOptions(nextHidden, nextCustom);
+    if (remaining.length === 0) {
+      setEditedBook((prev) => ({
+        ...prev,
+        volumeOrder: 0,
+        volumeLabelByLang: resolveTitleByLang(''),
+      }));
+      return;
+    }
+    handleVolumeOrderChange(Number(remaining[0].value));
   };
 
   const handlePublisherChange = (publisher: string) => {
@@ -2585,8 +2638,10 @@ function BookEditor({
       Object.entries(resolved).map(([key, val]) => [key, sanitizeTitleName(val ?? '')]),
     ) as TitleByLang;
     const volumeCnSeed =
-      customVolumeOptions.find((item) => item.order === editedBook.volumeOrder)?.label ??
-      formatVolumeLabelCn(editedBook.volumeOrder);
+      editedBook.volumeOrder > 0
+        ? (customVolumeOptions.find((item) => item.order === editedBook.volumeOrder)?.label ??
+          formatVolumeLabelCn(editedBook.volumeOrder))
+        : '';
     const resolvedVolume = resolveTitleByLang(volumeCnSeed, undefined, editedBook.volumeLabelByLang);
     const resolvedPublisher = resolveTitleByLang(editedBook.publisher, undefined, editedBook.publisherByLang);
     const resources: BookResourceBundle = {
@@ -2609,6 +2664,7 @@ function BookEditor({
         authors: parsedAuthors,
         description: sanitizeDescription(editedBook.description),
         customVolumeOptions,
+        hiddenVolumeOrders,
       },
       resources,
     );
@@ -2642,49 +2698,61 @@ function BookEditor({
     window.setTimeout(() => setEditorToast(null), 2200);
   };
 
-  const applyImportedCatalog = (data: ArrayBuffer) => {
-    const parsed = parseCatalogWorkbook(data, { bookTitle: editedBook.title });
-    setBookUnits((prev) =>
-      parsed.map((unit) => {
-        const existing = prev.find((row) => row.order === unit.order);
-        return {
-          id: existing?.id ?? `unit-${unit.order}`,
-          order: unit.order,
-          title: unit.title,
-          titleEn: existing?.titleEn,
-          mounted: existing ? cloneMounted(existing.mounted) : createEmptyMounted(),
-          lessons: unit.lessons.map((lesson, index) => ({
-            id: `lesson-${unit.order}-${index + 1}`,
-            title: lesson.title,
-            page: lesson.page,
-            resources: createEmptyResources(),
-          })),
-        };
-      }),
-    );
-    const lessonCount = parsed.reduce((sum, unit) => sum + unit.lessons.length, 0);
-    showEditorToast(`已导入 ${parsed.length} 个单元、${lessonCount} 课`);
+  const catalogImportLessonCount = useMemo(
+    () => catalogImportParsed?.reduce((sum, unit) => sum + unit.lessons.length, 0) ?? 0,
+    [catalogImportParsed],
+  );
+
+  const openCatalogImportModal = () => {
+    setCatalogImportFileName('');
+    setCatalogImportParsed(null);
+    setCatalogImportLoading(false);
+    setCatalogImportOpen(true);
+  };
+
+  const closeCatalogImportModal = () => {
     setCatalogImportOpen(false);
     setCatalogImportFileName('');
+    setCatalogImportParsed(null);
+    setCatalogImportLoading(false);
   };
 
   const handleCatalogImportFile = async (file?: File) => {
-    if (!file) return;
-    if (!/\.xlsx$/i.test(file.name)) {
-      showEditorToast('请上传 .xlsx 格式的 Excel 文件');
+    if (!file || catalogImportLoading) return;
+    const validation = validateCatalogImportFile(file);
+    if (!validation.ok) {
+      showEditorToast(validation.message);
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
       showEditorToast('文件大小不能超过 10MB');
       return;
     }
-    setCatalogImportFileName(file.name);
+    setCatalogImportLoading(true);
+    setCatalogImportParsed(null);
+    setCatalogImportFileName('');
     try {
       const buffer = await file.arrayBuffer();
-      applyImportedCatalog(buffer);
-    } catch (error) {
-      showEditorToast(error instanceof Error ? error.message : '导入失败，请检查表格格式');
+      const parsed = parseCatalogWorkbook(buffer, { bookTitle: editedBook.title });
+      setCatalogImportFileName(file.name);
+      setCatalogImportParsed(parsed);
+    } catch {
+      setCatalogImportParsed(null);
+      setCatalogImportFileName('');
+      showEditorToast('上传失败，请重新上传');
+    } finally {
+      setCatalogImportLoading(false);
     }
+  };
+
+  const confirmCatalogImport = () => {
+    if (!catalogImportParsed?.length) return;
+    const units = buildBookUnitsFromCatalog(catalogImportParsed, bookUnits);
+    setBookUnits(units);
+    closeCatalogImportModal();
+    showEditorToast(
+      `上传成功，已导入 ${catalogImportParsed.length} 个单元、${catalogImportLessonCount} 课`,
+    );
   };
 
   return (
@@ -2702,37 +2770,39 @@ function BookEditor({
             </button>
             <span>
               {isNew ? '新增数据' : `编辑书籍：${book.title}`}
-              {seriesName && (
+              {seriesName && editedBook.volumeOrder > 0 && (
                 <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--ink-light)', marginLeft: 8 }}>
-                  · {seriesName} 第 {book.volumeOrder} 册
+                  · {seriesName} 第 {editedBook.volumeOrder} 册
                 </span>
               )}
             </span>
           </h1>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
-              type="button" 
-              className="btn btn-secondary btn-sm"
-              onClick={onCancel}
-            >
-              取消
-            </button>
-            <button 
-              type="button" 
-              className="btn btn-primary btn-sm"
-              onClick={handleSave}
-              disabled={
-                !editedBook.publisher ||
-                editedBook.features.length === 0 ||
-                !(titleByLang.CN ?? editedBook.title).trim() ||
-                !editedBook.isbn.trim() ||
-                !editedBook.version.trim() ||
-                parseAuthorsInput(authorsInput).length === 0
-              }
-            >
-              💾 保存
-            </button>
-          </div>
+          {activeTab === 'basic' && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary btn-sm"
+                onClick={onCancel}
+              >
+                取消
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-primary btn-sm"
+                onClick={handleSave}
+                disabled={
+                  !editedBook.publisher ||
+                  editedBook.features.length === 0 ||
+                  !(titleByLang.CN ?? editedBook.title).trim() ||
+                  !editedBook.isbn.trim() ||
+                  !editedBook.version.trim() ||
+                  parseAuthorsInput(authorsInput).length === 0
+                }
+              >
+                💾 保存
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 标签页 */}
@@ -2803,9 +2873,9 @@ function BookEditor({
               </div>
 
               <div className="form-group">
-                <label>册次<span className="required">*</span></label>
+                <label>册次</label>
                 <LibraryInlineAddSelect
-                  value={String(editedBook.volumeOrder)}
+                  value={editedBook.volumeOrder > 0 ? String(editedBook.volumeOrder) : ''}
                   placeholder="请选择册次"
                   options={volumeSelectOptions}
                   addLabel="+ 新建册次"
@@ -2815,8 +2885,8 @@ function BookEditor({
                   sanitizeAdd={sanitizeTitleName}
                   maxLength={LIBRARY_FIELD_LIMITS.title}
                   addHint={LIBRARY_FIELD_HINTS.title}
-                  canDeleteOption={(value) => !isPresetVolumeOrder(Number(value))}
-                  onDeleteOption={removeCustomVolume}
+                  canDeleteOption={() => true}
+                  onDeleteOption={removeVolumeOption}
                   deleteConfirmHint={(label) => (
                     <>请输入 <strong>{label}</strong> 以确认删除该册次选项，此操作不可恢复。</>
                   )}
@@ -3121,7 +3191,7 @@ function BookEditor({
           <div className="config-section">
             <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>📋 内容管理</span>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setCatalogImportOpen(true)}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={openCatalogImportModal}>
                 📥 导入教材目录
               </button>
             </div>
@@ -3244,7 +3314,7 @@ function BookEditor({
 
       <div
         className={`modal-overlay ${catalogImportOpen ? 'open' : ''}`}
-        onClick={() => setCatalogImportOpen(false)}
+        onClick={closeCatalogImportModal}
         role="dialog"
         aria-modal="true"
         aria-label="导入教材目录"
@@ -3252,46 +3322,64 @@ function BookEditor({
         <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
           <div className="modal-header">
             <div className="modal-title">导入教材目录</div>
-            <button type="button" className="modal-close" onClick={() => setCatalogImportOpen(false)} aria-label="关闭">✕</button>
+            <button type="button" className="modal-close" onClick={closeCatalogImportModal} aria-label="关闭">✕</button>
           </div>
           <div className="modal-body">
             <input
               ref={catalogImportInputRef}
               type="file"
-              accept=".xlsx"
+              accept=".xlsx,.xls"
               style={{ display: 'none' }}
+              disabled={catalogImportLoading}
               onChange={(e) => {
                 void handleCatalogImportFile(e.target.files?.[0]);
                 e.target.value = '';
               }}
             />
             <div
-              style={{
-                border: '1px dashed var(--stone-dark)',
-                borderRadius: 12,
-                padding: '44px 20px',
-                textAlign: 'center',
-                background: 'var(--mist)',
-                marginBottom: 18,
-                cursor: 'pointer',
+              className={`library-catalog-import-dropzone${catalogImportLoading ? ' is-loading' : ''}${catalogImportParsed ? ' is-ready' : ''}`}
+              onClick={() => !catalogImportLoading && catalogImportInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!catalogImportLoading) e.currentTarget.classList.add('is-dragover');
               }}
-              onClick={() => catalogImportInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('is-dragover');
+              }}
               onDrop={(e) => {
                 e.preventDefault();
-                void handleCatalogImportFile(e.dataTransfer.files?.[0]);
+                e.currentTarget.classList.remove('is-dragover');
+                if (!catalogImportLoading) void handleCatalogImportFile(e.dataTransfer.files?.[0]);
               }}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && catalogImportInputRef.current?.click()}
+              onKeyDown={(e) => e.key === 'Enter' && !catalogImportLoading && catalogImportInputRef.current?.click()}
             >
-              <div style={{ width: 50, height: 50, margin: '0 auto 12px', border: '2px solid var(--ink-light)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-light)', fontSize: 26 }}>
-                ↑
-              </div>
-              <div style={{ fontSize: 16, marginBottom: 2 }}>点击上传或拖拽 Excel 文件至此</div>
-              <div className="form-hint">支持 .xlsx 格式 · 最大 10MB</div>
-              {catalogImportFileName && (
-                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--teal)' }}>已选择：{catalogImportFileName}</div>
+              {catalogImportLoading ? (
+                <div className="library-catalog-import-loading">
+                  <span className="library-catalog-import-spinner" aria-hidden />
+                  <div>正在解析表格…</div>
+                </div>
+              ) : catalogImportParsed ? (
+                <>
+                  <div className="library-catalog-import-drop-icon" aria-hidden>✓</div>
+                  <div className="library-catalog-import-drop-title">
+                    解析完成 {catalogImportParsed.length} 个单元 · {catalogImportLessonCount} 课
+                  </div>
+                  {catalogImportFileName && (
+                    <div className="form-hint" style={{ marginTop: 6 }}>{catalogImportFileName}</div>
+                  )}
+                  <div className="form-hint" style={{ marginTop: 8 }}>确认无误后，请点击下方「保存并导入」</div>
+                </>
+              ) : (
+                <>
+                  <div className="library-catalog-import-drop-icon" aria-hidden>↑</div>
+                  <div className="library-catalog-import-drop-title">点击上传或拖拽 Excel 文件至此</div>
+                  <div className="form-hint">
+                    支持 .xlsx / .xls · 最大 10MB · 不支持 doc / pdf / png / zip 等非表格文件
+                  </div>
+                </>
               )}
             </div>
 
@@ -3299,7 +3387,7 @@ function BookEditor({
             <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
               <li><b style={{ color: 'var(--ink)' }}>双层目录</b>（快乐中文等）：一级目录填单元，如「第一单元 我和你」；二级目录填课，如「1 你好」；第三列填页码</li>
               <li><b style={{ color: 'var(--ink)' }}>单层目录</b>（HSK 等）：仅填写课程行，如「1 你好」+ 页码；整本书作为一个单元，单元名取当前书名</li>
-              <li>导入后同步更新「结构配置」与「内容管理」</li>
+              <li>解析后需点击「保存并导入」才会写入「结构配置」与「内容管理」</li>
             </ul>
 
             <div style={{ marginTop: 12 }}>
@@ -3313,6 +3401,19 @@ function BookEditor({
                 下载导入模板
               </a>
             </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={closeCatalogImportModal}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={confirmCatalogImport}
+              disabled={!catalogImportParsed?.length || catalogImportLoading}
+            >
+              保存并导入
+            </button>
           </div>
         </div>
       </div>
