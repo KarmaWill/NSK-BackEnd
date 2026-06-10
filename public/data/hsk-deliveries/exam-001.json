@@ -1,0 +1,323 @@
+{
+  "examId": "exam-001",
+  "level": 1,
+  "title": "HSK1 模拟考试 · 2024 春季",
+  "durationMinutes": 40,
+  "totalScore": 200,
+  "passScore": 120,
+  "showPinyin": true,
+  "noticeRules": [
+    "本次考试共 40 题，满分 200 分，考试时长 40 分钟。",
+    "听力部分约 17 分钟，阅读部分约 23 分钟，请合理分配答题时间。",
+    "听力音频仅播放一次，请集中注意力。",
+    "提交后不可修改答案，请确认后再提交。"
+  ],
+  "sectionSummary": [
+    {
+      "module": "听力",
+      "count": 20,
+      "minutes": 17
+    },
+    {
+      "module": "阅读",
+      "count": 20,
+      "minutes": 15
+    }
+  ],
+  "questions": [
+    {
+      "id": 1,
+      "type": "L01",
+      "typeName": "图片选择",
+      "category": "listening",
+      "section": "第一部分",
+      "content": {
+        "phrase": "七个苹果"
+      },
+      "options": [
+        {
+          "key": "A",
+          "image": "🍎"
+        },
+        {
+          "key": "B",
+          "image": "🍊"
+        },
+        {
+          "key": "C",
+          "image": "🍎🍎"
+        }
+      ],
+      "answer": "C",
+      "score": 5
+    },
+    {
+      "id": 2,
+      "type": "L01",
+      "typeName": "图片选择",
+      "category": "listening",
+      "section": "第一部分",
+      "content": {
+        "phrase": "汉语老师"
+      },
+      "options": [
+        {
+          "key": "A",
+          "image": "👨‍⚕️"
+        },
+        {
+          "key": "B",
+          "image": "👨‍🏫"
+        },
+        {
+          "key": "C",
+          "image": "👨‍🍳"
+        }
+      ],
+      "answer": "B",
+      "score": 5
+    },
+    {
+      "id": 3,
+      "type": "L01",
+      "typeName": "图片选择",
+      "category": "listening",
+      "section": "第一部分",
+      "content": {
+        "phrase": "很好吃"
+      },
+      "options": [
+        {
+          "key": "A",
+          "image": "😋"
+        },
+        {
+          "key": "B",
+          "image": "😢"
+        },
+        {
+          "key": "C",
+          "image": "😠"
+        }
+      ],
+      "answer": "A",
+      "score": 5
+    },
+    {
+      "id": 4,
+      "type": "L01",
+      "typeName": "图片选择",
+      "category": "listening",
+      "section": "第一部分",
+      "content": {
+        "phrase": "坐飞机"
+      },
+      "options": [
+        {
+          "key": "A",
+          "image": "🚄"
+        },
+        {
+          "key": "B",
+          "image": "🚗"
+        },
+        {
+          "key": "C",
+          "image": "✈️"
+        }
+      ],
+      "answer": "C",
+      "score": 5
+    },
+    {
+      "id": 5,
+      "type": "L01",
+      "typeName": "图片选择",
+      "category": "listening",
+      "section": "第一部分",
+      "content": {
+        "phrase": "不高兴"
+      },
+      "options": [
+        {
+          "key": "A",
+          "image": "😊"
+        },
+        {
+          "key": "B",
+          "image": "😞"
+        },
+        {
+          "key": "C",
+          "image": "😴"
+        }
+      ],
+      "answer": "B",
+      "score": 5
+    },
+    {
+      "id": 6,
+      "type": "L03",
+      "typeName": "短句选答",
+      "category": "listening",
+      "section": "第二部分",
+      "content": {
+        "phrase": "短句选答 1"
+      },
+      "options": [
+        {
+          "key": "A",
+          "text": "在读书",
+          "pinyin": "zài dú shū"
+        },
+        {
+          "key": "B",
+          "text": "六点了",
+          "pinyin": "liù diǎn le"
+        },
+        {
+          "key": "C",
+          "text": "再见",
+          "pinyin": "zài jiàn"
+        }
+      ],
+      "answer": "A",
+      "score": 5
+    },
+    {
+      "id": 11,
+      "type": "L02_group",
+      "typeName": "对话-图片匹配",
+      "category": "listening",
+      "section": "第三部分",
+      "options": [
+        {
+          "key": "A",
+          "image": "👗"
+        },
+        {
+          "key": "B",
+          "image": "🎤"
+        },
+        {
+          "key": "C",
+          "image": "🎧"
+        },
+        {
+          "key": "D",
+          "image": "🍳"
+        },
+        {
+          "key": "E",
+          "image": "🏥"
+        },
+        {
+          "key": "F",
+          "image": "🚗"
+        }
+      ],
+      "questions": [
+        {
+          "id": 11,
+          "answer": "E",
+          "score": 5
+        },
+        {
+          "id": 12,
+          "answer": "A",
+          "score": 5
+        },
+        {
+          "id": 13,
+          "answer": "D",
+          "score": 5
+        },
+        {
+          "id": 14,
+          "answer": "C",
+          "score": 5
+        },
+        {
+          "id": 15,
+          "answer": "B",
+          "score": 5
+        }
+      ],
+      "score": 25
+    },
+    {
+      "id": 21,
+      "type": "R01",
+      "typeName": "图文匹配",
+      "category": "reading",
+      "section": "第一部分",
+      "content": {
+        "sentence": "我喜欢吃面条。",
+        "pinyin": "wǒ xǐ huan chī miàn tiáo"
+      },
+      "options": [
+        {
+          "key": "A",
+          "image": "🏠"
+        },
+        {
+          "key": "B",
+          "image": "🍜"
+        },
+        {
+          "key": "C",
+          "image": "📱"
+        },
+        {
+          "key": "D",
+          "image": "🚗"
+        },
+        {
+          "key": "E",
+          "image": "🍜"
+        },
+        {
+          "key": "F",
+          "image": "✍️"
+        }
+      ],
+      "answer": "E",
+      "score": 5
+    },
+    {
+      "id": 31,
+      "type": "R03_group",
+      "typeName": "选词填空",
+      "category": "reading",
+      "section": "第三部分",
+      "questions": [
+        {
+          "id": 31,
+          "answer": "",
+          "score": 5
+        },
+        {
+          "id": 32,
+          "answer": "",
+          "score": 5
+        },
+        {
+          "id": 33,
+          "answer": "",
+          "score": 5
+        },
+        {
+          "id": 34,
+          "answer": "",
+          "score": 5
+        },
+        {
+          "id": 35,
+          "answer": "",
+          "score": 5
+        }
+      ],
+      "score": 25
+    }
+  ]
+}

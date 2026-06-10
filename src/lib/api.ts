@@ -1,4 +1,6 @@
 /** 开发模式默认走 Vite 同源代理 /api → localhost:3000，局域网访问 iPad 也能连 Mac 上的后端 */
+import type { ExamDeliveryPackage } from '../types/hskExams';
+
 function resolveApiBase(): string {
   const env = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
   if (env) return env;
@@ -279,4 +281,8 @@ export async function updateCmsBanner(id: string, data: Partial<CmsBannerRow>): 
 
 export async function deleteCmsBanner(id: string): Promise<void> {
   await apiFetch(`/api/cms/banners/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchHskExamDelivery(examId: string): Promise<ExamDeliveryPackage> {
+  return apiFetch<ExamDeliveryPackage>(`/api/hsk/exams/${encodeURIComponent(examId)}/delivery`);
 }

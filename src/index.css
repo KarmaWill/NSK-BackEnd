@@ -1537,6 +1537,21 @@ input[type="range"].swm-range {
   opacity: 1;
 }
 
+.modal-overlay.open .modal.hsk-question-picker {
+  margin-left: auto;
+  margin-right: 0;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal.hsk-question-picker .modal-body {
+  flex: 1;
+  overflow: auto;
+}
+
 /* 听力、阅读、书写配色 */
 .dot-listening { background: #4f46e5; }
 .dot-reading { background: var(--teal); }
@@ -2509,30 +2524,6 @@ input[type="range"].swm-range {
   gap: 6px;
 }
 
-.preview-device-toggle {
-  display: flex;
-  gap: 4px;
-  background: var(--stone-lighter);
-  padding: 2px;
-  border-radius: 6px;
-}
-
-.device-btn {
-  padding: 4px 12px;
-  border: none;
-  background: transparent;
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s;
-  color: var(--ink-light);
-}
-
-.device-btn.active {
-  background: var(--white);
-  color: var(--ink);
-}
-
 .preview-body {
   flex: 1;
   overflow-y: auto;
@@ -2544,7 +2535,7 @@ input[type="range"].swm-range {
 
 .preview-device {
   width: 100%;
-  max-width: 500px;
+  max-width: 680px;
   background: var(--white);
   border-radius: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);

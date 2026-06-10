@@ -268,11 +268,7 @@ export function HskQuestionConfig({ section, questionTypeId, hskLevel, onBack }:
         {/* 右侧预览面板 */}
         <div className="preview-panel">
           <div className="preview-header">
-            <h2>📱 实时预览</h2>
-            <div className="preview-device-toggle">
-              <button type="button" className="device-btn active">iPad</button>
-              <button type="button" className="device-btn">iPhone</button>
-            </div>
+            <h2>实时预览</h2>
           </div>
           <div className="preview-body">
             <div className="preview-device">
