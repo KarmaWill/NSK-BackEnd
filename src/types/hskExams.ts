@@ -7,7 +7,8 @@ export type HskPublishStatus = 'draft' | 'published';
 export type HskQuestionTypeCode =
   | 'L01' | 'L02' | 'L03' | 'L04' | 'L05' | 'L06'
   | 'R01' | 'R02' | 'R03' | 'R04' | 'R05' | 'R06' | 'R07' | 'R08' | 'R09'
-  | 'W01' | 'W02' | 'W03' | 'W04';
+  | 'W01' | 'W02' | 'W03' | 'W04'
+  | 'T01' | 'T02' | 'T03' | 'T04' | 'T05' | 'T06';
 
 export type HskQuestionTypeDef = {
   id: HskQuestionTypeCode;
@@ -20,6 +21,12 @@ export type HskQuestionTypeDef = {
   difficulty: string;
   isPublished: boolean;
   lastModified: string;
+  /** 作答模式（题型模板编辑） */
+  answerMode?: string;
+  /** 默认选项数量 */
+  defaultOptionCount?: number;
+  /** 题目编辑页显示的字段区块 */
+  editorFieldFlags?: Partial<Record<'audio' | 'image' | 'subQuestions' | 'wordBank' | 'pinyin' | 'writing', boolean>>;
 };
 
 export type HskQuestionOption = {
@@ -176,6 +183,7 @@ export type HskComposedPaper = {
   id: string;
   templateId: string;
   name: string;
+  description?: string;
   level: HskLevelCode | string;
   slots: HskPaperSlot[];
   totalScore: number;
@@ -183,6 +191,7 @@ export type HskComposedPaper = {
   duration: number;
   status: HskPublishStatus;
   linkedCourses: number;
+  createdAt?: string;
   updatedAt: string;
 };
 

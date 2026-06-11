@@ -18,6 +18,8 @@ import { HskExam } from './HskExam';
 import { HskPaper } from './HskPaper';
 import { HskQuestionBank } from './HskQuestionBank';
 import { Culture } from './Culture';
+import { VideoAdd } from './VideoAdd';
+import { VideoTypes } from './VideoTypes';
 import { Library } from './Library';
 import { Users } from './Users';
 import { Premium } from './Premium';
@@ -59,7 +61,7 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   hsk: () => <Hsk />,
   'hsk-question-bank': () => <HskQuestionBank />,
   'hsk-paper': () => <HskPaper />,
-  'hsk-exam': () => <HskExam />,
+  'hsk-exam': (p) => <HskExam onNavigate={p.onNavigate} />,
   'hsk-diagnostic': () => <DiagnosticAssessment />,
   'hsk-vocab-assess': () => <VocabAssessment />,
   'hsk-speaking-rater': () => (
@@ -78,6 +80,8 @@ const PANELS: Record<PanelId, (props: PanelProps) => JSX.Element> = {
   ),
   'hsk-compose': (p) => <HskCompose onNavigate={p.onNavigate} />,
   culture: () => <Culture />,
+  'video-add': () => <VideoAdd />,
+  'video-types': () => <VideoTypes />,
   library: () => <Library />,
   users: () => <Users />,
   feedback: () => <Feedback />,

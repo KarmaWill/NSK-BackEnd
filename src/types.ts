@@ -17,6 +17,8 @@ export type PanelId =
   | 'ai-eval'
   | 'ai-api'
   | 'culture'
+  | 'video-add'
+  | 'video-types'
   | 'library'
   | 'hsk'
   | 'hsk-question-bank'
@@ -58,7 +60,9 @@ export const NAV_LABELS: Record<PanelId, string> = {
   'ai-scene': '场景训练管理',
   'ai-eval': '发音评测设置',
   'ai-api': 'API 集成配置',
-  culture: '视频中心',
+  culture: '视频列表',
+  'video-add': '新增视频',
+  'video-types': '视频类型',
   library: '书籍教材管理',
   hsk: 'HSK考试管理',
   'hsk-question-bank': '题库管理',

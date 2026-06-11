@@ -1,106 +1,165 @@
 import { useMemo, useState } from 'react';
-import { HskDeliveryPreview } from '../components/HskDeliveryPreview';
-import { HskQuestionPicker } from '../components/HskQuestionPicker';
-import { HskTemplateEditor } from '../components/HskTemplateEditor';
-import { PageTabPanel, PageTabs } from '../components/PageTabs';
-import { getLevelStandard } from '../config/hskLevelStandards';
-import { levelToNumber } from '../config/hskQuestionTypes';
+import { HskPaperComposer } from '../components/HskPaperComposer';
+import { HskPaperPreviewPage } from '../components/HskPaperPreviewPage';
 import { useHskStore } from '../hooks/useHskStore';
 import {
   createPaperFromTemplate,
+  deletePaper,
   loadHskStore,
   publishPaper,
-  publishTemplate,
   savePaper,
-  saveTemplate,
+  unpublishPaper,
 } from '../stores/hskExams';
-import type { HskComposedPaper, HskPaperSlot, HskPaperTemplate } from '../types/hskExams';
-import { previewExamDelivery, validateDeliveryCompile } from '../utils/hskCompileDelivery';
-import {
-  assignQuestionNumbers,
-  calcPaperScore,
-  countFilledSlots,
-  countScoringSlots,
-  createEmptyTemplate as buildEmptyTemplate,
-} from '../utils/hskPaperUtils';
+import type { HskComposedPaper, HskPaperTemplate } from '../types/hskExams';
+import { validateDeliveryCompile } from '../utils/hskCompileDelivery';
+import { countFilledSlots, countScoringSlots } from '../utils/hskPaperUtils';
 
-const PAPER_TABS = [
-  { id: 'templates', label: '试卷模板' },
-  { id: 'list', label: '试卷列表' },
-  { id: 'compose', label: '组卷编辑' },
-  { id: 'preview', label: '编译预览' },
-] as const;
+type ListStep = 'list' | 'selectTemplate';
+
+type DeleteModal = {
+  paper: HskComposedPaper;
+  linkedExams: number;
+};
+
+type PublishModal =
+  | { type: 'incomplete'; paper: HskComposedPaper; emptySlots: number }
+  | { type: 'unpublish'; paper: HskComposedPaper; linkedExams: number };
+
+function formatPaperDate(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('zh-CN');
+}
+
+/** 展示用编号：兼容旧版 paper_xxx / paper-001 */
+function formatPaperDisplayId(id: string, index: number): string {
+  if (/^PAP-\d+/i.test(id)) return id.toUpperCase();
+  const legacyNum = id.match(/^paper-0*(\d+)$/i);
+  if (legacyNum) return `PAP-${legacyNum[1].padStart(3, '0')}`;
+  if (/^paper_\d+$/i.test(id)) return `PAP-${String(index + 1).padStart(3, '0')}`;
+  return id.length > 12 ? `${id.slice(0, 10)}…` : id;
+}
+
+function paperDescription(paper: HskComposedPaper, template?: HskPaperTemplate): string {
+  if (paper.description?.trim()) return paper.description.trim();
+  if (template) return `基于 ${template.name} 模板生成的正式考试试卷`;
+  return '';
+}
+
+function countEmptySlots(paper: HskComposedPaper): number {
+  const scoring = countScoringSlots(paper.slots);
+  const filled = countFilledSlots(paper.slots);
+  return Math.max(0, scoring - filled);
+}
 
 export function HskPaper() {
   const { store, refresh } = useHskStore();
-  const [activeTab, setActiveTab] = useState<string>('list');
-  const [selectedHskLevel, setSelectedHskLevel] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [listStep, setListStep] = useState<ListStep>('list');
   const [toast, setToast] = useState<string | null>(null);
-  const [editingTemplate, setEditingTemplate] = useState<HskPaperTemplate | null>(null);
   const [editingPaper, setEditingPaper] = useState<HskComposedPaper | null>(null);
-  const [pickerSlot, setPickerSlot] = useState<HskPaperSlot | null>(null);
-  const [publishError, setPublishError] = useState<string | null>(null);
   const [previewPaper, setPreviewPaper] = useState<HskComposedPaper | null>(null);
+  const [deleteModal, setDeleteModal] = useState<DeleteModal | null>(null);
+  const [publishModal, setPublishModal] = useState<PublishModal | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2200);
   };
 
+  const sortedPapers = useMemo(
+    () =>
+      [...store.papers].sort((a, b) => {
+        const at = new Date(a.createdAt ?? a.updatedAt).getTime();
+        const bt = new Date(b.createdAt ?? b.updatedAt).getTime();
+        return bt - at;
+      }),
+    [store.papers],
+  );
+
   const filteredPapers = useMemo(() => {
-    return store.papers.filter((p) => {
-      const lvl = levelToNumber(String(p.level));
-      const matchesLevel = selectedHskLevel === null || lvl === selectedHskLevel;
-      const matchesSearch =
-        searchQuery === '' ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.id.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesLevel && matchesSearch;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sortedPapers;
+    return sortedPapers.filter((paper) => {
+      const tpl = store.templates.find((t) => t.id === paper.templateId);
+      return (
+        paper.id.toLowerCase().includes(q) ||
+        paper.name.toLowerCase().includes(q) ||
+        paper.description?.toLowerCase().includes(q) ||
+        tpl?.name.toLowerCase().includes(q)
+      );
     });
-  }, [store.papers, selectedHskLevel, searchQuery]);
+  }, [searchQuery, sortedPapers, store.templates]);
 
-  const getHskBadgeClass = (level: string) => {
-    const n = levelToNumber(level) ?? 1;
-    return `hsk-badge-${n}`;
+  const publishedCount = sortedPapers.filter((p) => p.status === 'published').length;
+
+  const getTemplate = (paper: HskComposedPaper) =>
+    store.templates.find((t) => t.id === paper.templateId);
+
+  const getLinkedExamCount = (paperId: string) =>
+    store.exams.filter((e) => e.paperId === paperId).length;
+
+  const handleTogglePublish = (paper: HskComposedPaper) => {
+    if (paper.status === 'published') {
+      const linkedExams = getLinkedExamCount(paper.id);
+      if (linkedExams > 0) {
+        setPublishModal({ type: 'unpublish', paper, linkedExams });
+        return;
+      }
+      unpublishPaper(store, paper.id);
+      refresh();
+      showToast('已取消发布');
+      return;
+    }
+    const emptySlots = countEmptySlots(paper);
+    if (emptySlots > 0) {
+      setPublishModal({ type: 'incomplete', paper, emptySlots });
+      return;
+    }
+    const err = publishPaper(loadHskStore(), paper.id);
+    if (err) {
+      showToast(err);
+      return;
+    }
+    refresh();
+    showToast('试卷已发布');
   };
 
-  const moduleStats = (paper: HskComposedPaper) => {
-    const listening = paper.slots.filter((s) => s.moduleId === 'listening' && !s.isExample).length;
-    const reading = paper.slots.filter((s) => s.moduleId === 'reading' && !s.isExample).length;
-    const writing = paper.slots.filter((s) => s.moduleId === 'writing' && !s.isExample).length;
-    return { listening, reading, writing };
+  const confirmDelete = () => {
+    if (!deleteModal) return;
+    deletePaper(store, deleteModal.paper.id);
+    refresh();
+    setDeleteModal(null);
+    showToast(`已删除试卷 ${deleteModal.paper.id}`);
   };
 
-  if (editingTemplate) {
+  const handleCreateFromTemplate = (template: HskPaperTemplate) => {
+    const paper = createPaperFromTemplate(store, template.id);
+    if (!paper) {
+      showToast('模板不存在');
+      return;
+    }
+    refresh();
+    setListStep('list');
+    setEditingPaper(structuredClone(paper));
+    showToast('已创建试卷，请从题库选题');
+  };
+
+  if (previewPaper) {
+    const template = getTemplate(previewPaper);
+    const compileWarning = template
+      ? validateDeliveryCompile(previewPaper, store.questions, template)
+      : '未找到关联模板';
     return (
       <>
-        <HskTemplateEditor
-          template={editingTemplate}
+        <HskPaperPreviewPage
+          paper={previewPaper}
+          template={template}
+          questions={store.questions}
           typeDefs={store.questionTypes}
-          publishError={publishError}
-          onChange={setEditingTemplate}
-          onBack={() => {
-            setEditingTemplate(null);
-            setPublishError(null);
-          }}
-          onSave={() => {
-            saveTemplate(store, { ...editingTemplate, status: 'draft' });
-            refresh();
-            showToast('模板草稿已保存');
-          }}
-          onPublish={() => {
-            saveTemplate(store, editingTemplate);
-            const err = publishTemplate(loadHskStore(), editingTemplate.id);
-            if (err) {
-              setPublishError(err);
-              return;
-            }
-            setPublishError(null);
-            refresh();
-            showToast('模板已发布');
-            setEditingTemplate(null);
-          }}
+          compileWarning={compileWarning}
+          onBack={() => setPreviewPaper(null)}
         />
         {toast && <div className="hsk-toast show">{toast}</div>}
       </>
@@ -108,119 +167,37 @@ export function HskPaper() {
   }
 
   if (editingPaper) {
-    const filled = countFilledSlots(editingPaper.slots);
-    const scoring = countScoringSlots(editingPaper.slots);
-    const template = store.templates.find((t) => t.id === editingPaper.templateId);
+    const template = getTemplate(editingPaper);
     const compileErr = template ? validateDeliveryCompile(editingPaper, store.questions, template) : null;
-    const levelNum = levelToNumber(String(editingPaper.level));
-    const standard = levelNum ? getLevelStandard(levelNum) : null;
     return (
       <>
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <button type="button" className="back-btn" onClick={() => setEditingPaper(null)}>← 返回列表</button>
-            <div className="page-title" style={{ marginTop: 8 }}>{editingPaper.name}</div>
-            <div className="page-subtitle">
-              已选题 {filled}/{scoring} · {calcPaperScore(editingPaper.slots)} 分
-              {standard && (
-                <span style={{ marginLeft: 8 }}>
-                  · HSK{levelNum} 标准 {standard.totalScore} 分 / {standard.totalQuestions} 题
-                </span>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                setPreviewPaper(editingPaper);
-                setActiveTab('preview');
-              }}
-            >
-              编译预览
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                savePaper(store, { ...editingPaper, status: 'draft' });
-                refresh();
-                showToast('组卷草稿已保存');
-              }}
-            >
-              保存草稿
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                if (compileErr) {
-                  showToast(compileErr);
-                  return;
-                }
-                savePaper(store, editingPaper);
-                const err = publishPaper(loadHskStore(), editingPaper.id);
-                if (err) {
-                  showToast(err);
-                  return;
-                }
-                refresh();
-                showToast('试卷已发布');
-                setEditingPaper(null);
-              }}
-            >
-              发布试卷
-            </button>
-          </div>
-        </div>
-        {compileErr && (
-          <div className="card" style={{ marginBottom: 12 }}>
-            <div className="card-body" style={{ color: 'var(--danger)', fontSize: 13 }}>{compileErr}</div>
-          </div>
-        )}
-        <div className="card" style={{ marginTop: 0 }}>
-          <div className="card-body">
-            <div className="hsk-qtype-grid">
-              {editingPaper.slots.filter((s) => !s.isExample).map((slot) => (
-                <button
-                  key={slot.globalIndex}
-                  type="button"
-                  className={`hsk-qtype-card ${slot.questionId ? 'configured' : 'unconfigured'}`}
-                  onClick={() => setPickerSlot(slot)}
-                >
-                  <div className="hsk-qtc-top">
-                    <span className="hsk-qtc-id">{slot.questionType}</span>
-                    <span className={`hsk-qtc-status ${slot.questionId ? 'st-done' : 'st-empty'}`}>
-                      {slot.questionId ? '已选' : '待选'}
-                    </span>
-                  </div>
-                  <div className="hsk-qtc-name">第 {slot.questionNumber} 题</div>
-                  <div className="hsk-qtc-desc">{slot.sectionName}</div>
-                  <div className="hsk-qtc-footer">
-                    <span className="hsk-qtc-count">{slot.questionId ?? '点击从题库选择'}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <HskQuestionPicker
-          open={!!pickerSlot}
-          slot={pickerSlot}
+        <HskPaperComposer
+          paper={editingPaper}
+          template={template}
           questions={store.questions}
-          onClose={() => setPickerSlot(null)}
-          onSelect={(question) => {
-            if (!pickerSlot) return;
-            const slots = editingPaper.slots.map((s) =>
-              s.globalIndex === pickerSlot.globalIndex ? { ...s, questionId: question.question_uid } : s,
-            );
-            setEditingPaper({
-              ...editingPaper,
-              slots: assignQuestionNumbers(slots),
-              totalScore: calcPaperScore(slots),
-            });
-            setPickerSlot(null);
+          typeDefs={store.questionTypes}
+          compileError={compileErr}
+          onBack={() => setEditingPaper(null)}
+          onChange={setEditingPaper}
+          onSaveDraft={() => {
+            savePaper(store, { ...editingPaper, status: 'draft' });
+            refresh();
+            showToast('组卷草稿已保存');
+          }}
+          onPublish={() => {
+            if (compileErr) {
+              showToast(compileErr);
+              return;
+            }
+            savePaper(store, editingPaper);
+            const err = publishPaper(loadHskStore(), editingPaper.id);
+            if (err) {
+              showToast(err);
+              return;
+            }
+            refresh();
+            showToast('试卷已发布');
+            setEditingPaper(null);
           }}
         />
         {toast && <div className="hsk-toast show">{toast}</div>}
@@ -228,121 +205,168 @@ export function HskPaper() {
     );
   }
 
-  const templatesPanel = (
-    <div className="paper-table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>模板 ID</th>
-            <th>名称</th>
-            <th>级别</th>
-            <th>题量/分值</th>
-            <th>状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {store.templates.map((tpl) => (
-            <tr key={tpl.id}>
-              <td><span className="paper-id">{tpl.id}</span></td>
-              <td>{tpl.name}</td>
-              <td><span className={`hsk-badge ${getHskBadgeClass(String(tpl.level))}`}>{tpl.level}</span></td>
-              <td>{tpl.totalQuestions} 题 / {tpl.totalScore} 分 / {tpl.totalDuration} 分钟</td>
-              <td>{tpl.status === 'published' ? '已发布' : '草稿'}</td>
-              <td>
-                <div className="actions">
-                  <button type="button" className="action-btn edit" onClick={() => setEditingTemplate(structuredClone(tpl))}>编辑</button>
-                  <button
-                    type="button"
-                    className="action-btn data"
-                    onClick={() => {
-                      const paper = createPaperFromTemplate(store, tpl.id);
-                      if (paper) {
-                        refresh();
-                        setEditingPaper(structuredClone(paper));
-                        setActiveTab('compose');
-                        showToast('已基于模板创建组卷');
-                      }
-                    }}
-                  >
-                    组卷
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const listPanel = (
-    <>
-      <div className="paper-filter-bar">
-        <div className="filter-group">
-          <span className="filter-label">HSK级别:</span>
-          <select value={selectedHskLevel ?? ''} onChange={(e) => setSelectedHskLevel(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">全部级别</option>
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <option key={n} value={n}>HSK {n}</option>
-            ))}
-          </select>
+  if (listStep === 'selectTemplate') {
+    return (
+      <div className="hsk-paper-mgmt">
+        <div className="hsk-paper-mgmt-header">
+          <div className="hsk-paper-mgmt-header-main">
+            <button type="button" className="hsk-paper-back" onClick={() => setListStep('list')}>
+              ← 返回列表
+            </button>
+            <h2 className="hsk-paper-mgmt-title">选择试卷模板</h2>
+            <p className="hsk-paper-mgmt-stats">从考试管理的模板中选择，生成具体试卷实例</p>
+          </div>
         </div>
-        <div className="filter-group">
+        <div className="hsk-paper-mgmt-body">
+        <div className="hsk-paper-template-grid">
+          {store.templates.length === 0 && (
+            <div className="hsk-paper-empty">暂无模板，请先在考试管理中配置试卷模板。</div>
+          )}
+          {store.templates.map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              className="hsk-paper-template-card"
+              onClick={() => handleCreateFromTemplate(tpl)}
+            >
+              <div className="hsk-paper-template-card-top">
+                <span className="hsk-paper-template-level">{tpl.level}</span>
+                <span className={`hsk-paper-template-status${tpl.status === 'published' ? ' is-published' : ''}`}>
+                  {tpl.status === 'published' ? '已发布' : '草稿'}
+                </span>
+              </div>
+              <h3>{tpl.name}</h3>
+              <p>
+                {tpl.totalQuestions} 题 · {tpl.totalScore} 分 · {tpl.totalDuration} 分钟
+              </p>
+            </button>
+          ))}
+        </div>
+        </div>
+        {toast && <div className="hsk-toast show">{toast}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="hsk-paper-mgmt">
+      <div className="hsk-paper-mgmt-header">
+        <div className="hsk-paper-mgmt-header-main">
+          <h2 className="hsk-paper-mgmt-title">试卷管理</h2>
+          <p className="hsk-paper-mgmt-stats">
+            共 {sortedPapers.length} 份试卷 · {publishedCount} 份已发布 · {sortedPapers.length - publishedCount} 份草稿
+          </p>
+        </div>
+        <div className="hsk-paper-mgmt-header-actions">
           <input
-            type="text"
-            className="search-input"
-            placeholder="搜索试卷 ID 或名称..."
+            type="search"
+            className="hsk-paper-mgmt-search"
+            placeholder="搜索试卷编号或名称..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          <button type="button" className="hsk-paper-create-btn" onClick={() => setListStep('selectTemplate')}>
+            + 新建试卷
+          </button>
         </div>
       </div>
-      <div className="paper-table-container">
-        <table>
+
+      <div className="hsk-paper-mgmt-body">
+      <div className="hsk-paper-table-card">
+        <table className="hsk-paper-table">
           <thead>
             <tr>
-              <th>试卷 ID</th>
-              <th>名称</th>
-              <th>级别</th>
-              <th>构成</th>
-              <th>总分/时长</th>
-              <th>状态</th>
-              <th>操作</th>
+              <th className="col-id">试卷编号</th>
+              <th className="col-name">试卷名称</th>
+              <th className="col-tpl">模板来源</th>
+              <th className="col-num">题目数</th>
+              <th className="col-score">总分</th>
+              <th className="col-publish">发布</th>
+              <th className="col-date">创建时间</th>
+              <th className="col-actions">操作</th>
             </tr>
           </thead>
           <tbody>
             {filteredPapers.map((paper) => {
-              const stats = moduleStats(paper);
+              const tpl = getTemplate(paper);
+              const filled = countFilledSlots(paper.slots);
+              const scoring = countScoringSlots(paper.slots);
+              const desc = paperDescription(paper, tpl);
+              const paperIndex = sortedPapers.findIndex((p) => p.id === paper.id);
+              const displayId = formatPaperDisplayId(paper.id, paperIndex >= 0 ? paperIndex : 0);
               return (
                 <tr key={paper.id}>
-                  <td><span className="paper-id">{paper.id}</span></td>
-                  <td>{paper.name}</td>
-                  <td><span className={`hsk-badge ${getHskBadgeClass(String(paper.level))}`}>{paper.level}</span></td>
-                  <td>
-                    <div className="question-stats">
-                      <div className="stat-item stat-listening">{stats.listening}</div>
-                      <div className="stat-item stat-reading">{stats.reading}</div>
-                      <div className="stat-item stat-writing">{stats.writing}</div>
+                  <td className="col-id">
+                    <code className="hsk-paper-code" title={paper.id}>{displayId}</code>
+                  </td>
+                  <td className="col-name">
+                    <div className="hsk-paper-name-cell">
+                      <div className="hsk-paper-name-row">
+                        <span className="hsk-paper-name">{paper.name}</span>
+                        <span className={`hsk-paper-status${paper.status === 'published' ? ' is-published' : ''}`}>
+                          {paper.status === 'published' ? '已发布' : '草稿'}
+                        </span>
+                      </div>
+                      {desc && <div className="hsk-paper-desc">{desc}</div>}
                     </div>
                   </td>
-                  <td>{paper.totalScore} 分 / {paper.duration} 分钟</td>
-                  <td>{paper.status === 'published' ? '已发布' : '草稿'}</td>
-                  <td>
-                    <div className="actions">
-                      <button type="button" className="action-btn edit" onClick={() => setEditingPaper(structuredClone(paper))}>
-                        组卷编辑
+                  <td className="col-tpl">
+                    <div className="hsk-paper-tpl-cell">
+                      <span className="hsk-paper-tpl-name">{tpl?.name ?? '未知模板'}</span>
+                      {tpl && <span className="hsk-paper-tpl-level">{tpl.level}</span>}
+                    </div>
+                  </td>
+                  <td className="col-num">
+                    <span className={`hsk-paper-count${filled < scoring ? ' is-incomplete' : ''}`}>
+                      {filled} 题
+                    </span>
+                  </td>
+                  <td className="col-score">{paper.totalScore} 分</td>
+                  <td className="col-publish">
+                    <label className="status-toggle" title={paper.status === 'published' ? '已发布' : '草稿'}>
+                      <input
+                        type="checkbox"
+                        checked={paper.status === 'published'}
+                        onChange={() => handleTogglePublish(paper)}
+                      />
+                      <span className="toggle-slider" />
+                    </label>
+                  </td>
+                  <td className="col-date">{formatPaperDate(paper.createdAt ?? paper.updatedAt)}</td>
+                  <td className="col-actions">
+                    <div className="hsk-paper-row-actions">
+                      <button
+                        type="button"
+                        className="hsk-paper-action hsk-paper-action-preview"
+                        onClick={() => setPreviewPaper(structuredClone(paper))}
+                      >
+                        预览
                       </button>
                       <button
                         type="button"
-                        className="action-btn data"
-                        onClick={() => {
-                          setPreviewPaper(structuredClone(paper));
-                          setActiveTab('preview');
-                        }}
+                        className="hsk-paper-action hsk-paper-action-compose"
+                        onClick={() => setEditingPaper(structuredClone(paper))}
                       >
-                        编译预览
+                        组卷编辑
                       </button>
+                      {paper.status === 'published' ? (
+                        <span className="hsk-paper-action hsk-paper-action-disabled" title="已发布试卷不可删除，请先取消发布">
+                          删除
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="hsk-paper-action hsk-paper-action-danger"
+                          onClick={() =>
+                            setDeleteModal({
+                              paper,
+                              linkedExams: getLinkedExamCount(paper.id),
+                            })
+                          }
+                        >
+                          删除
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -350,74 +374,94 @@ export function HskPaper() {
             })}
           </tbody>
         </table>
+        {filteredPapers.length === 0 && (
+          <div className="hsk-paper-empty">
+            {searchQuery.trim() ? '没有匹配的试卷，请调整搜索条件。' : '暂无试卷，点击「新建试卷」从模板创建。'}
+          </div>
+        )}
       </div>
-    </>
-  );
-
-  return (
-    <>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div className="page-title">试卷管理</div>
-          <div className="page-subtitle">试卷模板 · 试卷列表 · 从题库组卷</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setEditingTemplate(buildEmptyTemplate())}
-          >
-            + 新建模板
-          </button>
-        </div>
       </div>
 
-      <PageTabs tabs={[...PAPER_TABS]} activeTab={activeTab} onTabChange={setActiveTab}>
-        <PageTabPanel id="templates" activeTab={activeTab}>{templatesPanel}</PageTabPanel>
-        <PageTabPanel id="list" activeTab={activeTab}>{listPanel}</PageTabPanel>
-        <PageTabPanel id="compose" activeTab={activeTab}>
-          <div className="card">
-            <div className="card-body">
-              <p className="text-muted" style={{ margin: '0 0 12px' }}>
-                请从「试卷模板」创建组卷，或在「试卷列表」点击「组卷编辑」从题库选题。
+      {deleteModal && (
+        <div className="hsk-paper-modal-overlay" onClick={() => setDeleteModal(null)} role="presentation">
+          <div className="hsk-paper-modal" onClick={(e) => e.stopPropagation()} role="dialog">
+            <h3 className="hsk-paper-modal-title">删除试卷「{deleteModal.paper.name}」</h3>
+            {deleteModal.linkedExams > 0 ? (
+              <div className="hsk-paper-modal-warning">
+                该试卷已关联 <strong>{deleteModal.linkedExams}</strong> 场考试。删除后相关考试将一并移除，确认删除？
+              </div>
+            ) : (
+              <p className="hsk-paper-modal-text">
+                确认删除试卷「{deleteModal.paper.id}」？此操作不可恢复。
               </p>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveTab('templates')}>
-                前往模板列表
+            )}
+            <div className="hsk-paper-modal-actions">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDeleteModal(null)}>
+                取消
+              </button>
+              <button type="button" className="hsk-paper-modal-delete" onClick={confirmDelete}>
+                确认删除
               </button>
             </div>
           </div>
-        </PageTabPanel>
-        <PageTabPanel id="preview" activeTab={activeTab}>
-          {(() => {
-            const paper = previewPaper ?? filteredPapers[0] ?? null;
-            const template = paper ? store.templates.find((t) => t.id === paper.templateId) : null;
-            const err = paper && template ? validateDeliveryCompile(paper, store.questions, template) : null;
-            const delivery = paper && template ? previewExamDelivery(paper, template, store.questions) : null;
-            return (
-              <>
-                <div className="paper-filter-bar">
-                  <div className="filter-group">
-                    <span className="filter-label">预览试卷:</span>
-                    <select
-                      value={paper?.id ?? ''}
-                      onChange={(e) => {
-                        const next = store.papers.find((p) => p.id === e.target.value);
-                        setPreviewPaper(next ? structuredClone(next) : null);
-                      }}
-                    >
-                      {store.papers.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <HskDeliveryPreview delivery={delivery} error={err} />
-              </>
-            );
-          })()}
-        </PageTabPanel>
-      </PageTabs>
+        </div>
+      )}
+
+      {publishModal?.type === 'incomplete' && (
+        <div className="hsk-paper-modal-overlay" onClick={() => setPublishModal(null)} role="presentation">
+          <div className="hsk-paper-modal" onClick={(e) => e.stopPropagation()} role="dialog">
+            <h3 className="hsk-paper-modal-title">无法发布</h3>
+            <p className="hsk-paper-modal-text">
+              还有 <strong>{publishModal.emptySlots}</strong> 道题未从题库选题，请先完成组卷编辑。
+            </p>
+            <div className="hsk-paper-modal-actions">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPublishModal(null)}>
+                知道了
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setEditingPaper(structuredClone(publishModal.paper));
+                  setPublishModal(null);
+                }}
+              >
+                去组卷编辑
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {publishModal?.type === 'unpublish' && (
+        <div className="hsk-paper-modal-overlay" onClick={() => setPublishModal(null)} role="presentation">
+          <div className="hsk-paper-modal" onClick={(e) => e.stopPropagation()} role="dialog">
+            <h3 className="hsk-paper-modal-title">取消发布</h3>
+            <div className="hsk-paper-modal-warning">
+              该试卷已关联 <strong>{publishModal.linkedExams}</strong> 场考试。取消发布后，相关考试可能需要重新配置。
+            </div>
+            <div className="hsk-paper-modal-actions">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPublishModal(null)}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="hsk-paper-modal-delete"
+                onClick={() => {
+                  unpublishPaper(store, publishModal.paper.id);
+                  refresh();
+                  setPublishModal(null);
+                  showToast('已取消发布');
+                }}
+              >
+                确认取消发布
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && <div className="hsk-toast show">{toast}</div>}
-    </>
+    </div>
   );
 }

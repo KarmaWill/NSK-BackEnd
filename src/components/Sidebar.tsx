@@ -62,7 +62,9 @@ const ICONS: Record<string, JSX.Element> = {
   'ai-capabilities': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M12 2l2.2 4.6 5 .7-3.6 3.5.9 4.9L12 13.8 7.5 15.7l.9-4.9L4.8 7.3l5-.7L12 2z"/><path d="M4 21h16"/></svg>),
   'ai-free': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>),
   'ai-scene': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>),
-  culture: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>),
+  culture: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>),
+  'video-add': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>),
+  'video-types': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>),
   library: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>),
   hsk: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
   users: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>),
@@ -152,6 +154,26 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
     setExpandedCourseLibs((prev) => ({ ...prev, [libId]: true }));
   };
 
+  const handleCourseLibRowClick = (libId: string) => {
+    const expanded = expandedCourseLibs[libId] ?? false;
+    if (expanded) {
+      toggleCourseLibExpanded(libId);
+    } else {
+      selectCourseLib(libId);
+    }
+  };
+
+  const handleGroupRowClick = (group: NavGroupNode) => {
+    const expanded = expandedGroups[group.id] ?? group.defaultExpanded ?? false;
+    const firstPanel = group.children.find((child): child is NavItemNode => child.type === 'item')?.panel;
+    if (expanded) {
+      toggleGroupExpanded(group.id);
+    } else {
+      setExpandedGroups((prev) => ({ ...prev, [group.id]: true }));
+      if (firstPanel) onNavigate(firstPanel);
+    }
+  };
+
   const nav = useCallback(
     (node: NavItemNode) => {
       const id = node.panel;
@@ -178,25 +200,19 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
     const expanded = expandedGroups[group.id] ?? group.defaultExpanded ?? false;
     const isActive = group.activePanels.includes(activePanel);
     const iconKey = group.iconPanel ?? 'hsk';
-    const firstPanel = group.children.find((child): child is NavItemNode => child.type === 'item')?.panel;
     return (
       <div key={group.id} className="course-tree">
         <div className="course-tree-node">
-          <div className={`nav-item tree-row ${isActive ? 'active' : ''}`}>
+          <div
+            className={`nav-item tree-row ${isActive ? 'active' : ''}`}
+            role="button"
+            tabIndex={0}
+            aria-expanded={expanded}
+            onClick={() => handleGroupRowClick(group)}
+            onKeyDown={(e) => e.key === 'Enter' && handleGroupRowClick(group)}
+          >
             {ICONS[iconKey]}
-            <span
-              className="tree-row-label"
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                if (firstPanel) onNavigate(firstPanel);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && firstPanel) onNavigate(firstPanel);
-              }}
-            >
-              {group.label}
-            </span>
+            <span className="tree-row-label">{group.label}</span>
             <TreeExpandChevron
               expanded={expanded}
               label={group.label}
@@ -221,17 +237,16 @@ export function Sidebar({ activePanel, onNavigate, activeCourseLibId, onActiveCo
           const expanded = expandedCourseLibs[lib.id] ?? false;
           return (
           <div key={lib.id} className="course-tree-node">
-            <div className={`course-lib-item tree-row ${isActive ? 'active' : ''}`}>
+            <div
+              className={`course-lib-item tree-row ${isActive ? 'active' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded}
+              onClick={() => handleCourseLibRowClick(lib.id)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCourseLibRowClick(lib.id)}
+            >
               {ICONS['course-lib']}
-              <span
-                className="course-lib-name tree-row-label"
-                role="button"
-                tabIndex={0}
-                onClick={() => selectCourseLib(lib.id)}
-                onKeyDown={(e) => e.key === 'Enter' && selectCourseLib(lib.id)}
-              >
-                {lib.name}
-              </span>
+              <span className="course-lib-name tree-row-label">{lib.name}</span>
               <TreeExpandChevron
                 expanded={expanded}
                 label={lib.name}

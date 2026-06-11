@@ -1,6 +1,7 @@
-import { HSK_QUESTION_TYPE_DEFS, levelToNumber } from '../config/hskQuestionTypes';
+import { HSK_QUESTION_TYPE_DEFS, ensureQuestionTypes, levelToNumber } from '../config/hskQuestionTypes';
 import { getLevelStandard } from '../config/hskLevelStandards';
-import { createHsk1SeedQuestions } from '../data/hsk1SeedQuestions';
+import { createDefaultQuestionTags, ensureQuestionTags } from '../config/hskQuestionTags';
+import { createAdminSeedQuestions, ensureAdminSeedQuestions } from '../data/hskAdminSeedQuestions';
 import type {
   ExamDeliveryPackage,
   HskComposedPaper,
@@ -30,15 +31,11 @@ export const HSK_EXAMS_UPDATED_EVENT = 'nsk-hsk-exams-updated';
 const stamp = () => new Date().toISOString();
 
 function seedQuestions(): HskQuestionRow[] {
-  return createHsk1SeedQuestions();
+  return createAdminSeedQuestions();
 }
 
 function seedTags(): HskQuestionTag[] {
-  return [
-    { id: 'tag-2c1', label: '2选1', description: '二选一选项题' },
-    { id: 'tag-3c1', label: '3选1', description: '三选一选项题' },
-    { id: 'tag-4c1', label: '4选1', description: '四选一选项题' },
-  ];
+  return createDefaultQuestionTags();
 }
 
 function seedTemplate(): HskPaperTemplate {
@@ -150,10 +147,12 @@ function seedPaper(template: HskPaperTemplate): HskComposedPaper {
     20: 'Q-R01-01',
   };
   const slots = buildSlotsFromTemplate(template, HSK_QUESTION_TYPE_DEFS, assignments);
+  const now = stamp();
   return {
-    id: 'paper-001',
+    id: 'PAP-001',
     templateId: template.id,
-    name: 'HSK1 模拟卷（样例）',
+    name: 'HSK1 基础测试卷 — 2026年3月',
+    description: '基于 HSK1 基础测试卷模板生成的正式考试试卷',
     level: 'HSK1',
     slots,
     totalScore: calcPaperScore(slots),
@@ -161,7 +160,8 @@ function seedPaper(template: HskPaperTemplate): HskComposedPaper {
     duration: template.totalDuration,
     status: 'draft',
     linkedCourses: 0,
-    updatedAt: stamp(),
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -223,9 +223,15 @@ function normalizeStore(raw: unknown): HskExamStoreSnapshot {
   if (!raw || typeof raw !== 'object') return fallback;
   const data = raw as Partial<HskExamStoreSnapshot>;
   return {
-    questionTypes: Array.isArray(data.questionTypes) && data.questionTypes.length ? data.questionTypes : fallback.questionTypes,
-    questions: Array.isArray(data.questions) ? data.questions : fallback.questions,
-    tags: Array.isArray(data.tags) && data.tags.length ? data.tags : fallback.tags,
+    questionTypes: ensureQuestionTypes(
+      Array.isArray(data.questionTypes) && data.questionTypes.length ? data.questionTypes : fallback.questionTypes,
+    ),
+    questions: ensureAdminSeedQuestions(
+      Array.isArray(data.questions) ? data.questions : fallback.questions,
+    ),
+    tags: ensureQuestionTags(
+      Array.isArray(data.tags) && data.tags.length ? data.tags : fallback.tags,
+    ),
     templates: Array.isArray(data.templates) && data.templates.length ? data.templates : fallback.templates,
     templateStatus: data.templateStatus && typeof data.templateStatus === 'object' ? data.templateStatus : fallback.templateStatus,
     papers: Array.isArray(data.papers) ? data.papers : fallback.papers,
@@ -244,7 +250,14 @@ export function loadHskStore(): HskExamStoreSnapshot {
       saveHskStore(initial);
       return initial;
     }
-    return normalizeStore(JSON.parse(raw));
+    const parsed = JSON.parse(raw) as Partial<HskExamStoreSnapshot>;
+    const normalized = normalizeStore(parsed);
+    if (JSON.stringify(parsed.tags) !== JSON.stringify(normalized.tags)
+      || JSON.stringify(parsed.questions) !== JSON.stringify(normalized.questions)
+      || JSON.stringify(parsed.questionTypes) !== JSON.stringify(normalized.questionTypes)) {
+      saveHskStore(normalized);
+    }
+    return normalized;
   } catch {
     const initial = createDefaultHskStore();
     saveHskStore(initial);
@@ -332,14 +345,38 @@ export function publishPaper(store: HskExamStoreSnapshot, paperId: string): stri
   return null;
 }
 
+export function unpublishPaper(store: HskExamStoreSnapshot, paperId: string) {
+  const paper = store.papers.find((p) => p.id === paperId);
+  if (!paper || paper.status !== 'published') return;
+  savePaper(store, { ...paper, status: 'draft' });
+}
+
+export function deletePaper(store: HskExamStoreSnapshot, paperId: string) {
+  const linkedExams = store.exams.filter((e) => e.paperId === paperId);
+  const examIds = new Set(linkedExams.map((e) => e.id));
+  const deliveryPackages = { ...store.deliveryPackages };
+  for (const examId of examIds) {
+    delete deliveryPackages[examId];
+  }
+  saveHskStore({
+    ...store,
+    papers: store.papers.filter((p) => p.id !== paperId),
+    exams: store.exams.filter((e) => e.paperId !== paperId),
+    deliveryPackages,
+  });
+}
+
 export function createPaperFromTemplate(store: HskExamStoreSnapshot, templateId: string, name?: string) {
   const template = store.templates.find((t) => t.id === templateId);
   if (!template) return null;
   const slots = buildSlotsFromTemplate(template, store.questionTypes);
+  const now = stamp();
+  const seq = store.papers.length + 1;
   const paper: HskComposedPaper = {
-    id: `paper_${Date.now()}`,
+    id: `PAP-${String(seq).padStart(3, '0')}`,
     templateId: template.id,
-    name: name ?? `${template.name} · 组卷`,
+    name: name ?? `${template.name} — ${new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}`,
+    description: `基于 ${template.name} 模板生成的正式考试试卷`,
     level: template.level,
     slots,
     totalScore: calcPaperScore(slots),
@@ -347,7 +384,8 @@ export function createPaperFromTemplate(store: HskExamStoreSnapshot, templateId:
     duration: template.totalDuration,
     status: 'draft',
     linkedCourses: 0,
-    updatedAt: stamp(),
+    createdAt: now,
+    updatedAt: now,
   };
   savePaper(store, paper);
   return paper;

@@ -1,6 +1,7 @@
 import type { ProductCode } from '../lib/api';
 import type { PanelId } from '../types';
 import { NAV_LABELS } from '../types';
+import { HSK_WEB_ROUTED_PANELS } from './assessmentTemplates';
 
 export type NavBadge = { text: string; className?: string };
 export type NavPhase = 'p0' | 'p1' | 'p2';
@@ -59,12 +60,11 @@ export const WEB_EXAM_BANK_GROUP: NavGroupNode = {
   label: '考试与题库',
   iconPanel: 'hsk',
   defaultExpanded: true,
-  activePanels: ['hsk-question-bank', 'hsk-paper', 'hsk-exam', 'hsk-compose'],
+  activePanels: ['hsk-question-bank', 'hsk-paper', 'hsk-exam'],
   children: [
     item('hsk-question-bank', { phase: 'p0', childClass: 'course-child-item' }),
     item('hsk-paper', { phase: 'p0', childClass: 'course-child-item' }),
     item('hsk-exam', { phase: 'p0', childClass: 'course-child-item' }),
-    item('hsk-compose', { label: '自由组卷', badge: { text: 'P1', className: 'warn' }, childClass: 'course-child-item' }),
   ],
 };
 
@@ -74,23 +74,24 @@ export const WEB_ASSESS_HUB_GROUP: NavGroupNode = {
   label: '测评中心',
   iconPanel: 'hsk',
   defaultExpanded: true,
-  activePanels: [
-    'hsk-diagnostic',
-    'hsk-vocab-assess',
-    'assess-mi',
-    'assess-style',
-    'assess-mbti',
-    'hsk-speaking-rater',
-    'hsk-writing-rater',
-  ],
+  activePanels: ['hsk-vocab-assess', 'hsk-speaking-rater', 'hsk-writing-rater'],
   children: [
-    item('hsk-diagnostic', { label: '入门诊断', phase: 'p0', childClass: 'course-child-item' }),
     item('hsk-vocab-assess', { label: '词汇测评', phase: 'p0', childClass: 'course-child-item' }),
-    item('assess-mi', { phase: 'p1', childClass: 'course-child-item' }),
-    item('assess-style', { phase: 'p1', childClass: 'course-child-item' }),
-    item('assess-mbti', { phase: 'p1', childClass: 'course-child-item' }),
     item('hsk-speaking-rater', { phase: 'p1', childClass: 'course-child-item' }),
     item('hsk-writing-rater', { phase: 'p1', childClass: 'course-child-item' }),
+  ],
+};
+
+export const VIDEO_CENTER_GROUP: NavGroupNode = {
+  type: 'group',
+  id: 'video-center',
+  label: '视频中心',
+  iconPanel: 'culture',
+  defaultExpanded: false,
+  activePanels: ['culture', 'video-types'],
+  children: [
+    item('culture', { label: '视频列表', childClass: 'course-child-item' }),
+    item('video-types', { label: '视频类型', childClass: 'course-child-item' }),
   ],
 };
 
@@ -127,7 +128,7 @@ const HSK_WEB_BLOCKS: NavBlock[] = [
   {
     type: 'section',
     label: '内容配置',
-    children: [item('audio-reading-mgmt', { label: '有声阅读' }), item('culture', { label: '视频中心' })],
+    children: [item('audio-reading-mgmt', { label: '有声阅读' }), VIDEO_CENTER_GROUP],
   },
   { type: 'section', label: '考试与测评', children: [WEB_EXAM_BANK_GROUP, WEB_ASSESS_HUB_GROUP] },
   {
@@ -154,7 +155,7 @@ function tabletBlocks(role: 'admin' | 'editor'): NavBlock[] {
       children: [
         item('audio-reading-mgmt', { label: '有声阅读管理' }),
         item('library'),
-        item('culture', { label: '文化视频管理' }),
+        VIDEO_CENTER_GROUP,
       ],
     },
     {
@@ -206,6 +207,8 @@ export function collectPanelsFromBlocks(blocks: NavBlock[]): PanelId[] {
       ids.add('hsk');
       ids.add('library');
       ids.add('culture');
+      ids.add('video-add');
+      ids.add('video-types');
       ids.add('audio-reading-mgmt');
       ids.add('ai-roles');
       ids.add('ai-free');
@@ -223,7 +226,7 @@ export function collectPanelsFromBlocks(blocks: NavBlock[]): PanelId[] {
 }
 
 export function getHskWebPanelAllowlist(): Set<PanelId> {
-  return new Set(collectPanelsFromBlocks(HSK_WEB_BLOCKS));
+  return new Set([...collectPanelsFromBlocks(HSK_WEB_BLOCKS), ...HSK_WEB_ROUTED_PANELS]);
 }
 
 export function getItemLabel(node: NavItemNode): string {

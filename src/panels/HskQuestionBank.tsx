@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PageTabPanel, PageTabs } from '../components/PageTabs';
 import { HskImportWizard } from '../components/HskImportWizard';
-import { HskQuestionPayloadEditor } from '../components/HskQuestionPayloadEditor';
-import { getSectionName } from '../config/hskQuestionTypes';
+import { HskQuestionListTable } from '../components/HskQuestionListTable';
+import { HskQuestionTypeCard } from '../components/HskQuestionTypeCard';
+import { HskTagManager } from '../components/HskTagManager';
+import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
 import { useHskStore } from '../hooks/useHskStore';
 import {
   importAnalyzeResultAsTemplate,
   mergeTypeCounts,
   upsertQuestionTypes,
   upsertQuestions,
-  upsertTags,
 } from '../stores/hskExams';
-import type { HskQuestionRow, HskSectionModule } from '../types/hskExams';
+import type { HskLevelCode, HskQuestionRow, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
 import { HskQuestionConfig } from './HskQuestionConfig';
+import { HskQuestionEditPage } from './HskQuestionEditPage';
 
 const QUESTION_BANK_TABS = [
   { id: 'types', label: '题型管理' },
   { id: 'questions', label: '题目列表' },
-  { id: 'tags', label: '题型标签' },
+  { id: 'tags', label: '标签管理' },
 ] as const;
 
 export function HskQuestionBank() {
@@ -26,10 +28,15 @@ export function HskQuestionBank() {
   const [selectedSection, setSelectedSection] = useState<HskSectionModule | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [questionSearch, setQuestionSearch] = useState('');
+  const [questionTypeFilter, setQuestionTypeFilter] = useState<HskQuestionTypeCode | 'all'>('all');
+  const [questionLevelFilter, setQuestionLevelFilter] = useState<HskLevelCode | 'all'>('all');
+  const [questionStatusFilter, setQuestionStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
+  const [questionDifficultyFilter, setQuestionDifficultyFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
+  const [questionTagFilter, setQuestionTagFilter] = useState<string>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<HskQuestionRow | null>(null);
-  const [configMode, setConfigMode] = useState<{ section: HskSectionModule; typeId: string; hskLevel: number } | null>(null);
+  const [configMode, setConfigMode] = useState<HskQuestionTypeCode | null>(null);
   const [localTypes, setLocalTypes] = useState(store.questionTypes);
   const [localQuestions, setLocalQuestions] = useState(store.questions);
   const [localTags, setLocalTags] = useState(store.tags);
@@ -50,25 +57,106 @@ export function HskQuestionBank() {
     setTimeout(() => setToast(null), 2200);
   };
 
-  const togglePublishStatus = (id: string) => {
-    const next = localTypes.map((q) =>
-      q.id === id ? { ...q, isPublished: !q.isPublished, lastModified: new Date().toISOString().slice(0, 10) } : q,
-    );
+  const sectionCounts = useMemo(() => {
+    const listening = questionTypes.filter((t) => t.section === 'listening').length;
+    const reading = questionTypes.filter((t) => t.section === 'reading').length;
+    const writing = questionTypes.filter((t) => t.section === 'writing').length;
+    return { all: questionTypes.length, listening, reading, writing };
+  }, [questionTypes]);
+
+  const duplicateQuestionType = (source: HskQuestionTypeDef) => {
+    const name = window.prompt('新题型名称', `${source.name}（副本）`);
+    if (!name?.trim()) return;
+    const idRaw = window.prompt('新题型 ID（如 L07、R08）', `${source.id}_NEW`);
+    if (!idRaw?.trim()) return;
+    const id = idRaw.trim().toUpperCase() as HskQuestionTypeCode;
+    if (localTypes.some((t) => t.id === id)) {
+      showToast(`题型 ID ${id} 已存在`);
+      return;
+    }
+    if (!/^[LRW]\d{2}$/.test(id)) {
+      showToast('题型 ID 格式应为 L01、R01、W01 等');
+      return;
+    }
+    const row: HskQuestionTypeDef = {
+      ...source,
+      id,
+      hskTypeCode: id,
+      name: name.trim(),
+      isPublished: false,
+      lastModified: new Date().toISOString().slice(0, 10),
+    };
+    const next = [...localTypes, row];
     setLocalTypes(next);
     upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, next);
-    const qtype = localTypes.find((q) => q.id === id);
-    showToast(`已${qtype?.isPublished ? '取消发布' : '发布'} ${qtype?.name}`);
+    showToast(`已新建题型 ${id}：${name.trim()}`);
   };
 
-  if (configMode) {
+  const deleteQuestionType = (id: HskQuestionTypeCode) => {
+    const row = questionTypes.find((t) => t.id === id);
+    if (!row) return;
+    if (row.questionCount > 0) {
+      showToast('该题型下还有题目，无法删除');
+      return;
+    }
+    if (!window.confirm(`确定删除题型 ${id}（${row.name}）？`)) return;
+    const next = localTypes.filter((t) => t.id !== id);
+    setLocalTypes(next);
+    upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, next);
+    showToast(`已删除题型 ${id}`);
+  };
+
+  const createQuestionTypeFromTemplate = () => {
+    const template = localTypes[0];
+    if (!template) return;
+    duplicateQuestionType(template);
+  };
+
+  useEffect(() => {
+    if (configMode && !localTypes.some((t) => t.id === configMode)) {
+      setConfigMode(null);
+    }
+  }, [configMode, localTypes]);
+
+  if (editingQuestion) {
     return (
-      <HskQuestionConfig
-        section={configMode.section}
-        questionTypeId={configMode.typeId}
-        hskLevel={configMode.hskLevel}
-        onBack={() => setConfigMode(null)}
+      <HskQuestionEditPage
+        question={editingQuestion}
+        types={localTypes}
+        tags={localTags}
+        onBack={() => setEditingQuestion(null)}
+        onSave={(next) => {
+          const updated = localQuestions.map((q) =>
+            q.question_uid === next.question_uid ? next : q,
+          );
+          setLocalQuestions(updated);
+          upsertQuestions({ ...store, tags: localTags }, updated);
+          showToast(next.status === 'published' ? `已发布 ${next.question_uid}` : `已保存草稿 ${next.question_uid}`);
+          setEditingQuestion(null);
+        }}
       />
     );
+  }
+
+  if (configMode) {
+    const editingType = localTypes.find((t) => t.id === configMode);
+    if (editingType) {
+      return (
+        <HskQuestionConfig
+          typeDef={editingType}
+          otherTypeIds={localTypes.filter((t) => t.id !== editingType.id).map((t) => t.id)}
+          onBack={() => setConfigMode(null)}
+          onSave={(next) => {
+            const nextTypes = localTypes.map((t) => (t.id === editingType.id ? next : t));
+            setLocalTypes(nextTypes);
+            upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, nextTypes);
+            if (next.id !== editingType.id) {
+              setConfigMode(next.id);
+            }
+          }}
+        />
+      );
+    }
   }
 
   const filteredTypes = questionTypes.filter((q) => {
@@ -82,244 +170,275 @@ export function HskQuestionBank() {
   });
 
   const filteredQuestions = localQuestions.filter((q) => {
+    if (questionTypeFilter !== 'all' && q.type_id !== questionTypeFilter) return false;
+    if (questionLevelFilter !== 'all' && q.level !== questionLevelFilter) return false;
+    if (questionStatusFilter !== 'all' && q.status !== questionStatusFilter) return false;
+    if (questionTagFilter !== 'all') {
+      const tag = localTags.find((t) => t.id === questionTagFilter);
+      if (tag && !q.tags.includes(tag.label)) return false;
+    }
+    if (questionDifficultyFilter !== 'all') {
+      const typeDef = localTypes.find((t) => t.id === q.type_id);
+      const stars = (typeDef?.difficulty.match(/★/g) ?? []).length;
+      if (String(stars) !== questionDifficultyFilter) return false;
+    }
     if (!questionSearch.trim()) return true;
     const s = questionSearch.toLowerCase();
-    return q.question_uid.toLowerCase().includes(s) || q.stem.toLowerCase().includes(s) || q.type_id.toLowerCase().includes(s);
+    return (
+      q.question_uid.toLowerCase().includes(s) ||
+      q.stem.toLowerCase().includes(s) ||
+      q.type_id.toLowerCase().includes(s) ||
+      q.level.toLowerCase().includes(s) ||
+      q.tags.some((tag) => tag.toLowerCase().includes(s))
+    );
   });
 
-  const getSectionBadgeClass = (section: HskSectionModule) => {
-    switch (section) {
-      case 'listening':
-        return 'section-badge-listening';
-      case 'reading':
-        return 'section-badge-reading';
-      case 'writing':
-        return 'section-badge-writing';
-    }
+  const typeFilterLabel = (type: HskQuestionTypeDef) => {
+    const reg = getRegistryEntry(type.id, defaultCompoundForType(type.id));
+    return `${reg?.runtimeTypeName ?? type.name} (${type.id})`;
+  };
+
+  const createQuestion = () => {
+    const typeId = questionTypeFilter === 'all' ? 'L01' : questionTypeFilter;
+    const id = `Q-${String(localQuestions.length + 1).padStart(3, '0')}`;
+    const row: HskQuestionRow = {
+      question_uid: id,
+      type_id: typeId,
+      level: 'HSK1',
+      tags: [],
+      stem: '新题目题干',
+      options: [
+        { label: 'A', text: '' },
+        { label: 'B', text: '' },
+      ],
+      correctAnswer: 'A',
+      explanation: '',
+      score: 5,
+      payload: { content: { phrase: '' }, runtimeOptions: [{ key: 'A' }, { key: 'B' }, { key: 'C' }] },
+      audioStatus: 'none',
+      imageStatus: 'none',
+      linked_courses: [],
+      linked_papers: [],
+      linked_videos: [],
+      status: 'draft',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const next = [...localQuestions, row];
+    setLocalQuestions(next);
+    upsertQuestions(store, next);
+    showToast(`已新建题目 ${id}`);
+  };
+
+  const deleteQuestion = (question: HskQuestionRow) => {
+    if (!window.confirm(`确定删除题目 ${question.question_uid}？`)) return;
+    const next = localQuestions.filter((q) => q.question_uid !== question.question_uid);
+    setLocalQuestions(next);
+    upsertQuestions(store, next);
+    showToast(`已删除 ${question.question_uid}`);
   };
 
   const typesPanel = (
-    <>
-      <div className="paper-filter-bar">
-        <div className="filter-group">
-          <span className="filter-label">题型分类:</span>
-          <select value={selectedSection} onChange={(e) => setSelectedSection(e.target.value as HskSectionModule | 'all')}>
-            <option value="all">全部分类</option>
-            <option value="listening">听力题型</option>
-            <option value="reading">阅读题型</option>
-            <option value="writing">书写题型</option>
-          </select>
+    <div className="hsk-type-mgmt">
+      <div className="hsk-type-mgmt-toolbar">
+        <div>
+          <h2 className="hsk-type-mgmt-page-title">题型管理</h2>
+          <p className="hsk-type-mgmt-lead">
+            管理题库的题型模板，可通过复制现有题型来创建新题型
+          </p>
         </div>
-        <div className="filter-group">
-          <span className="filter-label">搜索:</span>
+        <button type="button" className="btn btn-primary btn-sm" onClick={createQuestionTypeFromTemplate}>
+          + 新建题型
+        </button>
+      </div>
+
+      <div className="hsk-type-mgmt-filters">
+        <div className="hsk-type-mgmt-tabs" role="tablist" aria-label="题型分类">
+          {(
+            [
+              { id: 'all' as const, label: '全部', count: sectionCounts.all, icon: null },
+              { id: 'listening' as const, label: '听力', count: sectionCounts.listening, icon: '🎧' },
+              { id: 'reading' as const, label: '阅读', count: sectionCounts.reading, icon: '📖' },
+              { id: 'writing' as const, label: '写作', count: sectionCounts.writing, icon: '✍️' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedSection === tab.id}
+              className={`hsk-type-mgmt-tab${selectedSection === tab.id ? ' active' : ''}`}
+              onClick={() => setSelectedSection(tab.id)}
+            >
+              {tab.icon && <span className="hsk-type-mgmt-tab-icon" aria-hidden>{tab.icon}</span>}
+              {tab.label}
+              <span className="hsk-type-mgmt-tab-count">({tab.count})</span>
+            </button>
+          ))}
+        </div>
+        <div className="hsk-type-mgmt-search">
           <input
-            type="text"
+            type="search"
             className="search-input"
-            placeholder="搜索题型ID、名称或描述..."
+            placeholder="搜索题型 ID、名称或描述…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: '13px', color: 'var(--ink-light)' }}>
-          共 {filteredTypes.length} 种题型 · 题库 {localQuestions.length} 题
-        </div>
       </div>
 
-      <div className="paper-table-container">
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: '80px' }}>题型ID</th>
-              <th style={{ width: '120px' }}>题型名称</th>
-              <th style={{ width: '90px' }}>分类</th>
-              <th>题型描述</th>
-              <th style={{ width: '120px' }}>题库题量</th>
-              <th style={{ width: '140px' }}>适用级别</th>
-              <th style={{ width: '100px' }}>发布状态</th>
-              <th style={{ width: '200px' }}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTypes.map((qtype) => (
-              <tr key={qtype.id}>
-                <td><span className="paper-id">{qtype.id}</span></td>
-                <td><div className="paper-name">{qtype.name}</div></td>
-                <td>
-                  <span className={`section-badge ${getSectionBadgeClass(qtype.section)}`}>
-                    {getSectionName(qtype.section)}
-                  </span>
-                </td>
-                <td><div style={{ fontSize: '13px', color: 'var(--ink-light)' }}>{qtype.description}</div></td>
-                <td>
-                  <strong>{qtype.questionCount}</strong>
-                  <span style={{ color: 'var(--ink-light)', fontSize: 12 }}> / {qtype.totalQuestions}</span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {qtype.hskLevels.map((level) => (
-                      <span key={level} className="hsk-level-mini">HSK{level}</span>
-                    ))}
-                  </div>
-                </td>
-                <td>
-                  <label className="status-toggle">
-                    <input type="checkbox" checked={qtype.isPublished} onChange={() => togglePublishStatus(qtype.id)} />
-                    <span className="toggle-slider" />
-                  </label>
-                </td>
-                <td>
-                  <div className="actions">
-                    <button
-                      type="button"
-                      className="action-btn edit"
-                      onClick={() => setConfigMode({ section: qtype.section, typeId: qtype.id, hskLevel: qtype.hskLevels[0] })}
-                    >
-                      配置
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {toast && <div className="hsk-toast show">{toast}</div>}
-    </>
-  );
-
-  const questionsPanel = (
-    <>
-      <div className="paper-filter-bar">
-        <div className="filter-group">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="搜索题目 ID、题型或题干..."
-            value={questionSearch}
-            onChange={(e) => setQuestionSearch(e.target.value)}
+      <div className="hsk-type-mgmt-grid">
+        {filteredTypes.map((qtype) => (
+          <HskQuestionTypeCard
+            key={qtype.id}
+            qtype={qtype}
+            onEdit={() => setConfigMode(qtype.id)}
+            onDuplicate={() => duplicateQuestionType(qtype)}
+            onDelete={() => deleteQuestionType(qtype.id)}
           />
-        </div>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          onClick={() => {
-            const id = `Q-${String(localQuestions.length + 1).padStart(3, '0')}`;
-            const row: HskQuestionRow = {
-              question_uid: id,
-              type_id: 'L01',
-              level: 'HSK1',
-              tags: [],
-              stem: '新题目题干',
-              options: [
-                { label: 'A', text: '' },
-                { label: 'B', text: '' },
-              ],
-              correctAnswer: 'A',
-              explanation: '',
-              score: 5,
-              payload: { content: { phrase: '' }, runtimeOptions: [{ key: 'A' }, { key: 'B' }, { key: 'C' }] },
-              audioStatus: 'none',
-              imageStatus: 'none',
-              linked_courses: [],
-              linked_papers: [],
-              linked_videos: [],
-              status: 'draft',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            const next = [...localQuestions, row];
-            setLocalQuestions(next);
-            upsertQuestions(store, next);
-            showToast(`已新建题目 ${id}`);
-          }}
-        >
-          + 新建题目
-        </button>
+        ))}
       </div>
-      <div className="paper-table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>题目 ID</th>
-              <th>题型</th>
-              <th>级别</th>
-              <th>题干</th>
-              <th>Payload</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredQuestions.map((q) => (
-              <tr key={q.question_uid}>
-                <td><span className="paper-id">{q.question_uid}</span></td>
-                <td>{q.type_id}</td>
-                <td>{q.level}</td>
-                <td>{q.stem}</td>
-                <td style={{ fontSize: 12 }}>
-                  {q.payload?.runtimeOptions?.length ? `${q.payload.runtimeOptions.length} 选项` : '—'}
-                  {q.payload?.subQuestions?.length ? ` · ${q.payload.subQuestions.length} 子题` : ''}
-                  {(q.audioUrl || q.payload?.audioUrl) ? ' · 音频' : ''}
-                </td>
-                <td>{q.status === 'published' ? '已发布' : '草稿'}</td>
-                <td>
-                  <button type="button" className="action-btn edit" onClick={() => setEditingQuestion(q)}>
-                    编辑 Payload
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
 
-  const tagsPanel = (
-    <div className="card">
-      <div className="card-header">
-        <div className="card-title">题型标签</div>
-      </div>
-      <div className="card-body">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: 12 }}>
-          {localTags.map((tag) => (
-            <span key={tag.id} className="library-feature-selected-tag" title={tag.description}>
-              {tag.label}
-            </span>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={() => {
-            const label = prompt('新标签名称');
-            if (!label?.trim()) return;
-            const next = [...localTags, { id: `tag-${Date.now()}`, label: label.trim() }];
-            setLocalTags(next);
-            upsertTags(store, next);
-            showToast(`已添加标签 ${label.trim()}`);
-          }}
-        >
-          + 新建标签
-        </button>
-      </div>
+      {filteredTypes.length === 0 && (
+        <div className="hsk-type-mgmt-empty">没有匹配的题型，请调整筛选或搜索条件。</div>
+      )}
+
+      {toast && <div className="hsk-toast show">{toast}</div>}
     </div>
   );
 
-  return (
-    <>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+  const questionsPanel = (
+    <div className="hsk-question-list">
+      <div className="hsk-question-list-header">
         <div>
-          <div className="page-title">题库管理</div>
-          <div className="page-subtitle">题型管理 · 题目 Payload 编辑 · 智能导入</div>
+          <h2 className="hsk-question-list-title">题目列表</h2>
+          <p className="hsk-question-list-lead">
+            管理题库中的所有题目，查看题目关联的课程、试卷和视频
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" className="btn btn-secondary" onClick={() => setImportOpen(true)}>
-            智能导入
+        <div className="hsk-question-list-header-actions">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => showToast('AI 批量生成功能开发中')}
+          >
+            AI 批量生成
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setImportOpen(true)}>
+            导入 PDF
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={createQuestion}>
+            + 新建题目
           </button>
         </div>
       </div>
 
+      <div className="hsk-question-list-filter-card">
+        <div className="hsk-question-list-filter-row">
+          <label className="hsk-question-list-filter-search-wrap">
+            <span className="hsk-question-list-filter-search-icon" aria-hidden>🔍</span>
+            <input
+              type="search"
+              className="hsk-question-list-filter-search"
+              placeholder="搜索题目、标签或编号…"
+              value={questionSearch}
+              onChange={(e) => setQuestionSearch(e.target.value)}
+            />
+          </label>
+          <select
+            className="hsk-question-list-filter-select"
+            value={questionTypeFilter}
+            onChange={(e) => setQuestionTypeFilter(e.target.value as HskQuestionTypeCode | 'all')}
+          >
+            <option value="all">全部题型</option>
+            {localTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {typeFilterLabel(type)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="hsk-question-list-filter-select"
+            value={questionLevelFilter}
+            onChange={(e) => setQuestionLevelFilter(e.target.value as HskLevelCode | 'all')}
+          >
+            <option value="all">全部等级</option>
+            {(['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'] as HskLevelCode[]).map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+          <select
+            className="hsk-question-list-filter-select"
+            value={questionStatusFilter}
+            onChange={(e) => setQuestionStatusFilter(e.target.value as 'all' | 'published' | 'draft')}
+          >
+            <option value="all">全部状态</option>
+            <option value="published">已发布</option>
+            <option value="draft">草稿</option>
+          </select>
+          <select
+            className="hsk-question-list-filter-select"
+            value={questionDifficultyFilter}
+            onChange={(e) => setQuestionDifficultyFilter(e.target.value as typeof questionDifficultyFilter)}
+          >
+            <option value="all">全部难度</option>
+            <option value="1">★☆☆☆☆</option>
+            <option value="2">★★☆☆☆</option>
+            <option value="3">★★★☆☆</option>
+            <option value="4">★★★★☆</option>
+            <option value="5">★★★★★</option>
+          </select>
+        </div>
+        <div className="hsk-question-list-filter-row hsk-question-list-filter-row-secondary">
+          <select
+            className="hsk-question-list-filter-select hsk-question-list-filter-select-tags"
+            value={questionTagFilter}
+            onChange={(e) => setQuestionTagFilter(e.target.value)}
+          >
+            <option value="all">全部标签</option>
+            {localTags.map((tag) => (
+              <option key={tag.id} value={tag.id}>{tag.label}</option>
+            ))}
+          </select>
+          <span className="hsk-question-list-result-count">共 {filteredQuestions.length} 题</span>
+        </div>
+      </div>
+
+      <HskQuestionListTable
+        questions={filteredQuestions}
+        types={localTypes}
+        onEdit={setEditingQuestion}
+        onPreview={setEditingQuestion}
+        onDelete={deleteQuestion}
+      />
+
+      {filteredQuestions.length === 0 && (
+        <div className="hsk-type-mgmt-empty">没有匹配的题目，请调整筛选或新建题目。</div>
+      )}
+    </div>
+  );
+
+  const tagsPanel = (
+    <HskTagManager
+      tags={localTags}
+      questions={localQuestions}
+      onTagsChange={(nextTags, nextQuestions) => {
+        setLocalTags(nextTags);
+        setLocalQuestions(nextQuestions);
+        upsertQuestions({ ...store, tags: nextTags }, nextQuestions);
+      }}
+      onToast={showToast}
+      onNavigateToTag={(tagLabel) => {
+        const tag = localTags.find((t) => t.label === tagLabel);
+        if (!tag) return;
+        setActiveTab('questions');
+        setQuestionTagFilter(tag.id);
+      }}
+    />
+  );
+
+  return (
+    <>
       <PageTabs tabs={[...QUESTION_BANK_TABS]} activeTab={activeTab} onTabChange={setActiveTab}>
         <PageTabPanel id="types" activeTab={activeTab}>{typesPanel}</PageTabPanel>
         <PageTabPanel id="questions" activeTab={activeTab}>{questionsPanel}</PageTabPanel>
@@ -337,21 +456,6 @@ export function HskQuestionBank() {
         }}
       />
       {toast && activeTab !== 'types' && <div className="hsk-toast show">{toast}</div>}
-
-      {editingQuestion && (
-        <HskQuestionPayloadEditor
-          open
-          question={editingQuestion}
-          onClose={() => setEditingQuestion(null)}
-          onSave={(next) => {
-            const updated = localQuestions.map((q) => (q.question_uid === next.question_uid ? next : q));
-            setLocalQuestions(updated);
-            upsertQuestions(store, updated);
-            showToast(`已保存 ${next.question_uid} Payload`);
-            setEditingQuestion(null);
-          }}
-        />
-      )}
     </>
   );
 }
