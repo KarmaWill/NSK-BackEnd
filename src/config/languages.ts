@@ -15,6 +15,22 @@ export const LANG_OPTIONS: Array<{ key: LangKey; label: string }> = [
   { key: 'KM', label: '高棉语' },
 ];
 
+/** 题目编辑页多语言标签展示（对齐 HSK-Exams QuestionEditPage） */
+export const LANG_TAB_META: Record<LangKey, { flag: string; code: string; label: string }> = {
+  CN: { flag: '🇨🇳', code: 'ZH', label: '中文' },
+  EN: { flag: '🇺🇸', code: 'EN', label: 'English' },
+  ES: { flag: '🇪🇸', code: 'ES', label: 'Español' },
+  FR: { flag: '🇫🇷', code: 'FR', label: 'Français' },
+  PT: { flag: '🇵🇹', code: 'PT', label: 'Português' },
+  JA: { flag: '🇯🇵', code: 'JA', label: '日本語' },
+  KO: { flag: '🇰🇷', code: 'KO', label: '한국어' },
+  TH: { flag: '🇹🇭', code: 'TH', label: 'ภาษาไทย' },
+  VI: { flag: '🇻🇳', code: 'VI', label: 'Tiếng Việt' },
+  ID: { flag: '🇮🇩', code: 'ID', label: 'Bahasa Indonesia' },
+  MS: { flag: '🇲🇾', code: 'MS', label: 'Bahasa Melayu' },
+  KM: { flag: '🇰🇭', code: 'KM', label: 'ខ្មែរ' },
+};
+
 export type TitleByLang = Partial<Record<LangKey, string>>;
 
 export function createEmptyTitleByLang(cn = '', en = ''): TitleByLang {

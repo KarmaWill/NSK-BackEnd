@@ -87,6 +87,12 @@ export type HskQuestionRow = {
   question_uid: string;
   type_id: HskQuestionTypeCode;
   level: HskLevelCode;
+  /** 便于识别的题目名称（选填） */
+  questionName?: string;
+  /** 难度 1–5 星 */
+  difficulty?: number;
+  /** HSK3+ 是否显示拼音字段 */
+  showPinyinFields?: boolean;
   tags: string[];
   stem: string;
   options: HskQuestionOption[];
@@ -94,6 +100,8 @@ export type HskQuestionRow = {
   explanation: string;
   /** 解析多语言文案（CN 与 explanation 同步） */
   explanationByLang?: TitleByLang;
+  /** 解析拼音（全局共享，各语言解析共用） */
+  explanationPinyin?: string;
   score: number;
   payload?: HskQuestionPayload;
   audioUrl?: string;

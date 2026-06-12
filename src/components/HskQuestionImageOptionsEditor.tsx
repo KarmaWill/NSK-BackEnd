@@ -1,5 +1,6 @@
-import { useRef, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import type { HskRuntimeOption } from '../types/hskExams';
+import { HskResourceModal } from './HskResourceModal';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 
@@ -36,6 +37,7 @@ function ImageOptionRow({
   onCorrectToggle,
 }: RowProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [resourceModalOpen, setResourceModalOpen] = useState(false);
   const imageUrl = option.image ?? '';
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -46,69 +48,77 @@ function ImageOptionRow({
   };
 
   return (
-    <div className="hsk-question-image-option-row">
-      <div className="hsk-question-image-option-label">{option.key}</div>
-      <div className="hsk-question-image-option-body">
-        <div className="hsk-question-media-pick-row">
-          <button
-            type="button"
-            className={`hsk-question-media-pick-box hsk-question-image-pick-box${imageUrl ? ' has-value' : ''}`}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <span className="hsk-question-media-pick-icon" aria-hidden>🖼</span>
-            <span className="hsk-question-media-pick-text">
-              {imageUrl ? '已选择图片' : '点击选择图片资源'}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              const url = window.prompt('输入图片 URL 或资源路径', imageUrl);
-              if (url != null) onImageChange(url.trim());
-            }}
-          >
-            选择
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hsk-question-media-file-input"
-            onChange={handleFileChange}
-          />
+    <div className="hsk-question-image-option-card">
+      <div className="hsk-question-image-option-card-head">
+        <span className="hsk-question-image-option-label">{option.key}</span>
+      </div>
+
+      <div className="hsk-question-media-pick-row">
+        <button
+          type="button"
+          className={`hsk-question-media-pick-box hsk-question-image-pick-box${imageUrl ? ' has-value' : ''}`}
+          onClick={() => setResourceModalOpen(true)}
+        >
+          <span className="hsk-question-media-pick-icon" aria-hidden>🖼</span>
+          <span className="hsk-question-media-pick-text">
+            {imageUrl ? '已选择图片' : '点击选择图片资源'}
+          </span>
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setResourceModalOpen(true)}>
+          选择
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hsk-question-media-file-input"
+          onChange={handleFileChange}
+        />
+      </div>
+
+      <div className="hsk-question-image-option-preview-wrap">
+        <div className="hsk-question-image-option-preview">
+          {imageUrl ? (
+            <img src={imageUrl} alt={`选项 ${option.key}`} />
+          ) : (
+            <>
+              <span className="hsk-question-image-option-preview-icon" aria-hidden>
+                图
+              </span>
+              <span className="hsk-question-image-option-preview-label">图片预览区</span>
+            </>
+          )}
         </div>
-        <div className="hsk-question-image-option-preview-wrap">
-          <div className="hsk-question-image-option-preview">
-            {imageUrl ? (
-              <img src={imageUrl} alt={`选项 ${option.key}`} />
-            ) : (
-              <span>图片预览区</span>
-            )}
-          </div>
-          <div className="hsk-question-image-option-actions">
-            {showCorrectToggle && (
-              <button
-                type="button"
-                className={`hsk-question-image-correct-btn${isCorrect ? ' is-active' : ''}`}
-                onClick={onCorrectToggle}
-              >
-                {isCorrect ? '●' : '○'} 设为正确答案
-              </button>
-            )}
-            {canRemove && (
-              <button
-                type="button"
-                className="hsk-question-image-option-remove"
-                aria-label={`移除选项 ${option.key}`}
-                onClick={onRemove}
-              >
-                ×
-              </button>
-            )}
-          </div>
+        <div className="hsk-question-image-option-actions">
+          {showCorrectToggle && (
+            <button
+              type="button"
+              className={`hsk-question-image-correct-btn${isCorrect ? ' is-active' : ''}`}
+              onClick={onCorrectToggle}
+            >
+              {isCorrect ? '●' : '○'} 设为正确答案
+            </button>
+          )}
+          {canRemove && (
+            <button
+              type="button"
+              className="hsk-question-image-option-remove"
+              aria-label={`移除选项 ${option.key}`}
+              onClick={onRemove}
+            >
+              ×
+            </button>
+          )}
         </div>
       </div>
+
+      <HskResourceModal
+        open={resourceModalOpen}
+        kind="image"
+        selectedUrl={imageUrl}
+        onClose={() => setResourceModalOpen(false)}
+        onConfirm={(resource) => onImageChange(resource.url)}
+      />
     </div>
   );
 }

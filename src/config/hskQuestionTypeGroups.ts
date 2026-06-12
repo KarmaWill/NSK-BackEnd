@@ -28,6 +28,12 @@ export function isImageOptionQuestionType(typeId: HskQuestionTypeCode): boolean 
   return (IMAGE_OPTION_QUESTION_TYPES as readonly string[]).includes(typeId);
 }
 
+export const JUDGMENT_QUESTION_TYPES = ['L06', 'R08'] as const satisfies readonly HskQuestionTypeCode[];
+
+export function isJudgmentQuestionType(typeId: HskQuestionTypeCode): boolean {
+  return (JUDGMENT_QUESTION_TYPES as readonly string[]).includes(typeId);
+}
+
 /** 题目编辑页题型下拉顺序（对齐 HSK-Exams QuestionEditPage） */
 export const HSK_QUESTION_EDIT_TYPE_ORDER = [
   'L01',

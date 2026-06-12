@@ -10,9 +10,11 @@ type Props = {
   tags: HskQuestionTag[];
   selected: string[];
   onChange: (next: string[]) => void;
+  /** 已选标签由外层统一展示 pill 行时设为 true */
+  hideSelectedPills?: boolean;
 };
 
-export function HskQuestionTagPicker({ tags, selected, onChange }: Props) {
+export function HskQuestionTagPicker({ tags, selected, onChange, hideSelectedPills = false }: Props) {
   const categories = useMemo(() => getQuestionTagPickerCategories(tags), [tags]);
 
   const selectTag = (label: string) => {
@@ -40,7 +42,7 @@ export function HskQuestionTagPicker({ tags, selected, onChange }: Props) {
               onSelect={selectTag}
               style={{ marginBottom: 10 }}
             />
-            {selectedInCategory.length > 0 && (
+            {selectedInCategory.length > 0 && !hideSelectedPills && (
               <div className="library-feature-selected-tags">
                 {selectedInCategory.map((label) => (
                   <span key={label} className="library-feature-selected-tag">

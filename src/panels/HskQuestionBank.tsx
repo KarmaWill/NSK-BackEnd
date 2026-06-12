@@ -21,14 +21,14 @@ import { HskQuestionConfig } from './HskQuestionConfig';
 import { HskQuestionEditPage } from './HskQuestionEditPage';
 
 const QUESTION_BANK_TABS = [
-  { id: 'types', label: '题型管理' },
   { id: 'questions', label: '题目列表' },
+  { id: 'types', label: '题型管理' },
   { id: 'tags', label: '标签管理' },
 ] as const;
 
 export function HskQuestionBank() {
   const { store, refresh } = useHskStore();
-  const [activeTab, setActiveTab] = useState<string>('types');
+  const [activeTab, setActiveTab] = useState<string>('questions');
   const [selectedSection, setSelectedSection] = useState<HskSectionModule | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [questionSearch, setQuestionSearch] = useState('');
