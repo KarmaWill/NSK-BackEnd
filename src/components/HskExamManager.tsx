@@ -16,12 +16,18 @@ import {
   saveTemplate,
 } from '../stores/hskExams';
 import type {
+  HskAudioRules,
   HskPaperTemplate,
   HskQuestionTypeCode,
   HskQuestionTypeDef,
   HskSectionModule,
   HskTemplateSection,
 } from '../types/hskExams';
+import {
+  defaultCompoundForType,
+  typeRequiresCompound,
+  typeSupportsCompound,
+} from '../config/hskQuestionTypeRegistry';
 import {
   computeSectionNumberRanges,
   CUSTOM_COLORS,
@@ -35,7 +41,7 @@ import {
   sectionHasExample,
   type SectionRange,
 } from '../utils/hskTemplateDisplay';
-import { createEmptyTemplate, recalcTemplateTotals } from '../utils/hskPaperUtils';
+import { applyTemplatePatch, createEmptyTemplate, getScorePerQuestion } from '../utils/hskPaperUtils';
 import { ASSESSMENT_TEMPLATE_ENTRIES } from '../config/assessmentTemplates';
 import type { PanelId } from '../types';
 
@@ -105,6 +111,48 @@ function ExamModalOverlay({
   );
 }
 
+const DEFAULT_AUDIO_RULES: HskAudioRules = {
+  autoPlayOnEnter: true,
+  allowPause: false,
+  maxPlayCount: 1,
+};
+
+function resolveAudioRules(template: HskPaperTemplate): HskAudioRules {
+  return { ...DEFAULT_AUDIO_RULES, ...template.audioRules };
+}
+
+type CategoryOption = {
+  value: string;
+  label: string;
+  parentCategory: string | null;
+  categoryId: string | null;
+};
+
+function buildCategoryOptions(customCategories: HskCustomCategory[]): CategoryOption[] {
+  const opts: CategoryOption[] = [
+    { value: 'hsk-tab', label: 'HSK（显示在HSK标签页）', parentCategory: 'HSK', categoryId: null },
+    { value: 'klzw-tab', label: '快乐中文（显示在快乐中文标签页）', parentCategory: 'KLZW', categoryId: null },
+    { value: 'uncategorized', label: '未分类（显示在自定义模板标签页）', parentCategory: null, categoryId: null },
+  ];
+  for (const cat of customCategories) {
+    opts.push({
+      value: cat.id,
+      label: `${cat.name}（显示在HSK标签页）`,
+      parentCategory: 'HSK',
+      categoryId: cat.id,
+    });
+  }
+  return opts;
+}
+
+function templateCategoryValue(template: HskPaperTemplate): string {
+  if (template.parentCategory === null && template.categoryId === null) return 'uncategorized';
+  if (template.parentCategory === 'HSK' && template.categoryId) return template.categoryId;
+  if (template.parentCategory === 'HSK') return 'hsk-tab';
+  if (template.parentCategory === 'KLZW') return 'klzw-tab';
+  return 'uncategorized';
+}
+
 function StatCard({ label, value, unit }: { label: string; value: string | number; unit?: string }) {
   return (
     <div className="hsk-exam-stat-card">
@@ -112,6 +160,309 @@ function StatCard({ label, value, unit }: { label: string; value: string | numbe
       <span className="hsk-exam-stat-value">{value}</span>
       {unit && <span className="hsk-exam-stat-unit">{unit}</span>}
     </div>
+  );
+}
+
+function EditableStatCard({
+  label,
+  value,
+  unit,
+  readOnly,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  unit?: string;
+  readOnly?: boolean;
+  onChange?: (value: number) => void;
+}) {
+  if (readOnly || !onChange) {
+    return <StatCard label={label} value={value} unit={unit} />;
+  }
+  return (
+    <div className="hsk-exam-stat-card is-editable">
+      <span className="hsk-exam-stat-label">{label}</span>
+      <div className="hsk-exam-stat-input-wrap">
+        <input
+          type="number"
+          min={0}
+          value={value}
+          onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+        />
+        {unit && <span className="hsk-exam-stat-unit">{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+function TemplateMetaForm({
+  template,
+  customCategories,
+  onChange,
+}: {
+  template: HskPaperTemplate;
+  customCategories: HskCustomCategory[];
+  onChange: (patch: Partial<HskPaperTemplate>) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const audio = resolveAudioRules(template);
+  const categoryOptions = buildCategoryOptions(customCategories);
+  const categoryValue = templateCategoryValue(template);
+
+  return (
+    <div className="hsk-exam-meta-panel">
+      <button
+        type="button"
+        className="hsk-exam-meta-panel-head"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <div>
+          <h3 className="hsk-exam-meta-panel-title">模板基础属性配置</h3>
+          <p className="hsk-exam-meta-panel-sub">时间规则 · 分值设定 · 分类归属</p>
+        </div>
+        <span className="hsk-exam-meta-panel-toggle">{expanded ? '收起' : '展开'}</span>
+      </button>
+      {expanded && (
+        <div className="hsk-exam-meta-panel-body">
+          <div className="hsk-exam-meta-grid">
+            <label>
+              <span>模板名称</span>
+              <input value={template.name} onChange={(e) => onChange({ name: e.target.value })} />
+            </label>
+            <label>
+              <span>归属分类</span>
+              <select
+                value={categoryValue}
+                onChange={(e) => {
+                  const opt = categoryOptions.find((o) => o.value === e.target.value);
+                  if (!opt) return;
+                  onChange({
+                    parentCategory: opt.parentCategory,
+                    categoryId: opt.categoryId,
+                    level: opt.parentCategory === 'HSK' && !opt.categoryId ? 'custom' : template.level,
+                  });
+                }}
+              >
+                {categoryOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>卷面总分</span>
+              <input
+                type="number"
+                min={0}
+                value={template.totalScore}
+                onChange={(e) => onChange({ totalScore: Math.max(0, Number(e.target.value) || 0) })}
+              />
+            </label>
+            <label>
+              <span>合格分数</span>
+              <input
+                type="number"
+                min={0}
+                value={template.passScore}
+                onChange={(e) => onChange({ passScore: Math.max(0, Number(e.target.value) || 0) })}
+              />
+            </label>
+            <label>
+              <span>考试总时长 (分钟)</span>
+              <input
+                type="number"
+                min={1}
+                value={template.totalDuration}
+                onChange={(e) => onChange({ totalDuration: Math.max(1, Number(e.target.value) || 1) })}
+              />
+            </label>
+            <label>
+              <span>考前准备时长 (分钟)</span>
+              <input
+                type="number"
+                min={0}
+                value={template.timeBlocks.prep}
+                onChange={(e) =>
+                  onChange({
+                    timeBlocks: { ...template.timeBlocks, prep: Math.max(0, Number(e.target.value) || 0) },
+                  })
+                }
+              />
+            </label>
+            <label>
+              <span>听力缓冲时长 (分钟)</span>
+              <input
+                type="number"
+                min={0}
+                value={template.timeBlocks.buffer}
+                onChange={(e) =>
+                  onChange({
+                    timeBlocks: { ...template.timeBlocks, buffer: Math.max(0, Number(e.target.value) || 0) },
+                  })
+                }
+              />
+            </label>
+          </div>
+
+          <div className="hsk-exam-audio-rules">
+            <h4 className="hsk-exam-audio-rules-title">🎵 音频播放规则</h4>
+            <div className="hsk-exam-audio-rules-row">
+              <label className="hsk-exam-audio-check">
+                <input
+                  type="checkbox"
+                  checked={audio.autoPlayOnEnter}
+                  onChange={(e) => onChange({ audioRules: { ...audio, autoPlayOnEnter: e.target.checked } })}
+                />
+                进入题目自动播放
+              </label>
+              <label className="hsk-exam-audio-check">
+                <input
+                  type="checkbox"
+                  checked={audio.allowPause}
+                  onChange={(e) => onChange({ audioRules: { ...audio, allowPause: e.target.checked } })}
+                />
+                允许暂停
+              </label>
+            </div>
+            <div className="hsk-exam-audio-play-count">
+              <span className="hsk-exam-audio-play-label">最大播放次数</span>
+              <div className="hsk-exam-audio-play-options">
+                {[
+                  { value: 1, label: '1次（正式考试推荐）' },
+                  { value: 2, label: '2次' },
+                  { value: 3, label: '3次' },
+                  { value: null, label: '不限' },
+                ].map((opt) => (
+                  <label key={String(opt.value)} className="hsk-exam-audio-play-opt">
+                    <input
+                      type="radio"
+                      name={`audio-play-${template.id}`}
+                      checked={audio.maxPlayCount === opt.value}
+                      onChange={() => onChange({ audioRules: { ...audio, maxPlayCount: opt.value } })}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type AddTypeModalState = {
+  moduleId: HskSectionModule;
+};
+
+function AddTypeModal({
+  moduleId,
+  template,
+  typeDefs,
+  onConfirm,
+  onClose,
+}: {
+  moduleId: HskSectionModule;
+  template: HskPaperTemplate;
+  typeDefs: HskQuestionTypeDef[];
+  onConfirm: (data: {
+    questionType: HskQuestionTypeCode;
+    questionCount: number;
+    scorePerQuestion: number;
+    isCompound: boolean;
+  }) => void;
+  onClose: () => void;
+}) {
+  const sectionTypes = useMemo(
+    () => typeDefs.filter((t) => t.section === moduleId),
+    [typeDefs, moduleId],
+  );
+  const defaultType = sectionTypes[0]?.hskTypeCode ?? (moduleId === 'reading' ? 'R01' : moduleId === 'writing' ? 'W01' : 'L01');
+  const [questionType, setQuestionType] = useState<HskQuestionTypeCode>(defaultType);
+  const [questionCount, setQuestionCount] = useState(5);
+  const [scorePerQuestion, setScorePerQuestion] = useState(() => getScorePerQuestion(template, typeDefs));
+  const [isCompound, setIsCompound] = useState(() => defaultCompoundForType(defaultType));
+  const requiresCompound = typeRequiresCompound(questionType);
+  const supportsCompound = typeSupportsCompound(questionType);
+
+  useEffect(() => {
+    if (requiresCompound) setIsCompound(true);
+  }, [requiresCompound, questionType]);
+
+  const handleTypeChange = (code: HskQuestionTypeCode) => {
+    setQuestionType(code);
+    if (typeRequiresCompound(code)) setIsCompound(true);
+    else if (!typeSupportsCompound(code)) setIsCompound(false);
+    else setIsCompound(defaultCompoundForType(code));
+  };
+
+  return (
+    <ExamModalOverlay onClose={onClose}>
+      <h3>添加题型</h3>
+      <label className="hsk-exam-modal-field">
+        <span>题型分类</span>
+        <select value={questionType} onChange={(e) => handleTypeChange(e.target.value as HskQuestionTypeCode)}>
+          {sectionTypes.map((t) => (
+            <option key={t.hskTypeCode} value={t.hskTypeCode}>
+              {t.hskTypeCode} — {t.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="hsk-exam-modal-field">
+        <span>包含题数</span>
+        <input
+          type="number"
+          min={1}
+          value={questionCount}
+          onChange={(e) => setQuestionCount(Math.max(1, Number(e.target.value) || 1))}
+        />
+      </label>
+      <label className="hsk-exam-modal-field">
+        <span>单题分值</span>
+        <input
+          type="number"
+          min={1}
+          value={scorePerQuestion}
+          onChange={(e) => setScorePerQuestion(Math.max(1, Number(e.target.value) || 1))}
+        />
+      </label>
+      <label className="hsk-exam-modal-field hsk-exam-modal-checkbox">
+        <span>是否为复合题</span>
+        <label className="hsk-exam-audio-check">
+          <input
+            type="checkbox"
+            checked={isCompound}
+            disabled={requiresCompound || !supportsCompound}
+            onChange={(e) => setIsCompound(e.target.checked)}
+          />
+          （渲染&quot;复合&quot;标签）
+        </label>
+      </label>
+      <div className="hsk-exam-modal-actions">
+        <button type="button" className="hsk-exam-btn-secondary" onClick={onClose}>
+          取消
+        </button>
+        <button
+          type="button"
+          className="hsk-exam-btn-primary"
+          style={{ background: CUSTOM_COLORS.gradient }}
+          onClick={() =>
+            onConfirm({
+              questionType,
+              questionCount,
+              scorePerQuestion,
+              isCompound: requiresCompound ? true : isCompound,
+            })
+          }
+        >
+          添加
+        </button>
+      </div>
+    </ExamModalOverlay>
   );
 }
 
@@ -229,6 +580,7 @@ function TemplateDetailPanel({
   template,
   typeDefs,
   readOnly,
+  customCategories,
   onChange,
   onSave,
   onPublish,
@@ -237,6 +589,7 @@ function TemplateDetailPanel({
   template: HskPaperTemplate;
   typeDefs: HskQuestionTypeDef[];
   readOnly?: boolean;
+  customCategories?: HskCustomCategory[];
   onChange?: (t: HskPaperTemplate) => void;
   onSave?: () => void;
   onPublish?: () => void;
@@ -245,10 +598,11 @@ function TemplateDetailPanel({
   const sectionRanges = useMemo(() => computeSectionNumberRanges(template), [template]);
   const colors = getTemplateColors(template);
   const duration = getTemplateDisplayDuration(template);
+  const [addTypeModal, setAddTypeModal] = useState<AddTypeModalState | null>(null);
 
   const updateTemplate = (patch: Partial<HskPaperTemplate>) => {
     if (!onChange) return;
-    onChange(recalcTemplateTotals({ ...template, ...patch }, typeDefs));
+    onChange(applyTemplatePatch(template, patch, typeDefs));
   };
 
   const deleteSection = (moduleId: HskSectionModule, sectionId: string) => {
@@ -256,14 +610,19 @@ function TemplateDetailPanel({
     const modules = template.modules.map((m) =>
       m.id === moduleId ? { ...m, sections: m.sections.filter((s) => s.id !== sectionId) } : m,
     );
-    onChange(recalcTemplateTotals({ ...template, modules }, typeDefs));
+    onChange(applyTemplatePatch(template, { modules }, typeDefs));
   };
 
-  const addSection = (moduleId: HskSectionModule) => {
+  const confirmAddSection = (
+    moduleId: HskSectionModule,
+    data: {
+      questionType: HskQuestionTypeCode;
+      questionCount: number;
+      scorePerQuestion: number;
+      isCompound: boolean;
+    },
+  ) => {
     if (!onChange) return;
-    const defaultType =
-      typeDefs.find((t) => t.section === moduleId)?.hskTypeCode ??
-      (moduleId === 'listening' ? 'L01' : moduleId === 'reading' ? 'R01' : 'W01');
     const modules = template.modules.map((m) => {
       if (m.id !== moduleId) return m;
       return {
@@ -273,16 +632,23 @@ function TemplateDetailPanel({
           {
             id: `${moduleId}_s${Date.now()}`,
             name: `第 ${m.sections.length + 1} 部分`,
-            questionType: defaultType as HskQuestionTypeCode,
-            isCompound: false,
-            groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-            totalCount: 5,
-            scoringCount: 5,
+            questionType: data.questionType,
+            isCompound: data.isCompound,
+            groups: [{ questionCount: data.questionCount, hasExample: false, exampleCount: 0 }],
+            totalCount: data.questionCount,
+            scoringCount: data.questionCount,
           },
         ],
       };
     });
-    onChange(recalcTemplateTotals({ ...template, modules }, typeDefs));
+    onChange(
+      applyTemplatePatch(
+        template,
+        { modules, customScorePerQuestion: data.scorePerQuestion },
+        typeDefs,
+      ),
+    );
+    setAddTypeModal(null);
   };
 
   return (
@@ -325,51 +691,47 @@ function TemplateDetailPanel({
 
       {publishError && <div className="hsk-exam-error">{publishError}</div>}
 
-      {!readOnly && (
-        <div className="hsk-exam-meta-form">
-          <div className="hsk-exam-meta-grid">
-            <label>
-              <span>模板名称</span>
-              <input
-                value={template.name}
-                onChange={(e) => updateTemplate({ name: e.target.value })}
-              />
-            </label>
-            <label>
-              <span>卷面总分</span>
-              <input
-                type="number"
-                value={template.totalScore}
-                onChange={(e) => updateTemplate({ totalScore: Number(e.target.value) || 0 })}
-              />
-            </label>
-            <label>
-              <span>合格分数</span>
-              <input
-                type="number"
-                value={template.passScore}
-                onChange={(e) => updateTemplate({ passScore: Number(e.target.value) || 0 })}
-              />
-            </label>
-            <label>
-              <span>考试总时长 (分钟)</span>
-              <input
-                type="number"
-                value={template.totalDuration}
-                onChange={(e) => updateTemplate({ totalDuration: Number(e.target.value) || 0 })}
-              />
-            </label>
-          </div>
-        </div>
-      )}
-
       <div className="hsk-exam-stats-row">
-        <StatCard label="考试时长" value={duration} unit="分钟" />
+        <EditableStatCard
+          label="考试时长"
+          value={duration}
+          unit="分钟"
+          readOnly={readOnly}
+          onChange={(v) => updateTemplate({ totalDuration: v })}
+        />
         <StatCard label="题目总数" value={template.totalQuestions} unit="道" />
-        <StatCard label="卷面总分" value={template.totalScore} unit="分" />
-        <StatCard label="合格分数" value={template.passScore} unit="分" />
-        <StatCard label="缓冲时间" value={template.timeBlocks.buffer} unit="分钟" />
+        <EditableStatCard
+          label="卷面总分"
+          value={template.totalScore}
+          unit="分"
+          readOnly={readOnly}
+          onChange={(v) => updateTemplate({ totalScore: v })}
+        />
+        <EditableStatCard
+          label="合格分数"
+          value={template.passScore}
+          unit="分"
+          readOnly={readOnly}
+          onChange={(v) => updateTemplate({ passScore: v })}
+        />
+        <EditableStatCard
+          label="缓冲时间"
+          value={template.timeBlocks.buffer}
+          unit="分钟"
+          readOnly={readOnly}
+          onChange={(v) =>
+            updateTemplate({ timeBlocks: { ...template.timeBlocks, buffer: v } })
+          }
+        />
       </div>
+
+      {!readOnly && (
+        <TemplateMetaForm
+          template={template}
+          customCategories={customCategories ?? []}
+          onChange={updateTemplate}
+        />
+      )}
 
       {template.modules
         .filter((m) => m.sections.length > 0 || !readOnly)
@@ -382,9 +744,19 @@ function TemplateDetailPanel({
             typeDefs={typeDefs}
             readOnly={readOnly}
             onDeleteSection={readOnly ? undefined : (id) => deleteSection(mod.id, id)}
-            onAddSection={readOnly ? undefined : () => addSection(mod.id)}
+            onAddSection={readOnly ? undefined : () => setAddTypeModal({ moduleId: mod.id })}
           />
         ))}
+
+      {addTypeModal && (
+        <AddTypeModal
+          moduleId={addTypeModal.moduleId}
+          template={template}
+          typeDefs={typeDefs}
+          onClose={() => setAddTypeModal(null)}
+          onConfirm={(data) => confirmAddSection(addTypeModal.moduleId, data)}
+        />
+      )}
     </div>
   );
 }
@@ -428,15 +800,26 @@ function CopyTemplateModal({
 function CustomTemplateCard({
   template,
   onEdit,
+  onDelete,
 }: {
   template: HskPaperTemplate;
   onEdit: () => void;
+  onDelete: () => void;
 }) {
   const duration = getTemplateDisplayDuration(template);
   const isPublished = template.status === 'published';
 
   return (
     <div className="hsk-exam-custom-card">
+      <button
+        type="button"
+        className="hsk-exam-custom-card-delete"
+        onClick={onDelete}
+        aria-label={`删除模板 ${template.name}`}
+        title="删除模板"
+      >
+        ×
+      </button>
       <div className="hsk-exam-custom-card-top">
         <span className="hsk-exam-badge-custom-sm" style={{ background: CUSTOM_COLORS.gradient }}>
           自定义
@@ -925,6 +1308,14 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
     showToast('模板已删除');
   };
 
+  const handleDeleteCustomCard = (tpl: HskPaperTemplate) => {
+    if (!window.confirm(`确认删除模板「${tpl.name}」？`)) return;
+    deleteTemplate(store, tpl.id);
+    refresh();
+    if (editingCustom?.id === tpl.id) setEditingCustom(null);
+    showToast('模板已删除');
+  };
+
   if (editingCustom) {
     return (
       <div className="hsk-exam-mgmt">
@@ -946,6 +1337,7 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
         <TemplateDetailPanel
           template={editingCustom}
           typeDefs={store.questionTypes}
+          customCategories={customHskCategories}
           onChange={setEditingCustom}
           onSave={handleSaveCustom}
           onPublish={handlePublishCustom}
@@ -1156,6 +1548,7 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
                     key={tpl.id}
                     template={tpl}
                     onEdit={() => setEditingCustom(structuredClone(tpl))}
+                    onDelete={() => handleDeleteCustomCard(tpl)}
                   />
                 ))}
               </div>

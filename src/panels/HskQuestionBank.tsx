@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { PageTabPanel, PageTabs } from '../components/PageTabs';
 import { HskImportWizard } from '../components/HskImportWizard';
 import { HskQuestionListTable } from '../components/HskQuestionListTable';
+import { HskQuestionTypeSelect } from '../components/HskQuestionTypeSelect';
 import { HskQuestionTypeCard } from '../components/HskQuestionTypeCard';
 import { HskTagManager } from '../components/HskTagManager';
-import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
 import { useHskStore } from '../hooks/useHskStore';
 import {
   importAnalyzeResultAsTemplate,
@@ -12,7 +12,11 @@ import {
   upsertQuestionTypes,
   upsertQuestions,
 } from '../stores/hskExams';
-import type { HskLevelCode, HskQuestionRow, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
+import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
+import { HSK_QUESTION_LEVELS } from '../types/hskExams';
+import { HSK_QUESTION_STATUS_FILTER_OPTIONS } from '../config/hskQuestionWorkflow';
+import { buildDuplicateQuestionType, createBlankQuestionType } from '../utils/hskQuestionTypeDuplicate';
+import { isLegacyGenericTypeId } from '../config/hskQuestionTypes';
 import { HskQuestionConfig } from './HskQuestionConfig';
 import { HskQuestionEditPage } from './HskQuestionEditPage';
 
@@ -30,13 +34,14 @@ export function HskQuestionBank() {
   const [questionSearch, setQuestionSearch] = useState('');
   const [questionTypeFilter, setQuestionTypeFilter] = useState<HskQuestionTypeCode | 'all'>('all');
   const [questionLevelFilter, setQuestionLevelFilter] = useState<HskLevelCode | 'all'>('all');
-  const [questionStatusFilter, setQuestionStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
+  const [questionStatusFilter, setQuestionStatusFilter] = useState<HskQuestionStatus | 'all'>('all');
   const [questionDifficultyFilter, setQuestionDifficultyFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
   const [questionTagFilter, setQuestionTagFilter] = useState<string>('all');
   const [toast, setToast] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<HskQuestionRow | null>(null);
   const [configMode, setConfigMode] = useState<HskQuestionTypeCode | null>(null);
+  const [newTypeDraft, setNewTypeDraft] = useState<HskQuestionTypeDef | null>(null);
   const [localTypes, setLocalTypes] = useState(store.questionTypes);
   const [localQuestions, setLocalQuestions] = useState(store.questions);
   const [localTags, setLocalTags] = useState(store.tags);
@@ -48,7 +53,11 @@ export function HskQuestionBank() {
   }, [store]);
 
   const questionTypes = useMemo(
-    () => mergeTypeCounts(localTypes, localQuestions),
+    () =>
+      mergeTypeCounts(
+        localTypes.filter((t) => !isLegacyGenericTypeId(t.id)),
+        localQuestions,
+      ),
     [localTypes, localQuestions],
   );
 
@@ -64,10 +73,15 @@ export function HskQuestionBank() {
     return { all: questionTypes.length, listening, reading, writing };
   }, [questionTypes]);
 
-  const duplicateQuestionType = (source: HskQuestionTypeDef) => {
-    const name = window.prompt('新题型名称', `${source.name}（副本）`);
+  const duplicateQuestionType = (source: HskQuestionTypeDef, openConfig = false) => {
+    const auto = buildDuplicateQuestionType(source, localTypes);
+    if (!auto) {
+      showToast('同分区下已无可用题型 ID');
+      return;
+    }
+    const name = window.prompt('新题型名称', auto.name);
     if (!name?.trim()) return;
-    const idRaw = window.prompt('新题型 ID（如 L07、R08）', `${source.id}_NEW`);
+    const idRaw = window.prompt('新题型 ID（如 L07、R08）', auto.id);
     if (!idRaw?.trim()) return;
     const id = idRaw.trim().toUpperCase() as HskQuestionTypeCode;
     if (localTypes.some((t) => t.id === id)) {
@@ -79,17 +93,42 @@ export function HskQuestionBank() {
       return;
     }
     const row: HskQuestionTypeDef = {
-      ...source,
+      ...auto,
       id,
       hskTypeCode: id,
       name: name.trim(),
-      isPublished: false,
-      lastModified: new Date().toISOString().slice(0, 10),
     };
     const next = [...localTypes, row];
     setLocalTypes(next);
     upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, next);
     showToast(`已新建题型 ${id}：${name.trim()}`);
+    if (openConfig) setConfigMode(id);
+  };
+
+  const duplicateFromConfig = (source: HskQuestionTypeDef) => {
+    duplicateQuestionType(source, true);
+  };
+
+  const updateQuestionStatus = (question: HskQuestionRow, status: HskQuestionStatus) => {
+    const next = {
+      ...question,
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = localQuestions.map((q) =>
+      q.question_uid === next.question_uid ? next : q,
+    );
+    setLocalQuestions(updated);
+    upsertQuestions({ ...store, tags: localTags }, updated);
+    if (status === 'pending_review') {
+      showToast(`已提交审核 ${question.question_uid}`);
+    } else if (status === 'pending_publish') {
+      showToast(`已审核，${question.question_uid} 进入待发布`);
+    } else if (status === 'published') {
+      showToast(`已发布 ${question.question_uid}`);
+    } else {
+      showToast(`已保存草稿 ${question.question_uid}`);
+    }
   };
 
   const deleteQuestionType = (id: HskQuestionTypeCode) => {
@@ -107,9 +146,8 @@ export function HskQuestionBank() {
   };
 
   const createQuestionTypeFromTemplate = () => {
-    const template = localTypes[0];
-    if (!template) return;
-    duplicateQuestionType(template);
+    const section = selectedSection === 'all' ? 'reading' : selectedSection;
+    setNewTypeDraft(createBlankQuestionType(localTypes, section));
   };
 
   useEffect(() => {
@@ -131,8 +169,35 @@ export function HskQuestionBank() {
           );
           setLocalQuestions(updated);
           upsertQuestions({ ...store, tags: localTags }, updated);
-          showToast(next.status === 'published' ? `已发布 ${next.question_uid}` : `已保存草稿 ${next.question_uid}`);
+          showToast(
+            next.status === 'published'
+              ? `已发布 ${next.question_uid}`
+              : next.status === 'pending_review'
+                ? `已提交审核 ${next.question_uid}`
+                : next.status === 'pending_publish'
+                  ? `已保存为待发布 ${next.question_uid}`
+                  : `已保存草稿 ${next.question_uid}`,
+          );
           setEditingQuestion(null);
+        }}
+      />
+    );
+  }
+
+  if (newTypeDraft) {
+    return (
+      <HskQuestionConfig
+        typeDef={newTypeDraft}
+        isNew
+        questionCount={0}
+        otherTypeIds={localTypes.map((t) => t.id)}
+        onBack={() => setNewTypeDraft(null)}
+        onSave={(next) => {
+          const nextTypes = [...localTypes, next];
+          setLocalTypes(nextTypes);
+          upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, nextTypes);
+          setNewTypeDraft(null);
+          showToast(`已新建题型 ${next.id}：${next.name}`);
         }}
       />
     );
@@ -141,11 +206,15 @@ export function HskQuestionBank() {
   if (configMode) {
     const editingType = localTypes.find((t) => t.id === configMode);
     if (editingType) {
+      const typeQuestionCount =
+        questionTypes.find((t) => t.id === editingType.id)?.questionCount ?? 0;
       return (
         <HskQuestionConfig
           typeDef={editingType}
+          questionCount={typeQuestionCount}
           otherTypeIds={localTypes.filter((t) => t.id !== editingType.id).map((t) => t.id)}
           onBack={() => setConfigMode(null)}
+          onDuplicateAndNew={() => duplicateFromConfig(editingType)}
           onSave={(next) => {
             const nextTypes = localTypes.map((t) => (t.id === editingType.id ? next : t));
             setLocalTypes(nextTypes);
@@ -193,10 +262,6 @@ export function HskQuestionBank() {
     );
   });
 
-  const typeFilterLabel = (type: HskQuestionTypeDef) => {
-    const reg = getRegistryEntry(type.id, defaultCompoundForType(type.id));
-    return `${reg?.runtimeTypeName ?? type.name} (${type.id})`;
-  };
 
   const createQuestion = () => {
     const typeId = questionTypeFilter === 'all' ? 'L01' : questionTypeFilter;
@@ -345,36 +410,30 @@ export function HskQuestionBank() {
               onChange={(e) => setQuestionSearch(e.target.value)}
             />
           </label>
-          <select
-            className="hsk-question-list-filter-select"
+          <HskQuestionTypeSelect
             value={questionTypeFilter}
-            onChange={(e) => setQuestionTypeFilter(e.target.value as HskQuestionTypeCode | 'all')}
-          >
-            <option value="all">全部题型</option>
-            {localTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {typeFilterLabel(type)}
-              </option>
-            ))}
-          </select>
+            types={questionTypes}
+            onChange={setQuestionTypeFilter}
+            className="hsk-question-list-filter-type-select"
+          />
           <select
             className="hsk-question-list-filter-select"
             value={questionLevelFilter}
             onChange={(e) => setQuestionLevelFilter(e.target.value as HskLevelCode | 'all')}
           >
             <option value="all">全部等级</option>
-            {(['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'] as HskLevelCode[]).map((level) => (
+            {HSK_QUESTION_LEVELS.map((level) => (
               <option key={level} value={level}>{level}</option>
             ))}
           </select>
           <select
             className="hsk-question-list-filter-select"
             value={questionStatusFilter}
-            onChange={(e) => setQuestionStatusFilter(e.target.value as 'all' | 'published' | 'draft')}
+            onChange={(e) => setQuestionStatusFilter(e.target.value as HskQuestionStatus | 'all')}
           >
-            <option value="all">全部状态</option>
-            <option value="published">已发布</option>
-            <option value="draft">草稿</option>
+            {HSK_QUESTION_STATUS_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
           <select
             className="hsk-question-list-filter-select"
@@ -410,6 +469,7 @@ export function HskQuestionBank() {
         onEdit={setEditingQuestion}
         onPreview={setEditingQuestion}
         onDelete={deleteQuestion}
+        onStatusChange={updateQuestionStatus}
       />
 
       {filteredQuestions.length === 0 && (

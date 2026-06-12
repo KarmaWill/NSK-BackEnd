@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
+import { getQuestionStatusLabel } from '../config/hskQuestionWorkflow';
 import { getSectionName } from '../config/hskQuestionTypes';
+import { HSK_QUESTION_LEVELS } from '../types/hskExams';
 import type { HskPaperSlot, HskQuestionRow, HskQuestionTypeCode } from '../types/hskExams';
 
 type Props = {
@@ -59,7 +61,7 @@ export function HskQuestionPicker({ open, slot, questions, onClose, onSelect }: 
             <div className="filter-group">
               <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
                 <option value="">全部级别</option>
-                {['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'].map((lv) => (
+                {HSK_QUESTION_LEVELS.map((lv) => (
                   <option key={lv} value={lv}>{lv}</option>
                 ))}
               </select>
@@ -85,7 +87,7 @@ export function HskQuestionPicker({ open, slot, questions, onClose, onSelect }: 
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 500 }}>{q.stem}</div>
                   <div className="form-hint" style={{ marginTop: 6 }}>
-                    {q.level} · {q.status === 'published' ? '已发布' : '草稿'}
+                    {q.level} · {getQuestionStatusLabel(q.status)}
                   </div>
                 </button>
               ))

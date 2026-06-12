@@ -1,14 +1,36 @@
+import type { TitleByLang } from '../config/languages';
+
 export type HskSectionModule = 'listening' | 'reading' | 'writing';
 
-export type HskLevelCode = 'HSK1' | 'HSK2' | 'HSK3' | 'HSK4' | 'HSK5' | 'HSK6' | 'custom';
+export type HskLevelCode =
+  | 'HSK1'
+  | 'HSK2'
+  | 'HSK3'
+  | 'HSK4'
+  | 'HSK5'
+  | 'HSK6'
+  | 'HSK7-9'
+  | 'custom';
+
+export const HSK_QUESTION_LEVELS = [
+  'HSK1',
+  'HSK2',
+  'HSK3',
+  'HSK4',
+  'HSK5',
+  'HSK6',
+  'HSK7-9',
+] as const satisfies readonly HskLevelCode[];
 
 export type HskPublishStatus = 'draft' | 'published';
+
+/** 题库题目工作流状态 */
+export type HskQuestionStatus = 'draft' | 'pending_review' | 'pending_publish' | 'published';
 
 export type HskQuestionTypeCode =
   | 'L01' | 'L02' | 'L03' | 'L04' | 'L05' | 'L06'
   | 'R01' | 'R02' | 'R03' | 'R04' | 'R05' | 'R06' | 'R07' | 'R08' | 'R09'
-  | 'W01' | 'W02' | 'W03' | 'W04'
-  | 'T01' | 'T02' | 'T03' | 'T04' | 'T05' | 'T06';
+  | 'W01' | 'W02' | 'W03' | 'W04';
 
 export type HskQuestionTypeDef = {
   id: HskQuestionTypeCode;
@@ -56,6 +78,8 @@ export type HskQuestionPayload = {
   runtimeOptions?: HskRuntimeOption[];
   subQuestions?: HskSubQuestionPayload[];
   audioUrl?: string;
+  /** 音频文本稿（选填） */
+  audioTranscript?: string;
   renderKey?: string;
 };
 
@@ -68,15 +92,17 @@ export type HskQuestionRow = {
   options: HskQuestionOption[];
   correctAnswer: string;
   explanation: string;
+  /** 解析多语言文案（CN 与 explanation 同步） */
+  explanationByLang?: TitleByLang;
   score: number;
   payload?: HskQuestionPayload;
   audioUrl?: string;
-  audioStatus: 'none' | 'ready' | 'missing';
-  imageStatus: 'none' | 'ready' | 'missing';
+  audioStatus: 'none' | 'ready' | 'missing' | 'pending';
+  imageStatus: 'none' | 'ready' | 'missing' | 'pending';
   linked_courses: string[];
   linked_papers: string[];
   linked_videos: string[];
-  status: HskPublishStatus;
+  status: HskQuestionStatus;
   createdAt: string;
   updatedAt: string;
 };
@@ -146,6 +172,13 @@ export type HskTimeBlocks = {
   writing: number;
 };
 
+export type HskAudioRules = {
+  autoPlayOnEnter: boolean;
+  allowPause: boolean;
+  /** null = 不限播放次数 */
+  maxPlayCount: number | null;
+};
+
 export type HskPaperTemplate = {
   id: string;
   name: string;
@@ -161,6 +194,9 @@ export type HskPaperTemplate = {
   modules: HskTemplateModule[];
   status: HskPublishStatus;
   updatedAt: string;
+  audioRules?: HskAudioRules;
+  /** 自定义模板可覆盖默认单题分值 */
+  customScorePerQuestion?: number;
 };
 
 export type HskPaperSlot = {

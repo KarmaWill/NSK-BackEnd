@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { HskMultilangTextarea } from '../components/HskMultilangTextarea';
+import { HskQuestionAudioSection } from '../components/HskQuestionAudioSection';
 import { HskQuestionEditPreview } from '../components/HskQuestionEditPreview';
+import { HskQuestionImageOptionsEditor } from '../components/HskQuestionImageOptionsEditor';
+import { HskQuestionTagPicker } from '../components/HskQuestionTagPicker';
+import { HskQuestionEditTypeSelect } from '../components/HskQuestionEditTypeSelect';
 import { getAnswerModeDef, guessAnswerMode } from '../config/hskAnswerModes';
+import { autoTranslateTitleByLang, resolveExplanationByLang, type LangKey } from '../config/languages';
+import { isImageOptionQuestionType } from '../config/hskQuestionTypeGroups';
+import { getQuestionStatusClass, getQuestionStatusLabel } from '../config/hskQuestionWorkflow';
 import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
-import type { HskLevelCode, HskQuestionRow, HskQuestionTypeCode, HskQuestionTypeDef } from '../types/hskExams';
+import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTypeDef, HskRuntimeOption } from '../types/hskExams';
+import { HSK_QUESTION_LEVELS } from '../types/hskExams';
 
 type Props = {
   question: HskQuestionRow;
@@ -12,19 +21,37 @@ type Props = {
   onSave: (question: HskQuestionRow) => void;
 };
 
-function SectionHeader({ icon, title }: { icon: string; title: string }) {
+function SectionHeader({
+  icon,
+  title,
+  extra,
+}: {
+  icon: string;
+  title: string;
+  extra?: ReactNode;
+}) {
   return (
-    <div className="hsk-question-edit-section-head">
-      <span aria-hidden>{icon}</span>
-      <h3>{title}</h3>
+    <div className={`hsk-question-edit-section-head${extra ? ' hsk-question-edit-section-head-split' : ''}`}>
+      <div className="hsk-question-edit-section-head-main">
+        <span aria-hidden>{icon}</span>
+        <h3>{title}</h3>
+      </div>
+      {extra}
     </div>
   );
 }
+
+const DEFAULT_IMAGE_OPTIONS: HskRuntimeOption[] = [
+  { key: 'A', text: '图片A', image: '' },
+  { key: 'B', text: '图片B', image: '' },
+  { key: 'C', text: '图片C', image: '' },
+];
 
 export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: Props) {
   const [draft, setDraft] = useState<HskQuestionRow>(() => structuredClone(question));
   const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [explanationLangTab, setExplanationLangTab] = useState<LangKey>('CN');
 
   useEffect(() => {
     setDraft(structuredClone(question));
@@ -41,6 +68,11 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     [types],
   );
 
+  const explanationByLang = useMemo(
+    () => resolveExplanationByLang(draft.explanation, draft.explanationByLang),
+    [draft.explanation, draft.explanationByLang],
+  );
+
   const options =
     draft.payload?.runtimeOptions ??
     draft.options.map((o) => ({
@@ -49,6 +81,17 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       pinyin: o.pinyin,
       image: o.image,
     }));
+
+  const usesImageOptions = isImageOptionQuestionType(draft.type_id);
+  const imageOptions = useMemo(() => {
+    if (!usesImageOptions) return options;
+    if (options.length >= 2) return options;
+    return DEFAULT_IMAGE_OPTIONS;
+  }, [usesImageOptions, options]);
+
+  const showAudioSection = registry?.editorFields.includes('audio') || !!draft.audioUrl;
+  const audioUrl = draft.payload?.audioUrl ?? draft.audioUrl ?? '';
+  const audioTranscript = draft.payload?.audioTranscript ?? '';
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -59,9 +102,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     setDraft((prev) => ({ ...prev, [key]: value, updatedAt: new Date().toISOString() }));
   };
 
-  const updateOptionText = (index: number, text: string) => {
-    const next = [...options];
-    next[index] = { ...next[index], text };
+  const syncRuntimeOptions = (next: HskRuntimeOption[]) => {
     const rowOptions = next.map((o) => ({
       label: o.key,
       text: o.text ?? '',
@@ -72,11 +113,67 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       ...prev,
       options: rowOptions,
       payload: { ...prev.payload, runtimeOptions: next },
+      imageStatus: next.some((o) => o.image) ? 'ready' : prev.imageStatus,
       updatedAt: new Date().toISOString(),
     }));
   };
 
-  const handleSave = (status: 'draft' | 'published') => {
+  const updateOptionText = (index: number, text: string) => {
+    const next = [...options];
+    next[index] = { ...next[index], text };
+    syncRuntimeOptions(next);
+  };
+
+  const updateAudioUrl = (url: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      audioUrl: url,
+      audioStatus: url ? 'ready' : 'none',
+      payload: { ...prev.payload, audioUrl: url },
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const updateAudioTranscript = (text: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      payload: { ...prev.payload, audioTranscript: text },
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const updateTags = (nextTags: string[]) => {
+    setDraft((prev) => ({ ...prev, tags: nextTags, updatedAt: new Date().toISOString() }));
+  };
+
+  const updateExplanationLang = (lang: LangKey, value: string) => {
+    setDraft((prev) => {
+      const nextByLang = {
+        ...resolveExplanationByLang(prev.explanation, prev.explanationByLang),
+        [lang]: value,
+      };
+      return {
+        ...prev,
+        explanationByLang: nextByLang,
+        explanation: lang === 'CN' ? value : (nextByLang.CN ?? prev.explanation),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  const handleAutoTranslateExplanation = () => {
+    const seed = (explanationByLang.CN ?? explanationByLang[explanationLangTab] ?? '').trim();
+    if (!seed) return;
+    const next = autoTranslateTitleByLang(seed);
+    setDraft((prev) => ({
+      ...prev,
+      explanationByLang: next,
+      explanation: next.CN ?? prev.explanation,
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const handleSave = (status: HskQuestionStatus) => {
     if (!draft.stem.trim()) {
       showToast('请填写题干');
       return;
@@ -137,18 +234,13 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                 <label>题目ID</label>
                 <input type="text" value={draft.question_uid} readOnly className="input-readonly" />
               </div>
-              <div className="form-group">
+              <div className="form-group hsk-question-edit-type-field">
                 <label>题型</label>
-                <select
+                <HskQuestionEditTypeSelect
                   value={draft.type_id}
-                  onChange={(e) => update('type_id', e.target.value as HskQuestionTypeCode)}
-                >
-                  {visibleTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.id})
-                    </option>
-                  ))}
-                </select>
+                  types={visibleTypes}
+                  onChange={(typeId) => update('type_id', typeId)}
+                />
               </div>
               <div className="form-group">
                 <label>等级</label>
@@ -156,7 +248,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                   value={draft.level}
                   onChange={(e) => update('level', e.target.value as HskLevelCode)}
                 >
-                  {(['HSK1', 'HSK2', 'HSK3', 'HSK4', 'HSK5', 'HSK6'] as HskLevelCode[]).map((level) => (
+                  {HSK_QUESTION_LEVELS.map((level) => (
                     <option key={level} value={level}>{level}</option>
                   ))}
                 </select>
@@ -172,17 +264,45 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
               </div>
             </div>
 
+            <div className="hsk-question-edit-workflow-card">
+              <div className="hsk-question-edit-workflow-head">
+                <span className={`hsk-question-list-status ${getQuestionStatusClass(draft.status)}`}>
+                  {getQuestionStatusLabel(draft.status)}
+                </span>
+                <span className="hsk-question-edit-workflow-hint">流程：草稿 → 待审核 → 待发布 → 已发布</span>
+              </div>
+              <div className="hsk-question-edit-workflow-actions">
+                {draft.status === 'draft' && (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleSave('pending_review')}>
+                    提交审核
+                  </button>
+                )}
+                {draft.status === 'pending_review' && (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleSave('pending_publish')}>
+                    审核通过
+                  </button>
+                )}
+                {draft.status === 'pending_publish' && (
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSave('published')}>
+                    发布
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="form-group">
               <label>标签</label>
-              <select
-                value={draft.tags[0] ?? ''}
-                onChange={(e) => update('tags', e.target.value ? [e.target.value] : [])}
-              >
-                <option value="">未设置</option>
-                {tags.map((tag) => (
-                  <option key={tag.id} value={tag.label}>{tag.label}</option>
-                ))}
-              </select>
+              <div className="form-hint" style={{ marginBottom: 12 }}>
+                按分类选择题型特征标签，可多选；在「标签管理」中新增的标签会出现在「自定义标签」分组。
+              </div>
+              <HskQuestionTagPicker
+                tags={tags}
+                selected={draft.tags}
+                onChange={updateTags}
+              />
+              {draft.tags.length === 0 && (
+                <div className="form-hint" style={{ marginTop: 8 }}>未设置</div>
+              )}
             </div>
 
             <SectionHeader icon="📝" title="题干与作答" />
@@ -199,63 +319,70 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
               />
             </div>
 
-            {options.length > 0 && (
-              <div className="form-group">
-                <label>选项</label>
-                <div className="hsk-question-edit-options">
-                  {options.map((opt, idx) => (
-                    <div key={opt.key} className="hsk-question-edit-option-row">
-                      <span className="hsk-question-edit-option-key">{opt.key}</span>
-                      <input
-                        type="text"
-                        value={opt.text ?? ''}
-                        placeholder={`选项${opt.key}`}
-                        onChange={(e) => updateOptionText(idx, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+            {showAudioSection && (
+              <HskQuestionAudioSection
+                audioUrl={audioUrl}
+                audioTranscript={audioTranscript}
+                required={registry?.editorFields.includes('audio') ?? false}
+                onAudioUrlChange={updateAudioUrl}
+                onAudioTranscriptChange={updateAudioTranscript}
+              />
             )}
 
-            <div className="form-group">
-              <label>正确答案</label>
-              <input
-                type="text"
-                value={draft.correctAnswer}
-                onChange={(e) => update('correctAnswer', e.target.value)}
+            {usesImageOptions ? (
+              <HskQuestionImageOptionsEditor
+                options={imageOptions}
+                correctAnswer={draft.correctAnswer}
+                showCorrectToggle={draft.type_id === 'L01'}
+                onChange={syncRuntimeOptions}
+                onCorrectAnswerChange={(answer) => update('correctAnswer', answer)}
               />
-            </div>
+            ) : (
+              options.length > 0 && (
+                <div className="form-group">
+                  <label>选项</label>
+                  <div className="hsk-question-edit-options">
+                    {options.map((opt, idx) => (
+                      <div key={opt.key} className="hsk-question-edit-option-row">
+                        <span className="hsk-question-edit-option-key">{opt.key}</span>
+                        <input
+                          type="text"
+                          value={opt.text ?? ''}
+                          placeholder={`选项${opt.key}`}
+                          onChange={(e) => updateOptionText(idx, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
 
-            <div className="form-group">
-              <label>解析</label>
-              <textarea
-                rows={2}
-                value={draft.explanation}
-                onChange={(e) => update('explanation', e.target.value)}
-                placeholder="题目解析（选填）"
-              />
-            </div>
-
-            {(registry?.editorFields.includes('audio') || draft.audioUrl) && (
+            {(!usesImageOptions || draft.type_id !== 'L01') && (
               <div className="form-group">
-                <label>音频 URL</label>
+                <label>正确答案</label>
                 <input
-                  type="url"
-                  value={draft.payload?.audioUrl ?? draft.audioUrl ?? ''}
-                  onChange={(e) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      audioUrl: e.target.value,
-                      audioStatus: e.target.value ? 'ready' : 'none',
-                      payload: { ...prev.payload, audioUrl: e.target.value },
-                      updatedAt: new Date().toISOString(),
-                    }))
-                  }
-                  placeholder="https://..."
+                  type="text"
+                  value={draft.correctAnswer}
+                  onChange={(e) => update('correctAnswer', e.target.value)}
+                  placeholder={usesImageOptions ? '如 s1:img1,s2:img2,s3:img3' : ''}
                 />
               </div>
             )}
+
+            <div className="form-group">
+              <label>解析</label>
+              <HskMultilangTextarea
+                langTab={explanationLangTab}
+                onLangTabChange={setExplanationLangTab}
+                valueByLang={explanationByLang}
+                onChange={updateExplanationLang}
+                onAutoTranslate={handleAutoTranslateExplanation}
+                placeholder="题目解析（选填）"
+                rows={3}
+                fieldHint="中文解析会同步到 explanation 字段，供学员端默认展示"
+              />
+            </div>
 
             <SectionHeader icon="🔗" title="关联资源" />
 
@@ -326,9 +453,26 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleSave('draft')}>
             保存草稿
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSave('published')}>
-            发布
-          </button>
+          {draft.status === 'draft' && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleSave('pending_review')}>
+              提交审核
+            </button>
+          )}
+          {draft.status === 'pending_review' && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleSave('pending_publish')}>
+              审核通过
+            </button>
+          )}
+          {draft.status === 'pending_publish' && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => handleSave('published')}>
+              发布
+            </button>
+          )}
+          {draft.status === 'published' && (
+            <button type="button" className="btn btn-primary btn-sm" disabled>
+              已发布
+            </button>
+          )}
         </div>
       </footer>
 

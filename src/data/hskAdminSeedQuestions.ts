@@ -4,7 +4,7 @@ import type { HskQuestionRow } from '../types/hskExams';
 export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
   {
     "question_uid": "Q-001",
-    "type_id": "T01",
+    "type_id": "R07",
     "level": "HSK1",
     "tags": [
       "单选题"
@@ -49,7 +49,7 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
   },
   {
     "question_uid": "Q-002",
-    "type_id": "T05",
+    "type_id": "R08",
     "level": "HSK1",
     "tags": [
       "判断题"
@@ -77,13 +77,13 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
       "HSK1 基础测试卷"
     ],
     "linked_videos": [],
-    "status": "published",
+    "status": "pending_review",
     "createdAt": "2025-12-02T08:00:00.000Z",
     "updatedAt": "2025-12-02T08:00:00.000Z"
   },
   {
     "question_uid": "Q-003",
-    "type_id": "T01",
+    "type_id": "R07",
     "level": "HSK1",
     "tags": [
       "单选题"
@@ -127,7 +127,7 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
   },
   {
     "question_uid": "Q-004",
-    "type_id": "T03",
+    "type_id": "R03",
     "level": "HSK2",
     "tags": [
       "填空题"
@@ -148,13 +148,13 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
     "linked_videos": [
       "第3课 — 购物对话"
     ],
-    "status": "published",
+    "status": "pending_publish",
     "createdAt": "2025-12-05T08:00:00.000Z",
     "updatedAt": "2025-12-05T08:00:00.000Z"
   },
   {
     "question_uid": "Q-005",
-    "type_id": "T04",
+    "type_id": "W04",
     "level": "HSK2",
     "tags": [
       "简答题"
@@ -179,7 +179,7 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
   },
   {
     "question_uid": "Q-006",
-    "type_id": "T02",
+    "type_id": "R07",
     "level": "HSK3",
     "tags": [
       "多选题"
@@ -221,13 +221,13 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
     "linked_videos": [
       "第4课 — 时间表达"
     ],
-    "status": "published",
+    "status": "pending_review",
     "createdAt": "2025-12-10T08:00:00.000Z",
     "updatedAt": "2025-12-10T08:00:00.000Z"
   },
   {
     "question_uid": "Q-007",
-    "type_id": "T01",
+    "type_id": "R07",
     "level": "HSK2",
     "tags": [
       "单选题"
@@ -269,7 +269,7 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
   },
   {
     "question_uid": "Q-008",
-    "type_id": "T05",
+    "type_id": "R08",
     "level": "HSK1",
     "tags": [
       "判断题"
@@ -303,7 +303,7 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
   },
   {
     "question_uid": "Q-009",
-    "type_id": "T03",
+    "type_id": "R03",
     "level": "HSK3",
     "tags": [
       "填空题"
@@ -328,7 +328,7 @@ export const HSK_ADMIN_SEED_QUESTIONS: HskQuestionRow[] = [
   },
   {
     "question_uid": "Q-010",
-    "type_id": "T06",
+    "type_id": "L03",
     "level": "HSK2",
     "tags": [
       "听力题",

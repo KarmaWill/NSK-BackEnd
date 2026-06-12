@@ -1,6 +1,14 @@
+import {
+  getQuestionStatusClass,
+  getQuestionStatusLabel,
+} from '../config/hskQuestionWorkflow';
 import { getAnswerModeDef, guessAnswerMode } from '../config/hskAnswerModes';
-import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
-import type { HskQuestionRow, HskQuestionTypeCode, HskQuestionTypeDef } from '../types/hskExams';
+import type {
+  HskQuestionRow,
+  HskQuestionStatus,
+  HskQuestionTypeCode,
+  HskQuestionTypeDef,
+} from '../types/hskExams';
 
 type Props = {
   questions: HskQuestionRow[];
@@ -8,6 +16,7 @@ type Props = {
   onEdit: (question: HskQuestionRow) => void;
   onPreview: (question: HskQuestionRow) => void;
   onDelete: (question: HskQuestionRow) => void;
+  onStatusChange?: (question: HskQuestionRow, nextStatus: HskQuestionStatus) => void;
 };
 
 function sectionEmoji(typeId: HskQuestionTypeCode): string {
@@ -35,12 +44,18 @@ function getTagLabels(question: HskQuestionRow, types: HskQuestionTypeDef[]): st
 }
 
 export function getQuestionTypeFilterLabel(typeId: HskQuestionTypeCode, fallbackName: string): string {
-  const reg = getRegistryEntry(typeId, defaultCompoundForType(typeId));
   const emoji = sectionEmoji(typeId);
-  return `${emoji} ${reg?.runtimeTypeName ?? fallbackName} (${typeId})`;
+  return `${emoji} ${fallbackName} (${typeId})`;
 }
 
-export function HskQuestionListTable({ questions, types, onEdit, onPreview, onDelete }: Props) {
+export function HskQuestionListTable({
+  questions,
+  types,
+  onEdit,
+  onPreview,
+  onDelete,
+  onStatusChange,
+}: Props) {
   return (
     <div className="hsk-question-list-table-card">
       <div className="hsk-question-list-table-wrap">
@@ -102,11 +117,38 @@ export function HskQuestionListTable({ questions, types, onEdit, onPreview, onDe
                     </div>
                   </td>
                   <td className="col-status">
-                    <span
-                      className={`hsk-question-list-status${q.status === 'published' ? ' is-published' : ''}`}
-                    >
-                      {q.status === 'published' ? '已发布' : '草稿'}
-                    </span>
+                    <div className="hsk-question-list-status-cell">
+                      <span className={`hsk-question-list-status ${getQuestionStatusClass(q.status)}`}>
+                        {getQuestionStatusLabel(q.status)}
+                      </span>
+                      {q.status === 'draft' && onStatusChange && (
+                        <button
+                          type="button"
+                          className="hsk-question-list-status-btn"
+                          onClick={() => onStatusChange(q, 'pending_review')}
+                        >
+                          提交审核
+                        </button>
+                      )}
+                      {q.status === 'pending_review' && onStatusChange && (
+                        <button
+                          type="button"
+                          className="hsk-question-list-status-btn"
+                          onClick={() => onStatusChange(q, 'pending_publish')}
+                        >
+                          审核通过
+                        </button>
+                      )}
+                      {q.status === 'pending_publish' && onStatusChange && (
+                        <button
+                          type="button"
+                          className="hsk-question-list-status-btn is-primary"
+                          onClick={() => onStatusChange(q, 'published')}
+                        >
+                          发布
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="col-actions">
                     <div className="hsk-question-list-row-actions">

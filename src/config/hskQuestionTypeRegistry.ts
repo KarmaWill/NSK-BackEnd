@@ -50,10 +50,8 @@ export const QUESTION_TYPE_REGISTRY: QuestionTypeRegistryEntry[] = [
     sharedContent: true,
     editorFields: ['content', 'subQuestions', 'audio'],
   }),
-  entry('L06', 'L06', '短文多题', 'listening', {
-    isCompoundGroup: true,
-    sharedContent: true,
-    editorFields: ['content', 'subQuestions', 'audio'],
+  entry('L06', 'L06', '图片判断', 'listening', {
+    editorFields: ['content', 'options', 'audio', 'answer'],
   }),
   entry('R01', 'R01', '图文匹配', 'reading', { editorFields: ['content', 'options', 'answer'] }),
   entry('R02', 'R02', '问答匹配', 'reading', { editorFields: ['content', 'options', 'answer'] }),
@@ -62,24 +60,26 @@ export const QUESTION_TYPE_REGISTRY: QuestionTypeRegistryEntry[] = [
     sharedOptions: true,
     editorFields: ['content', 'options', 'subQuestions'],
   }),
-  entry('R04', 'R04', '阅读理解', 'reading', {
+  entry('R04', 'R04', '句子排序', 'reading', {
     isCompoundGroup: true,
     sharedContent: true,
     editorFields: ['content', 'subQuestions'],
   }),
-  entry('R05', 'R05_group', '句子排序', 'reading', {
+  entry('R05', 'R05_group', '段落填空', 'reading', {
     isCompoundGroup: true,
     sharedContent: true,
     editorFields: ['content', 'subQuestions'],
   }),
-  entry('R06', 'R06', '段落填空', 'reading', {
+  entry('R06', 'R06', '完形填空', 'reading', {
     isCompoundGroup: true,
     sharedContent: true,
     editorFields: ['content', 'subQuestions'],
   }),
-  entry('R07', 'R07', '段落理解', 'reading', { editorFields: ['content', 'subQuestions'] }),
-  entry('W01', 'W01', '汉字辨写', 'writing', { editorFields: ['content', 'answer'] }),
-  entry('W02', 'W02', '连词成句', 'writing', { editorFields: ['content', 'answer'] }),
+  entry('R07', 'R07', '阅读理解', 'reading', { editorFields: ['content', 'subQuestions'] }),
+  entry('R08', 'R08', '图片判断', 'reading', { editorFields: ['content', 'options', 'answer'] }),
+  entry('R09', 'R09', '图片选词填空', 'reading', { editorFields: ['content', 'options', 'answer'] }),
+  entry('W01', 'W01', '部件选择', 'writing', { editorFields: ['content', 'answer'] }),
+  entry('W02', 'W02', '填写汉字', 'writing', { editorFields: ['content', 'answer'] }),
   entry('W03', 'W03', '看图写句', 'writing', { editorFields: ['content', 'answer'] }),
   entry('W04', 'W04', '命题作文', 'writing', { editorFields: ['content', 'answer'] }),
 ];
@@ -105,7 +105,7 @@ export function typeSupportsCompound(hskTypeCode: HskQuestionTypeCode): boolean 
 
 export function typeRequiresCompound(hskTypeCode: HskQuestionTypeCode): boolean {
   const entries = QUESTION_TYPE_REGISTRY.filter((r) => r.hskTypeCode === hskTypeCode);
-  return entries.every((r) => r.isCompoundGroup);
+  return entries.length > 0 && entries.every((r) => r.isCompoundGroup);
 }
 
 export function defaultCompoundForType(hskTypeCode: HskQuestionTypeCode): boolean {

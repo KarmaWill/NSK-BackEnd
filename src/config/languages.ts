@@ -60,3 +60,14 @@ export function autoTranslateTitleByLang(seed: string): TitleByLang {
 export function primaryEnglishTitle(titleByLang?: TitleByLang, titleEn?: string): string {
   return titleByLang?.EN?.trim() || titleEn?.trim() || '';
 }
+
+export function resolveExplanationByLang(
+  explanation: string,
+  explanationByLang?: TitleByLang,
+): TitleByLang {
+  return {
+    ...createEmptyTitleByLang(explanation, ''),
+    ...explanationByLang,
+    CN: explanationByLang?.CN ?? explanation,
+  };
+}

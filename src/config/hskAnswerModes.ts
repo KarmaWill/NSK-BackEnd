@@ -72,12 +72,6 @@ const TYPE_DEFAULT_MODE: Partial<Record<HskQuestionTypeCode, AnswerModeId>> = {
   W02: 'sentence_fill',
   W03: 'picture_sentence',
   W04: 'essay',
-  T01: 'single_choice',
-  T02: 'multi_choice',
-  T03: 'word_fill',
-  T04: 'essay',
-  T05: 'true_false',
-  T06: 'single_choice',
 };
 
 export function getAnswerModeDef(id: AnswerModeId): AnswerModeDef {
@@ -132,8 +126,8 @@ export const HSK_TYPE_CODE_REFERENCE: { code: HskQuestionTypeCode; label: string
   { code: 'R05', label: '段落填空' },
   { code: 'R06', label: '完形填空' },
   { code: 'R07', label: '阅读理解' },
-  { code: 'W01', label: '汉字辨写' },
-  { code: 'W02', label: '连词成句' },
+  { code: 'W01', label: '部件选择' },
+  { code: 'W02', label: '填写汉字' },
   { code: 'W03', label: '看图写句' },
   { code: 'W04', label: '命题作文' },
 ];

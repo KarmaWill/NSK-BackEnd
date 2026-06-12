@@ -20,16 +20,10 @@ const rows: SeedRow[] = [
   { id: 'R07', name: '阅读理解', section: 'reading', description: '阅读文章后回答选择题', defaultScore: 2, hskLevels: [5, 6], difficulty: '★★★★★', isPublished: false, answerMode: 'single_choice', defaultOptionCount: 4 },
   { id: 'R08', name: '图片判断', section: 'reading', description: '看图片和句子，判断句子描述是否与图片一致', defaultScore: 2, hskLevels: [1, 2, 3], difficulty: '★★☆☆☆', isPublished: true, answerMode: 'true_false' },
   { id: 'R09', name: '图片选词填空', section: 'reading', description: '根据图片选择词语填入空白处', defaultScore: 2, hskLevels: [2, 3, 4], difficulty: '★★★☆☆', isPublished: true, answerMode: 'word_fill' },
-  { id: 'W01', name: '词语填空', section: 'writing', description: '将汉字部件组合成完整汉字并填写拼音', defaultScore: 2, hskLevels: [1, 2], difficulty: '★★☆☆☆', isPublished: true, answerMode: 'picture_sentence' },
-  { id: 'W02', name: '句子改写', section: 'writing', description: '根据拼音提示在空白处填写正确的汉字', defaultScore: 2, hskLevels: [2, 3, 4], difficulty: '★★★☆☆', isPublished: true, answerMode: 'sentence_fill' },
+  { id: 'W01', name: '部件选择', section: 'writing', description: '将汉字部件组合成完整汉字', defaultScore: 2, hskLevels: [1, 2], difficulty: '★★☆☆☆', isPublished: true, answerMode: 'picture_sentence' },
+  { id: 'W02', name: '填写汉字', section: 'writing', description: '根据拼音提示在空白处填写正确的汉字', defaultScore: 2, hskLevels: [2, 3, 4], difficulty: '★★★☆☆', isPublished: true, answerMode: 'sentence_fill' },
   { id: 'W03', name: '看图造句', section: 'writing', description: '根据图片和关键词进行造句', defaultScore: 2, hskLevels: [3, 4, 5], difficulty: '★★★★☆', isPublished: true, answerMode: 'essay' },
   { id: 'W04', name: '命题作文', section: 'writing', description: '根据给定话题和关键词进行写作', defaultScore: 10, hskLevels: [4, 5, 6], difficulty: '★★★★★', isPublished: false, answerMode: 'essay' },
-  { id: 'T01', name: '单选题', section: 'reading', description: '从多个选项中选择一个正确答案', defaultScore: 2, hskLevels: [1, 2, 3, 4, 5, 6], difficulty: '★☆☆☆☆', isPublished: true, answerMode: 'single_choice' },
-  { id: 'T02', name: '多选题', section: 'reading', description: '从多个选项中选择多个正确答案', defaultScore: 3, hskLevels: [1, 2, 3, 4, 5, 6], difficulty: '★★☆☆☆', isPublished: true, answerMode: 'multi_choice' },
-  { id: 'T03', name: '填空题', section: 'reading', description: '在空白处填入正确答案', defaultScore: 2, hskLevels: [1, 2, 3, 4, 5, 6], difficulty: '★★☆☆☆', isPublished: true, answerMode: 'word_fill' },
-  { id: 'T04', name: '简答题', section: 'reading', description: '用文字回答主观问题', defaultScore: 5, hskLevels: [1, 2, 3, 4, 5, 6], difficulty: '★★★☆☆', isPublished: true, answerMode: 'essay' },
-  { id: 'T05', name: '判断题', section: 'reading', description: '判断陈述的正误', defaultScore: 1, hskLevels: [1, 2, 3, 4, 5, 6], difficulty: '★☆☆☆☆', isPublished: true, answerMode: 'true_false' },
-  { id: 'T06', name: '听力单选题', section: 'listening', description: '听音频后从选项中选择正确答案', defaultScore: 3, hskLevels: [1, 2, 3, 4, 5, 6], difficulty: '★★☆☆☆', isPublished: true, answerMode: 'single_choice' },
 ];
 
 export const HSK_QUESTION_TYPE_DEFS: HskQuestionTypeDef[] = rows.map((row) => ({
@@ -40,8 +34,31 @@ export const HSK_QUESTION_TYPE_DEFS: HskQuestionTypeDef[] = rows.map((row) => ({
 
 export const HSK_TYPE_CODES = HSK_QUESTION_TYPE_DEFS.map((t) => t.id);
 
+/** 已废弃的通用题型 T01–T06 → 对应 HSK 官方题型 */
+export const LEGACY_GENERIC_TYPE_TO_HSK: Record<string, HskQuestionTypeCode> = {
+  T01: 'R07',
+  T02: 'R07',
+  T03: 'R03',
+  T04: 'W04',
+  T05: 'R08',
+  T06: 'L03',
+};
+
+export function isLegacyGenericTypeId(id: string): boolean {
+  return /^T\d{2}$/.test(id);
+}
+
+export function migrateLegacyTypeId(typeId: string): HskQuestionTypeCode {
+  if (isLegacyGenericTypeId(typeId)) {
+    return LEGACY_GENERIC_TYPE_TO_HSK[typeId] ?? 'R07';
+  }
+  return typeId as HskQuestionTypeCode;
+}
+
 export function ensureQuestionTypes(types: HskQuestionTypeDef[]): HskQuestionTypeDef[] {
-  const byId = new Map(types.map((type) => [type.id, type]));
+  const byId = new Map(
+    types.filter((t) => !isLegacyGenericTypeId(t.id)).map((type) => [type.id, type]),
+  );
   return HSK_QUESTION_TYPE_DEFS.map((def) => {
     const existing = byId.get(def.id);
     if (!existing) return def;

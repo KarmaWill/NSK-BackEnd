@@ -15,11 +15,36 @@ export function calcTimeBlockMinutes(blocks: HskTimeBlocks): number {
 }
 
 export function getScorePerQuestion(template: HskPaperTemplate, typeDefs: HskQuestionTypeDef[]): number {
+  if (template.customScorePerQuestion != null) return template.customScorePerQuestion;
   const level = levelToNumber(String(template.level));
   const standard = level ? getLevelStandard(level) : null;
   if (standard) return standard.scorePerQuestion;
   const firstType = typeDefs[0];
   return firstType?.defaultScore ?? 2;
+}
+
+export function applyTemplatePatch(
+  template: HskPaperTemplate,
+  patch: Partial<HskPaperTemplate>,
+  typeDefs: HskQuestionTypeDef[],
+): HskPaperTemplate {
+  const merged = { ...template, ...patch };
+  const next = recalcTemplateTotals(merged, typeDefs);
+  if (merged.category === 'official') return next;
+  if (patch.totalScore !== undefined) next.totalScore = patch.totalScore;
+  if (patch.passScore !== undefined) next.passScore = patch.passScore;
+  if (patch.totalDuration !== undefined) next.totalDuration = patch.totalDuration;
+  if (patch.timeBlocks) next.timeBlocks = { ...next.timeBlocks, ...patch.timeBlocks };
+  if (patch.audioRules) {
+    const baseAudio = {
+      autoPlayOnEnter: template.audioRules?.autoPlayOnEnter ?? true,
+      allowPause: template.audioRules?.allowPause ?? false,
+      maxPlayCount: template.audioRules?.maxPlayCount ?? 1,
+    };
+    next.audioRules = { ...baseAudio, ...patch.audioRules };
+  }
+  if (patch.customScorePerQuestion !== undefined) next.customScorePerQuestion = patch.customScorePerQuestion;
+  return next;
 }
 
 export function recalcTemplateTotals(template: HskPaperTemplate, typeDefs: HskQuestionTypeDef[]): HskPaperTemplate {
@@ -150,6 +175,7 @@ export function createEmptyTemplate(partial?: Partial<HskPaperTemplate>): HskPap
     totalScore: 0,
     passScore: 0,
     timeBlocks: { prep: 5, listening: 0, buffer: 3, reading: 0, writing: 0 },
+    audioRules: { autoPlayOnEnter: true, allowPause: false, maxPlayCount: 1 },
     modules: [
       { id: 'listening', name: '听力', totalQuestions: 0, sections: [] },
       { id: 'reading', name: '阅读', totalQuestions: 0, sections: [] },

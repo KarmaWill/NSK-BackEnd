@@ -1,4 +1,6 @@
-import { HSK_QUESTION_TYPE_DEFS, ensureQuestionTypes, levelToNumber } from '../config/hskQuestionTypes';
+import { normalizeQuestionLevel, normalizeQuestionStatus } from '../config/hskQuestionWorkflow';
+import { resolveExplanationByLang } from '../config/languages';
+import { HSK_QUESTION_TYPE_DEFS, ensureQuestionTypes, levelToNumber, migrateLegacyTypeId } from '../config/hskQuestionTypes';
 import { getLevelStandard } from '../config/hskLevelStandards';
 import { createDefaultQuestionTags, ensureQuestionTags } from '../config/hskQuestionTags';
 import { createAdminSeedQuestions, ensureAdminSeedQuestions } from '../data/hskAdminSeedQuestions';
@@ -218,6 +220,19 @@ export function createDefaultHskStore(): HskExamStoreSnapshot {
   };
 }
 
+function migrateQuestionRows(questions: HskQuestionRow[]): HskQuestionRow[] {
+  return questions.map((q) => {
+    const next = /^T\d{2}$/.test(q.type_id) ? { ...q, type_id: migrateLegacyTypeId(q.type_id) } : q;
+    return {
+      ...next,
+      level: normalizeQuestionLevel(next.level),
+      status: normalizeQuestionStatus(next.status),
+      explanationByLang: resolveExplanationByLang(next.explanation, next.explanationByLang),
+      explanation: resolveExplanationByLang(next.explanation, next.explanationByLang).CN ?? next.explanation,
+    };
+  });
+}
+
 function normalizeStore(raw: unknown): HskExamStoreSnapshot {
   const fallback = createDefaultHskStore();
   if (!raw || typeof raw !== 'object') return fallback;
@@ -226,8 +241,8 @@ function normalizeStore(raw: unknown): HskExamStoreSnapshot {
     questionTypes: ensureQuestionTypes(
       Array.isArray(data.questionTypes) && data.questionTypes.length ? data.questionTypes : fallback.questionTypes,
     ),
-    questions: ensureAdminSeedQuestions(
-      Array.isArray(data.questions) ? data.questions : fallback.questions,
+    questions: migrateQuestionRows(
+      ensureAdminSeedQuestions(Array.isArray(data.questions) ? data.questions : fallback.questions),
     ),
     tags: ensureQuestionTags(
       Array.isArray(data.tags) && data.tags.length ? data.tags : fallback.tags,
