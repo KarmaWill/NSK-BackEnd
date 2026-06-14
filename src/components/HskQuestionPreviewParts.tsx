@@ -42,6 +42,11 @@ import {
 } from '../utils/hskJudgmentQuestions';
 import { resolveR09Content, resolveR09Options } from '../utils/hskR09ImageWord';
 import { resolveW01ComponentParts, resolveW01WordMatches } from '../utils/hskW01ComponentMatch';
+import {
+  formatW02PinyinHintDisplay,
+  resolveW02PinyinHints,
+  W02_PREVIEW_HINT,
+} from '../utils/hskW02PinyinFill';
 import { resolveW03Content, W03_PREVIEW_HINT } from '../utils/hskW03PictureSentence';
 import { formatW04MinWordsHint, resolveW04Content } from '../utils/hskW04TopicEssay';
 
@@ -874,26 +879,107 @@ export function PreviewW01ComponentMatch({ question }: { question: HskQuestionRo
   );
 }
 
+function PreviewRubyLine({ text, pinyin }: { text: string; pinyin?: string }) {
+  if (!text) return null;
+  const syllables = pinyin?.split(/\s+/).filter(Boolean) ?? [];
+  let syllableIndex = 0;
+
+  return (
+    <span className="hsk-preview-w02-ruby-line">
+      {[...text].map((ch, idx) => {
+        if (/[\u4e00-\u9fff]/.test(ch)) {
+          const py = syllables[syllableIndex++] ?? '';
+          return (
+            <span key={`${ch}-${idx}`} className="hsk-preview-w02-ruby-unit">
+              <span className="hsk-preview-w02-ruby-py">{py}</span>
+              <span className="hsk-preview-w02-ruby-ch">{ch}</span>
+            </span>
+          );
+        }
+        return (
+          <span key={`${ch}-${idx}`} className="hsk-preview-w02-ruby-ch is-punct">
+            {ch}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** W02 填写汉字（对齐 HSK-Exams ExamRenderer / 原型预览） */
+export function PreviewW02PinyinFill({ question }: { question: HskQuestionRow }) {
+  const hints = resolveW02PinyinHints(question);
+
+  return (
+    <div className="hsk-preview-w02-wrap">
+      <div className="hsk-preview-w02-hint">{W02_PREVIEW_HINT}</div>
+      <div className="hsk-preview-w02-list">
+        {hints.map((hint, idx) => (
+          <div key={`w02-preview-${idx}`} className="hsk-preview-w02-sentence">
+            {hint.textBeforePinyin ? (
+              <PreviewRubyLine text={hint.textBefore} pinyin={hint.textBeforePinyin} />
+            ) : (
+              <span className="hsk-preview-w02-text">{hint.textBefore || '…'}</span>
+            )}
+            <span className="hsk-preview-w02-blank-pinyin">
+              {formatW02PinyinHintDisplay(hint.pinyin)}
+            </span>
+            <span className="hsk-preview-w02-blank" aria-hidden />
+            {hint.textAfter ? (
+              hint.textAfterPinyin ? (
+                <PreviewRubyLine text={hint.textAfter} pinyin={hint.textAfterPinyin} />
+              ) : (
+                <span className="hsk-preview-w02-text">{hint.textAfter}</span>
+              )
+            ) : null}
+            <input
+              type="text"
+              className="hsk-preview-w02-input"
+              placeholder="请输入汉字"
+              disabled
+              aria-label={`句子 ${idx + 1} 作答`}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** W03 看图造句（对齐 HSK-Exams ExamRenderer） */
 export function PreviewW03PictureSentence({ question }: { question: HskQuestionRow }) {
-  const { keywords } = resolveW03Content(question);
+  const { keywords, word } = resolveW03Content(question);
   const imageUrl = resolveQuestionImageUrl(question);
   const imagePending = isImagePending(question);
-  const displayWord = keywords.length ? keywords.join('、') : '';
 
   return (
     <div className="hsk-preview-w03-wrap">
-      {imagePending && !imageUrl && (
-        <PreviewImageBox pending={imagePending} alt="题目图片" size="lg" />
-      )}
-      {!imagePending && imageUrl && (
+      {imagePending && !imageUrl ? (
+        <div className="hsk-preview-w03-image-pending">
+          <span className="hsk-preview-status-badge">⏳ 待配图</span>
+        </div>
+      ) : null}
+      {!imagePending && imageUrl ? (
         <div className="hsk-preview-w03-image-wrap">
           <img src={imageUrl} alt="题目图片" className="hsk-preview-w03-image" />
         </div>
-      )}
+      ) : null}
       <div className="hsk-preview-w03-panel">
         <div className="hsk-preview-w03-hint">{W03_PREVIEW_HINT}</div>
-        {displayWord && <div className="hsk-preview-w03-word-chip">{displayWord}</div>}
+        {keywords.length > 0 ? (
+          <>
+            <div className="hsk-preview-w03-keywords">
+              {keywords.map((keyword, idx) => (
+                <span key={`${keyword}-${idx}`} className="hsk-preview-w03-keyword-tag">
+                  {keyword}
+                </span>
+              ))}
+            </div>
+            <div className="hsk-preview-w03-word-chip">{word}</div>
+          </>
+        ) : (
+          <div className="hsk-preview-w03-word-chip is-placeholder">关键词</div>
+        )}
         <textarea
           className="hsk-preview-w03-writing"
           placeholder="请在此处输入句子…"

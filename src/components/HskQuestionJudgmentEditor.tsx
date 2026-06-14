@@ -2,28 +2,17 @@ import { JUDGMENT_TF_OPTIONS } from '../utils/hskJudgmentQuestions';
 
 type Props = {
   sentence: string;
-  sentencePinyin: string;
   correctAnswer: string;
-  levelNumber: number;
-  showPinyinFields?: boolean;
   onSentenceChange: (value: string) => void;
-  onSentencePinyinChange: (value: string) => void;
   onCorrectAnswerChange: (value: string) => void;
 };
 
 export function HskQuestionJudgmentEditor({
   sentence,
-  sentencePinyin,
   correctAnswer,
-  levelNumber,
-  showPinyinFields = false,
   onSentenceChange,
-  onSentencePinyinChange,
   onCorrectAnswerChange,
 }: Props) {
-  const showPinyin = levelNumber <= 2 || showPinyinFields;
-  const pinyinRequired = levelNumber <= 2;
-
   return (
     <>
       <div className="hsk-question-edit-section-divider" />
@@ -46,21 +35,6 @@ export function HskQuestionJudgmentEditor({
             placeholder="请输入需要判断的句子…"
           />
         </div>
-
-        {showPinyin && (
-          <div className="form-group">
-            <label>
-              拼音
-              {pinyinRequired ? <span className="required"> *</span> : <span className="is-optional"> （选填）</span>}
-            </label>
-            <input
-              type="text"
-              value={sentencePinyin}
-              onChange={(e) => onSentencePinyinChange(e.target.value)}
-              placeholder="如：tā zài dǎ lán qiú"
-            />
-          </div>
-        )}
 
         <div className="hsk-question-judgment-answer-section">
           <label className="hsk-question-judgment-answer-label">

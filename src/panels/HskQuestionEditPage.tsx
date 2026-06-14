@@ -25,6 +25,7 @@ import { HskQuestionR06ClozeEditor } from '../components/HskQuestionR06ClozeEdit
 import { HskQuestionR07ReadingEditor } from '../components/HskQuestionR07ReadingEditor';
 import { HskQuestionR09Editor } from '../components/HskQuestionR09Editor';
 import { HskQuestionW01Editor } from '../components/HskQuestionW01Editor';
+import { HskQuestionW02Editor } from '../components/HskQuestionW02Editor';
 import { HskQuestionW03Editor } from '../components/HskQuestionW03Editor';
 import { HskQuestionW04Editor } from '../components/HskQuestionW04Editor';
 import { resolveL05SubQuestions } from '../utils/hskChoiceSubQuestions';
@@ -104,6 +105,13 @@ import {
   type HskW01ComponentPart,
   type HskW01WordMatch,
 } from '../utils/hskW01ComponentMatch';
+import {
+  buildW02CorrectAnswer,
+  buildW02PayloadPatch,
+  normalizeW02Question,
+  resolveW02PinyinHints,
+  type HskW02PinyinHint,
+} from '../utils/hskW02PinyinFill';
 import {
   buildW03PayloadPatch,
   normalizeW03Question,
@@ -384,6 +392,10 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       setDraft(normalizeW01Question(next));
       return;
     }
+    if (next.type_id === 'W02') {
+      setDraft(normalizeW02Question(next));
+      return;
+    }
     if (next.type_id === 'W03') {
       setDraft(normalizeW03Question(next));
       return;
@@ -441,6 +453,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
   const isR07 = draft.type_id === 'R07';
   const isR09 = draft.type_id === 'R09';
   const isW01 = draft.type_id === 'W01';
+  const isW02 = draft.type_id === 'W02';
   const isW03 = draft.type_id === 'W03';
   const isW04 = draft.type_id === 'W04';
   const isL05 = draft.type_id === 'L05';
@@ -459,6 +472,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     !isR07 &&
     !isR09 &&
     !isW01 &&
+    !isW02 &&
     !isW03 &&
     !isW04 &&
     !usesChoiceSubQuestions &&
@@ -612,10 +626,15 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     return resolveW01WordMatches(draft);
   }, [isW01, draft.payload?.content, draft.payload?.runtimeOptions]);
 
+  const w02Hints = useMemo(() => {
+    if (!isW02) return [] as HskW02PinyinHint[];
+    return resolveW02PinyinHints(draft);
+  }, [isW02, draft.payload?.content, draft.correctAnswer, draft.question_uid]);
+
   const w03Content = useMemo(() => {
-    if (!isW03) return { keywords: [] as string[], sampleAnswer: '' };
+    if (!isW03) return { keywords: [] as string[], sampleAnswer: '', word: '' };
     return resolveW03Content(draft);
-  }, [isW03, draft.payload?.content]);
+  }, [isW03, draft.payload?.content, draft.explanation]);
 
   const w04Content = useMemo(() => {
     if (!isW04) return { topic: '', keyword: '', minWords: 50, prompt: '', instruction: '' };
@@ -955,14 +974,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     }));
   };
 
-  const syncJudgmentSentencePinyin = (sentencePinyin: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      payload: buildJudgmentContentPatch(prev, { sentencePinyin }),
-      updatedAt: new Date().toISOString(),
-    }));
-  };
-
   const syncR09Sentence = (sentence: string) => {
     setDraft((prev) => ({
       ...prev,
@@ -1024,6 +1035,15 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
         updatedAt: new Date().toISOString(),
       };
     });
+  };
+
+  const syncW02Hints = (pinyinHints: HskW02PinyinHint[]) => {
+    setDraft((prev) => ({
+      ...prev,
+      correctAnswer: buildW02CorrectAnswer(pinyinHints),
+      payload: buildW02PayloadPatch(prev, { pinyinHints }),
+      updatedAt: new Date().toISOString(),
+    }));
   };
 
   const syncW03Keywords = (keywords: string[]) => {
@@ -1110,10 +1130,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       showToast('请填写判断句');
       return;
     }
-    if (isJudgment && levelNumber <= 2 && !judgmentContent.sentencePinyin.trim()) {
-      showToast('请填写拼音');
-      return;
-    }
     if (isJudgment && !questionImageUrl) {
       showToast('请上传题目图片');
       return;
@@ -1148,6 +1164,10 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     }
     if (isW01 && w01WordMatches.some((m) => !m.incomplete.trim() || !m.word.trim() || !m.componentKey)) {
       showToast('请完善词语匹配配置');
+      return;
+    }
+    if (isW02 && w02Hints.some((h) => !h.textBefore.trim() || !h.pinyin.trim() || !h.answer.trim())) {
+      showToast('请完善每条挖空句的前文、拼音提示和正确答案');
       return;
     }
     if (isW03 && !questionImageUrl) {
@@ -1245,6 +1265,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                       if (isJudgmentQuestionType(typeId)) return normalizeJudgmentQuestion(next);
                       if (typeId === 'R09') return normalizeR09Question(next);
                       if (typeId === 'W01') return normalizeW01Question(next);
+                      if (typeId === 'W02') return normalizeW02Question(next);
                       if (typeId === 'W03') return normalizeW03Question(next);
                       if (typeId === 'W04') return normalizeW04Question(next);
                       return next;
@@ -1333,12 +1354,8 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
 
                 <HskQuestionJudgmentEditor
                   sentence={judgmentContent.sentence}
-                  sentencePinyin={judgmentContent.sentencePinyin}
                   correctAnswer={draft.correctAnswer}
-                  levelNumber={levelNumber}
-                  showPinyinFields={draft.showPinyinFields}
                   onSentenceChange={syncJudgmentSentence}
-                  onSentencePinyinChange={syncJudgmentSentencePinyin}
                   onCorrectAnswerChange={(answer) => update('correctAnswer', answer)}
                 />
 
@@ -1515,6 +1532,10 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                 onComponentPartsChange={syncW01ComponentParts}
                 onWordMatchesChange={syncW01WordMatches}
               />
+            )}
+
+            {isW02 && (
+              <HskQuestionW02Editor hints={w02Hints} onChange={syncW02Hints} />
             )}
 
             {isW03 && (

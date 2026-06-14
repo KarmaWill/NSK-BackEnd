@@ -16,6 +16,7 @@ import {
   PreviewR07Reading,
   PreviewR09ImageWord,
   PreviewW01ComponentMatch,
+  PreviewW02PinyinFill,
   PreviewW03PictureSentence,
   PreviewW04TopicEssay,
   PreviewJudgmentImage,
@@ -125,6 +126,10 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
 
   if (typeId === 'W01') {
     return <PreviewW01ComponentMatch question={question} />;
+  }
+
+  if (typeId === 'W02') {
+    return <PreviewW02PinyinFill question={question} />;
   }
 
   if (typeId === 'W03') {

@@ -6912,6 +6912,154 @@ details.news-publish-card > summary::-webkit-details-marker {
   background: #fff;
 }
 
+.hsk-question-w02-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hsk-question-w02-card {
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.hsk-question-w02-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.hsk-question-w02-card-index {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.hsk-question-w02-card-remove {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hsk-question-w02-card-remove:hover {
+  color: #ef4444;
+}
+
+.hsk-question-w02-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+.hsk-question-w02-grid .form-group {
+  margin-bottom: 0;
+}
+
+.hsk-question-w02-grid input {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.hsk-preview-w02-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hsk-preview-w02-hint {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.hsk-preview-w02-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hsk-preview-w02-sentence {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 16px;
+  line-height: 2;
+}
+
+.hsk-preview-w02-ruby-line {
+  display: inline;
+}
+
+.hsk-preview-w02-ruby-unit {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: bottom;
+  margin-right: 1px;
+}
+
+.hsk-preview-w02-ruby-py {
+  font-size: 11px;
+  line-height: 1.2;
+  color: #9ca3af;
+  min-height: 14px;
+}
+
+.hsk-preview-w02-ruby-ch {
+  font-size: 18px;
+  line-height: 1.4;
+  color: #111827;
+}
+
+.hsk-preview-w02-ruby-ch.is-punct {
+  font-size: 16px;
+  margin: 0 1px;
+}
+
+.hsk-preview-w02-text {
+  font-size: 18px;
+  color: #111827;
+}
+
+.hsk-preview-w02-blank-pinyin {
+  margin: 0 6px;
+  font-size: 12px;
+  color: #9ca3af;
+  letter-spacing: 0.06em;
+}
+
+.hsk-preview-w02-blank {
+  display: inline-block;
+  width: 72px;
+  height: 2px;
+  margin: 0 4px 4px;
+  vertical-align: middle;
+  background: #c2410c;
+  border-radius: 999px;
+}
+
+.hsk-preview-w02-input {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 2px dashed #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  text-align: center;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
 .hsk-question-w03-body {
   display: flex;
   flex-direction: column;
@@ -6983,6 +7131,16 @@ details.news-publish-card > summary::-webkit-details-marker {
   object-fit: contain;
 }
 
+.hsk-preview-w03-image-pending {
+  display: flex;
+  justify-content: center;
+  min-height: 120px;
+  align-items: center;
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
 .hsk-preview-w03-panel {
   padding: 24px;
   border-radius: 12px;
@@ -6995,8 +7153,28 @@ details.news-publish-card > summary::-webkit-details-marker {
   color: #9ca3af;
 }
 
+.hsk-preview-w03-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.hsk-preview-w03-keyword-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .hsk-preview-w03-word-chip {
-  display: inline-block;
+  display: block;
+  width: fit-content;
   margin: 0 auto 16px;
   padding: 10px 24px;
   border-radius: 12px;
@@ -7008,9 +7186,14 @@ details.news-publish-card > summary::-webkit-details-marker {
   text-align: center;
 }
 
+.hsk-preview-w03-word-chip.is-placeholder {
+  background: #e5e7eb;
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .hsk-preview-w03-panel .hsk-preview-w03-word-chip {
-  display: block;
-  width: fit-content;
   margin-left: auto;
   margin-right: auto;
 }

@@ -59,6 +59,11 @@ export function getQuestionRequiredFieldSummary(typeId: HskQuestionTypeCode) {
     parts.push('部件选项');
     parts.push('词语匹配');
   }
+  if (typeId === 'W02') {
+    parts.push('挖空句子');
+    parts.push('拼音提示');
+    parts.push('正确答案');
+  }
   if (typeId === 'W03') {
     parts.push('题目图片');
     parts.push('关键词');
