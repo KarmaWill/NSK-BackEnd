@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PageTabPanel, PageTabs } from '../components/PageTabs';
-import { HskImportWizard } from '../components/HskImportWizard';
 import { HskQuestionListTable } from '../components/HskQuestionListTable';
 import { HskQuestionTypeSelect } from '../components/HskQuestionTypeSelect';
 import { HskQuestionTypeCard } from '../components/HskQuestionTypeCard';
 import { HskTagManager } from '../components/HskTagManager';
 import { useHskStore } from '../hooks/useHskStore';
 import {
-  importAnalyzeResultAsTemplate,
   mergeTypeCounts,
   upsertQuestionTypes,
   upsertQuestions,
@@ -27,7 +25,7 @@ const QUESTION_BANK_TABS = [
 ] as const;
 
 export function HskQuestionBank() {
-  const { store, refresh } = useHskStore();
+  const { store } = useHskStore();
   const [activeTab, setActiveTab] = useState<string>('questions');
   const [selectedSection, setSelectedSection] = useState<HskSectionModule | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,7 +36,6 @@ export function HskQuestionBank() {
   const [questionDifficultyFilter, setQuestionDifficultyFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
   const [questionTagFilter, setQuestionTagFilter] = useState<string>('all');
   const [toast, setToast] = useState<string | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<HskQuestionRow | null>(null);
   const [configMode, setConfigMode] = useState<HskQuestionTypeCode | null>(null);
   const [newTypeDraft, setNewTypeDraft] = useState<HskQuestionTypeDef | null>(null);
@@ -382,16 +379,6 @@ export function HskQuestionBank() {
           </p>
         </div>
         <div className="hsk-question-list-header-actions">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => showToast('AI 批量生成功能开发中')}
-          >
-            AI 批量生成
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setImportOpen(true)}>
-            导入 PDF
-          </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={createQuestion}>
             + 新建题目
           </button>
@@ -505,16 +492,6 @@ export function HskQuestionBank() {
         <PageTabPanel id="tags" activeTab={activeTab}>{tagsPanel}</PageTabPanel>
       </PageTabs>
 
-      <HskImportWizard
-        open={importOpen}
-        existingTypeCodes={localTypes.map((t) => t.hskTypeCode)}
-        onClose={() => setImportOpen(false)}
-        onImported={(result) => {
-          importAnalyzeResultAsTemplate(store, result);
-          refresh();
-          showToast(`已导入模板：${result.examMeta.title}（可在试卷管理查看）`);
-        }}
-      />
       {toast && activeTab !== 'types' && <div className="hsk-toast show">{toast}</div>}
     </>
   );

@@ -16,7 +16,6 @@ export function getQuestionRequiredFieldSummary(typeId: HskQuestionTypeCode) {
   }
   if (isJudgmentQuestionType(typeId)) {
     parts.push('题干 (stem)');
-    parts.push('判断句');
     parts.push('题目图片');
     parts.push('正确答案');
   }
@@ -50,18 +49,15 @@ export function getQuestionRequiredFieldSummary(typeId: HskQuestionTypeCode) {
     parts.push('阅读理解题目');
   }
   if (typeId === 'R09') {
-    parts.push('填空句');
     parts.push('词语选项');
-    parts.push('题目图片');
-    parts.push('正确答案');
+    parts.push('题目列表');
   }
   if (typeId === 'W01') {
     parts.push('部件选项');
     parts.push('词语匹配');
   }
   if (typeId === 'W02') {
-    parts.push('挖空句子');
-    parts.push('拼音提示');
+    parts.push('句子文本');
     parts.push('正确答案');
   }
   if (typeId === 'W03') {
@@ -70,7 +66,6 @@ export function getQuestionRequiredFieldSummary(typeId: HskQuestionTypeCode) {
   }
   if (typeId === 'W04') {
     parts.push('主题 / 题目');
-    parts.push('关键词');
     parts.push('最低字数');
   }
 

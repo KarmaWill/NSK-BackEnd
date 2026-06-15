@@ -1,3 +1,5 @@
+import { PinyinCountInput } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
 import {
   answerDisplayLabel,
   answerPairingOptionLabel,
@@ -28,6 +30,21 @@ export function HskQuestionR02MatchEditor({
 }: Props) {
   const showPinyin = levelNumber <= 2 || showPinyinFields;
   const pairingAnswerOptions = answerItems.filter((item) => !item.isDistractor);
+
+  const toggleExample = (index: number) => {
+    const nextIsExample = !questionItems[index].isExample;
+    onQuestionItemsChange(
+      questionItems.map((item, idx) => {
+        if (idx === index) {
+          return { ...item, isExample: nextIsExample };
+        }
+        if (nextIsExample && item.isExample) {
+          return { ...item, isExample: false };
+        }
+        return item;
+      }),
+    );
+  };
 
   const updateQuestion = (index: number, patch: Partial<HskR02QuestionItem>) => {
     const next = [...questionItems];
@@ -114,24 +131,42 @@ export function HskQuestionR02MatchEditor({
           </div>
           <div className="hsk-question-r02-item-list">
             {questionItems.map((item, idx) => (
-              <div key={`${item.id}-${idx}`} className="hsk-question-r02-item-row">
-                <span className="hsk-question-r02-item-index">{idx + 1}</span>
+              <div
+                key={`${item.id}-${idx}`}
+                className={`hsk-question-r02-item-row${item.isExample ? ' is-example' : ''}`}
+              >
+                <span className="hsk-question-r02-item-index">
+                  {item.isExample ? '例题' : idx + 1}
+                </span>
                 <input
                   type="text"
                   value={item.text}
                   onChange={(e) => updateQuestion(idx, { text: e.target.value })}
-                  placeholder="问题文字"
+                  placeholder="问题文字（词间空格分词，如：小雨 今天 去 吃）"
                   className="hsk-question-r02-item-text"
                 />
                 {showPinyin && (
-                  <input
-                    type="text"
+                  <PinyinCountInput
                     value={item.pinyin ?? ''}
-                    onChange={(e) => updateQuestion(idx, { pinyin: e.target.value })}
-                    placeholder="拼音"
-                    className="hsk-question-r02-item-pinyin"
+                    onChange={(v) => updateQuestion(idx, { pinyin: v })}
+                    targetHanCount={countHanInText(item.text)}
+                    targetText={item.text}
+                    placeholder="词级：xiaoyu jintian qu chi"
+                    className="hsk-question-r03-sentence-pinyin-input"
                   />
                 )}
+                <label className="hsk-question-l02-sub-example-toggle">
+                  <span className="hsk-question-l02-sub-example-label">例题</span>
+                  <span className="toggle-wrap">
+                    <input
+                      type="checkbox"
+                      checked={!!item.isExample}
+                      onChange={() => toggleExample(idx)}
+                    />
+                    <div className="toggle-track" />
+                    <div className="toggle-thumb" />
+                  </span>
+                </label>
                 <button
                   type="button"
                   className="hsk-question-edit-text-option-remove"
@@ -168,12 +203,13 @@ export function HskQuestionR02MatchEditor({
                   className="hsk-question-r02-item-text"
                 />
                 {showPinyin && (
-                  <input
-                    type="text"
+                  <PinyinCountInput
                     value={item.pinyin ?? ''}
-                    onChange={(e) => updateAnswer(idx, { pinyin: e.target.value })}
-                    placeholder="拼音"
-                    className="hsk-question-r02-item-pinyin"
+                    onChange={(v) => updateAnswer(idx, { pinyin: v })}
+                    targetHanCount={countHanInText(item.text)}
+                    targetText={item.text}
+                    placeholder="词级：xiaoyu jintian；字级：xiao yu jin tian"
+                    className="hsk-question-r03-sentence-pinyin-input"
                   />
                 )}
                 <button
@@ -205,7 +241,9 @@ export function HskQuestionR02MatchEditor({
           <div className="hsk-question-r02-pairing-list">
             {questionItems.map((question, idx) => (
               <div key={question.id} className="hsk-question-r02-pairing-row">
-                <span className="hsk-question-r02-pairing-num">{idx + 1}</span>
+                <span className="hsk-question-r02-pairing-num">
+                  {question.isExample ? '例题' : idx + 1}
+                </span>
                 <label className="hsk-question-r02-pairing-label">正确回答：</label>
                 <select
                   className="hsk-question-r02-pairing-select"

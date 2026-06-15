@@ -38,7 +38,9 @@ export function HskQuestionW03Editor({
 
       <div className="hsk-question-w03-body">
         <div className="form-group">
-          <label>关键词</label>
+          <label>
+            关键词 <span className="required">*</span>
+          </label>
           {keywords.length > 0 && (
             <div className="hsk-question-w03-keyword-tags">
               {keywords.map((keyword, idx) => (

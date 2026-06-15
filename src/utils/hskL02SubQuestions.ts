@@ -64,7 +64,10 @@ export function resolveL02SubQuestions(
 }
 
 export function sumSubQuestionScores(subQuestions: HskSubQuestionPayload[]): number {
-  return subQuestions.reduce((sum, sub) => sum + (sub.score > 0 ? sub.score : 0), 0);
+  return subQuestions.reduce(
+    (sum, sub) => sum + (sub.isExample ? 0 : sub.score > 0 ? sub.score : 0),
+    0,
+  );
 }
 
 function l02SubDisplayId(sub: HskSubQuestionPayload, index: number): string {

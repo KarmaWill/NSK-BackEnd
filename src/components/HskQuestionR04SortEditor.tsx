@@ -1,3 +1,5 @@
+import { PinyinCountInput } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
 import {
   buildCorrectAnswerFromKeys,
   orderKeysFromCorrectAnswer,
@@ -87,12 +89,13 @@ export function HskQuestionR04SortEditor({
                   className="hsk-question-r02-item-text"
                 />
                 {showPinyin && (
-                  <input
-                    type="text"
+                  <PinyinCountInput
                     value={segment.pinyin ?? ''}
-                    onChange={(e) => updateSegment(idx, { pinyin: e.target.value })}
-                    placeholder="拼音"
-                    className="hsk-question-r02-item-pinyin"
+                    onChange={(v) => updateSegment(idx, { pinyin: v })}
+                    targetHanCount={countHanInText(segment.text)}
+                    targetText={segment.text}
+                    placeholder="词级：xiaoyu jintian；字级：xiao yu jin tian"
+                    className="hsk-question-r03-sentence-pinyin-input"
                   />
                 )}
                 <button

@@ -1,4 +1,6 @@
 import type { HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
+import { PinyinCountInput, PinyinInlineField } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
 import {
   createR07SubQuestion,
   optionDisplayLabel,
@@ -101,13 +103,16 @@ export function HskQuestionR07ReadingEditor({
         </div>
 
         <div className="hsk-question-r05-field">
-          <label>文章拼音（可选）</label>
-          <input
-            type="text"
+          <label>文章拼音（可选 · 整句逐字 ruby）</label>
+          <span className="hsk-question-r02-block-hint">
+            词级连写或字级分写均可，如：péngyou hǎo 或 péng you hǎo
+          </span>
+          <PinyinCountInput
             value={articlePinyin}
-            onChange={(e) => onArticlePinyinChange(e.target.value)}
-            placeholder="文章拼音（可选）"
-            className="hsk-question-r02-item-text"
+            onChange={onArticlePinyinChange}
+            targetHanCount={countHanInText(article)}
+            targetText={article}
+            placeholder="如：péngyou hǎo 或 péng you hǎo"
           />
         </div>
 
@@ -168,12 +173,10 @@ export function HskQuestionR07ReadingEditor({
                         className="hsk-question-r02-item-text"
                       />
                       {showPinyin && (
-                        <input
-                          type="text"
+                        <PinyinInlineField
                           value={option.pinyin ?? ''}
-                          onChange={(e) => updateOption(subIdx, optIdx, { pinyin: e.target.value })}
+                          onChange={(v) => updateOption(subIdx, optIdx, { pinyin: v })}
                           placeholder="拼音"
-                          className="hsk-question-r02-item-pinyin"
                         />
                       )}
                       <button

@@ -1,4 +1,5 @@
 import type { HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
+import { PinyinInlineField } from './PinyinCountInput';
 import { createL05SubQuestion } from '../utils/hskChoiceSubQuestions';
 
 type Props = {
@@ -135,12 +136,12 @@ export function HskQuestionChoiceSubQuestionsEditor({
                         className="hsk-question-edit-sub-option-text"
                       />
                       {showPinyin && (
-                        <input
-                          type="text"
+                        <PinyinInlineField
                           value={opt.pinyin ?? ''}
-                          onChange={(e) => updateOption(subIdx, optIdx, { pinyin: e.target.value })}
+                          onChange={(v) => updateOption(subIdx, optIdx, { pinyin: v })}
                           placeholder={levelNumber <= 2 ? '拼音 *' : '拼音'}
                           className="hsk-question-edit-sub-option-pinyin"
+                          required={levelNumber <= 2}
                         />
                       )}
                       <button

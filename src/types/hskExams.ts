@@ -71,6 +71,8 @@ export type HskSubQuestionPayload = {
   score: number;
   question?: string;
   options?: HskRuntimeOption[];
+  /** 子题是否为例题（不计分） */
+  isExample?: boolean;
 };
 
 export type HskQuestionPayload = {
@@ -103,6 +105,8 @@ export type HskQuestionRow = {
   /** 解析拼音（全局共享，各语言解析共用） */
   explanationPinyin?: string;
   score: number;
+  /** 是否为例题（不计分，预览显示「例如」） */
+  isExample?: boolean;
   payload?: HskQuestionPayload;
   audioUrl?: string;
   audioStatus: 'none' | 'ready' | 'missing' | 'pending';

@@ -11,8 +11,15 @@ export type HskW04Content = {
 };
 
 export function buildW04Instruction(keyword: string): string {
-  const trimmed = keyword.trim();
-  return trimmed ? `关键词：${trimmed}` : '';
+  const keywords = parseW04Keywords(keyword);
+  return keywords.length ? `关键词：${keywords.join('、')}` : '';
+}
+
+export function parseW04Keywords(keyword: string): string[] {
+  return keyword
+    .split(/[、,，]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 export function resolveW04Content(question: HskQuestionRow): Required<
@@ -81,4 +88,15 @@ export function buildW04PayloadPatch(
 
 export function formatW04MinWordsHint(minWords: number): string {
   return `请输入作文（不少于${minWords}字）`;
+}
+
+/** 作文正文字数（不计空白字符） */
+export function countW04EssayChars(text: string): number {
+  return text.replace(/\s/g, '').length;
+}
+
+export function resolveW04WritingHint(question: HskQuestionRow, minWords: number): string {
+  const stem = question.stem?.trim();
+  if (stem) return stem;
+  return formatW04MinWordsHint(minWords);
 }

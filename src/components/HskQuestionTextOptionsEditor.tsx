@@ -1,4 +1,5 @@
 import type { HskQuestionTypeCode, HskRuntimeOption } from '../types/hskExams';
+import { PinyinInlineField } from './PinyinCountInput';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const;
 
@@ -107,12 +108,12 @@ export function HskQuestionTextOptionsEditor({
                 className="hsk-question-edit-text-option-text"
               />
               {showPinyin && (
-                <input
-                  type="text"
+                <PinyinInlineField
                   value={opt.pinyin ?? ''}
-                  onChange={(e) => updateOption(idx, { pinyin: e.target.value })}
+                  onChange={(v) => updateOption(idx, { pinyin: v })}
                   placeholder={levelNumber <= 2 ? '拼音 *' : '拼音'}
                   className="hsk-question-edit-text-option-pinyin"
+                  required={levelNumber <= 2}
                 />
               )}
               {isListeningChoice && (

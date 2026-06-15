@@ -1,5 +1,10 @@
 export type LangKey = 'CN' | 'EN' | 'ES' | 'FR' | 'PT' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
 
+/** 答案解析编辑 Tab：多语言 + 拼音（对照中文解析） */
+export type ExplanationEditorTab = LangKey | 'PY';
+
+export const EXPLANATION_PINYIN_TAB_META = { flag: '🇭🇰', code: 'Pinyin' } as const;
+
 export const LANG_OPTIONS: Array<{ key: LangKey; label: string }> = [
   { key: 'CN', label: '中文' },
   { key: 'EN', label: '英文' },
@@ -15,20 +20,20 @@ export const LANG_OPTIONS: Array<{ key: LangKey; label: string }> = [
   { key: 'KM', label: '高棉语' },
 ];
 
-/** 题目编辑页多语言标签展示（对齐 HSK-Exams QuestionEditPage） */
-export const LANG_TAB_META: Record<LangKey, { flag: string; code: string; label: string }> = {
-  CN: { flag: '🇨🇳', code: 'ZH', label: '中文' },
-  EN: { flag: '🇺🇸', code: 'EN', label: 'English' },
-  ES: { flag: '🇪🇸', code: 'ES', label: 'Español' },
-  FR: { flag: '🇫🇷', code: 'FR', label: 'Français' },
-  PT: { flag: '🇵🇹', code: 'PT', label: 'Português' },
-  JA: { flag: '🇯🇵', code: 'JA', label: '日本語' },
-  KO: { flag: '🇰🇷', code: 'KO', label: '한국어' },
-  TH: { flag: '🇹🇭', code: 'TH', label: 'ภาษาไทย' },
-  VI: { flag: '🇻🇳', code: 'VI', label: 'Tiếng Việt' },
-  ID: { flag: '🇮🇩', code: 'ID', label: 'Bahasa Indonesia' },
-  MS: { flag: '🇲🇾', code: 'MS', label: 'Bahasa Melayu' },
-  KM: { flag: '🇰🇭', code: 'KM', label: 'ខ្មែរ' },
+/** 题目编辑页多语言标签展示（国旗 + 语言代码，如 🇨🇳CN） */
+export const LANG_TAB_META: Record<LangKey, { flag: string; code: LangKey }> = {
+  CN: { flag: '🇨🇳', code: 'CN' },
+  EN: { flag: '🇺🇸', code: 'EN' },
+  ES: { flag: '🇪🇸', code: 'ES' },
+  FR: { flag: '🇫🇷', code: 'FR' },
+  PT: { flag: '🇵🇹', code: 'PT' },
+  JA: { flag: '🇯🇵', code: 'JA' },
+  KO: { flag: '🇰🇷', code: 'KO' },
+  TH: { flag: '🇹🇭', code: 'TH' },
+  VI: { flag: '🇻🇳', code: 'VI' },
+  ID: { flag: '🇮🇩', code: 'ID' },
+  MS: { flag: '🇲🇾', code: 'MS' },
+  KM: { flag: '🇰🇭', code: 'KM' },
 };
 
 export type TitleByLang = Partial<Record<LangKey, string>>;

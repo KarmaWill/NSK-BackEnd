@@ -4,6 +4,11 @@ export type HskR05WordOption = {
   pinyin?: string;
 };
 
+/** 段落分词结果：普通文本片段 或 填空标记（带空号 + 可选内嵌拼音） */
+export type HskR05ParagraphToken =
+  | { type: 'text'; text: string }
+  | { type: 'blank'; index: number; embeddedPinyin?: string };
+
 type LegacyBlank = {
   index?: number;
   answer?: string;
@@ -43,7 +48,10 @@ export function buildR05CorrectAnswer(
     .join(',');
 }
 
-/** 从段落中解析填空序号：（1）、(2)、___（1）___、() */
+/**
+ * 从段落中解析填空序号：（1）、(2)、___（1）___、() 或 （pinyin） 形式的匿名空
+ * 注意：（pinyin）中允许用拼音（不含汉字、不含括号）作为嵌入拼音提示
+ */
 export function parseParagraphBlankIndices(paragraph: string): number[] {
   const indices: number[] = [];
   const numberedPattern = /___[（(]\s*(\d+)\s*[）)]___|[（(]\s*(\d+)\s*[）)]/g;
@@ -54,11 +62,54 @@ export function parseParagraphBlankIndices(paragraph: string): number[] {
   }
   if (indices.length > 0) return indices.sort((a, b) => a - b);
 
-  const anonymousCount = (paragraph.match(/\(\s*\)/g) ?? []).length;
+  // 匹配匿名空：（）或 （拼音提示）—— 内容为非汉字、非括号的非空字符串
+  const anonymousPattern = /[（(]\s*([^\u4e00-\u9fff（）()\d]*?)\s*[）)]/g;
+  let anonymousCount = 0;
+  while ((match = anonymousPattern.exec(paragraph)) !== null) {
+    anonymousCount += 1;
+  }
   if (anonymousCount > 0) {
     return Array.from({ length: anonymousCount }, (_, idx) => idx + 1);
   }
   return [];
+}
+
+/**
+ * 将段落拆为有序的「文本 / 填空」片段，供逐字 ruby 渲染。
+ * 支持三种填空写法：
+ *   - （1）/ (1) / ___（1）___ — 编号空
+ *   - （）/ ()               — 匿名空
+ *   - （hao）/ (nǐ hǎo)     — 匿名空 + 内嵌拼音提示（括号内为非汉字内容）
+ */
+export function tokenizeR05Paragraph(paragraph: string): HskR05ParagraphToken[] {
+  if (!paragraph) return [];
+  const tokens: HskR05ParagraphToken[] = [];
+  // group 1: 编号（含下划线）; group 2: 编号（不含）; group 3: 非汉字内容（可作为嵌入拼音）; 最后分支: 空括号
+  const re = /___[（(]\s*(\d+)\s*[）)]___|[（(]\s*(\d+)\s*[）)]|[（(]\s*([^\u4e00-\u9fff（）()\d][^（）()]*?)\s*[）)]|[（(]\s*[）)]/g;
+  let lastIndex = 0;
+  let anonymous = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(paragraph)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push({ type: 'text', text: paragraph.slice(lastIndex, match.index) });
+    }
+    const num = match[1] ?? match[2];
+    const embeddedPinyin = match[3];
+    if (num != null) {
+      tokens.push({ type: 'blank', index: Number(num) });
+    } else if (embeddedPinyin != null) {
+      anonymous += 1;
+      tokens.push({ type: 'blank', index: anonymous, embeddedPinyin: embeddedPinyin.trim() });
+    } else {
+      anonymous += 1;
+      tokens.push({ type: 'blank', index: anonymous });
+    }
+    lastIndex = re.lastIndex;
+  }
+  if (lastIndex < paragraph.length) {
+    tokens.push({ type: 'text', text: paragraph.slice(lastIndex) });
+  }
+  return tokens;
 }
 
 export function resolveR05BlankIndices(paragraph: string, correctAnswer: string): number[] {
@@ -141,6 +192,19 @@ export function resolveR05WordBank(
   return defaultR05WordBank();
 }
 
+export function normalizeBlankPinyins(
+  raw: Record<number | string, string> | undefined,
+  indices: number[],
+): Record<number, string> {
+  const result: Record<number, string> = {};
+  if (!raw) return result;
+  for (const index of indices) {
+    const value = raw[index] ?? raw[String(index)];
+    if (typeof value === 'string' && value.trim()) result[index] = value.trim();
+  }
+  return result;
+}
+
 export function resolveR05Content(
   content:
     | {
@@ -148,6 +212,7 @@ export function resolveR05Content(
         paragraphPinyin?: string;
         wordBank?: HskR05WordOption[];
         blanks?: LegacyBlank[];
+        blankPinyins?: Record<number | string, string>;
       }
     | undefined,
   correctAnswer: string,
@@ -157,6 +222,7 @@ export function resolveR05Content(
   wordBank: HskR05WordOption[];
   blankIndices: number[];
   blankAnswers: Record<number, string>;
+  blankPinyins: Record<number, string>;
 } {
   const paragraph = content?.paragraph ?? '';
   const paragraphPinyin = content?.paragraphPinyin ?? '';
@@ -173,7 +239,9 @@ export function resolveR05Content(
     blankAnswers = migrateLegacyBlanks(content.blanks).blankAnswers;
   }
 
-  return { paragraph, paragraphPinyin, wordBank, blankIndices, blankAnswers };
+  const blankPinyins = normalizeBlankPinyins(content?.blankPinyins, blankIndices);
+
+  return { paragraph, paragraphPinyin, wordBank, blankIndices, blankAnswers, blankPinyins };
 }
 
 export function wordOptionLabel(option: HskR05WordOption): string {

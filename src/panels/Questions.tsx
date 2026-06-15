@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { applyQuestionListOverrides, subscribeQuestionOverrideUpdates } from '../stores/questionOverrides';
+import { PinyinInlineField } from '../components/PinyinCountInput';
 
 type QuestionRow = {
   no: string;
@@ -615,7 +616,7 @@ export function Questions() {
                       <label className="form-label">* 题干中文</label>
                       <input className="form-input" style={{ marginBottom: 10 }} value={stemTextByLang.CN ?? ''} onChange={(e) => setStemTextByLang((prev) => ({ ...prev, CN: e.target.value }))} placeholder="如：米饭" />
                       <label className="form-label">题干拼音</label>
-                      <input className="form-input" value={stemPinyin} onChange={(e) => setStemPinyin(e.target.value)} placeholder="如：mǐfàn" style={{ fontStyle: 'italic' }} />
+                      <PinyinInlineField value={stemPinyin} onChange={setStemPinyin} className="form-input" placeholder="如：mǐfàn" />
                       {cfgErrors.stem && <div className="form-hint" style={{ color: 'var(--rose)' }}>{cfgErrors.stem}</div>}
                     </>
                   ) : (previewType === 'T00' || previewType === 'T03') ? (
@@ -711,7 +712,7 @@ export function Questions() {
                     )}
                     {cfgErrors[`opt-${i}`] && <div className="form-hint" style={{ color: 'var(--rose)', marginTop: -4, marginBottom: 8 }}>{cfgErrors[`opt-${i}`]}</div>}
                     {typeMeta.showPinyin && (
-                      <div className="form-group" style={{ marginBottom: 8 }}><label className="form-label">拼音</label><input className="form-input" value={opt.pinyin} onChange={(e) => updateOption(i, 'pinyin', e.target.value)} style={{ fontStyle: 'italic' }} placeholder="如：jiǎozi" /></div>
+                      <div className="form-group" style={{ marginBottom: 8 }}><label className="form-label">拼音</label><PinyinInlineField value={opt.pinyin} onChange={(v) => updateOption(i, 'pinyin', v)} className="form-input" placeholder="如：jiǎozi" /></div>
                     )}
                     {typeMeta.showVisual && (
                       <div className="form-group" style={{ marginBottom: 8 }}>

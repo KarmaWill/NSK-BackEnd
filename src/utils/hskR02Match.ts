@@ -2,6 +2,8 @@ export type HskR02QuestionItem = {
   id: string;
   text: string;
   pinyin?: string;
+  /** 例题：预览展示示范配对，不计入计分题序号 */
+  isExample?: boolean;
 };
 
 export type HskR02AnswerItem = {

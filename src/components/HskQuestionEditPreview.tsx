@@ -210,11 +210,17 @@ export function HskQuestionEditPreview({
         <span>📶 📡 🔋</span>
       </div>
       <div className="hsk-question-edit-preview-tablet-screen">
-        <div className="hsk-question-edit-preview-card is-tablet">{inner}</div>
+        <div className="hsk-question-edit-preview-card is-tablet">
+          {question.isExample && <div className="hsk-preview-example-badge">例如</div>}
+          {inner}
+        </div>
       </div>
     </div>
   ) : (
-    <div className="hsk-question-edit-preview-card">{inner}</div>
+    <div className="hsk-question-edit-preview-card">
+      {question.isExample && <div className="hsk-preview-example-badge">例如</div>}
+      {inner}
+    </div>
   );
 
   return (

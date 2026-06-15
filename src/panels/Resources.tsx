@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { PinyinInlineField } from '../components/PinyinCountInput';
 
 type LangKey = 'EN' | 'ES' | 'FR' | 'PT' | 'CN' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
 
@@ -572,7 +573,7 @@ export function Resources() {
                         <label className="form-label" style={{ marginBottom: 0 }}>拼音（仅中文）</label>
                         <button type="button" className="btn btn-ghost btn-sm" onClick={runAutoPinyin}>自动生成</button>
                       </div>
-                      <input className="form-input" placeholder="pīnyīn" value={form.pinyin ?? ''} onChange={(e) => setForm((f) => ({ ...f, pinyin: e.target.value }))} />
+                      <PinyinInlineField value={form.pinyin ?? ''} onChange={(v) => setForm((f) => ({ ...f, pinyin: v }))} placeholder="pīnyīn" className="form-input" />
                     </div>
                   </>
                 ) : (

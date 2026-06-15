@@ -1,3 +1,5 @@
+import { PinyinCountInput, PinyinInlineField } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
 import {
   defaultR06Blank,
   rekeyR06BlankOptions,
@@ -9,22 +11,26 @@ type Props = {
   article: string;
   articlePinyin: string;
   blanks: HskR06Blank[];
+  blankPinyins: Record<number, string>;
   levelNumber: number;
   showPinyinFields?: boolean;
   onArticleChange: (next: string) => void;
   onArticlePinyinChange: (next: string) => void;
   onBlanksChange: (next: HskR06Blank[]) => void;
+  onBlankPinyinsChange: (next: Record<number, string>) => void;
 };
 
 export function HskQuestionR06ClozeEditor({
   article,
   articlePinyin,
   blanks,
+  blankPinyins,
   levelNumber,
   showPinyinFields = false,
   onArticleChange,
   onArticlePinyinChange,
   onBlanksChange,
+  onBlankPinyinsChange,
 }: Props) {
   const showPinyin = levelNumber <= 2 || showPinyinFields;
 
@@ -70,6 +76,13 @@ export function HskQuestionR06ClozeEditor({
     });
   };
 
+  const updateBlankPinyin = (blankIndex: number, pinyin: string) => {
+    const next = { ...blankPinyins };
+    if (pinyin.trim()) next[blankIndex] = pinyin;
+    else delete next[blankIndex];
+    onBlankPinyinsChange(next);
+  };
+
   const addBlankOption = (blankIndex: number) => {
     const blank = blanks[blankIndex];
     updateBlank(blankIndex, {
@@ -106,13 +119,16 @@ export function HskQuestionR06ClozeEditor({
         </div>
 
         <div className="hsk-question-r05-field">
-          <label>文章拼音（可选）</label>
-          <input
-            type="text"
+          <label>文章拼音（可选 · 整句逐字 ruby）</label>
+          <span className="hsk-question-r02-block-hint">
+            词级连写或字级分写均可，如：péngyou hǎo 或 péng you hǎo；填空处不算字、自动跳过
+          </span>
+          <PinyinCountInput
             value={articlePinyin}
-            onChange={(e) => onArticlePinyinChange(e.target.value)}
-            placeholder="文章拼音（可选）"
-            className="hsk-question-r02-item-text"
+            onChange={onArticlePinyinChange}
+            targetHanCount={countHanInText(article)}
+            targetText={article}
+            placeholder="如：péngyou hǎo 或 péng you hǎo"
           />
         </div>
 
@@ -153,6 +169,13 @@ export function HskQuestionR06ClozeEditor({
                       </option>
                     ))}
                   </select>
+                  <input
+                    type="text"
+                    className="hsk-question-r05-blank-pinyin-input"
+                    value={blankPinyins[blank.index] ?? ''}
+                    onChange={(e) => updateBlankPinyin(blank.index, e.target.value)}
+                    placeholder="填空拼音（可选）"
+                  />
                 </div>
 
                 <div className="hsk-question-r06-option-list">
@@ -167,14 +190,10 @@ export function HskQuestionR06ClozeEditor({
                         className="hsk-question-r02-item-text"
                       />
                       {showPinyin && (
-                        <input
-                          type="text"
+                        <PinyinInlineField
                           value={option.pinyin ?? ''}
-                          onChange={(e) =>
-                            updateBlankOption(blankIdx, optionIdx, { pinyin: e.target.value })
-                          }
+                          onChange={(v) => updateBlankOption(blankIdx, optionIdx, { pinyin: v })}
                           placeholder="拼音"
-                          className="hsk-question-r02-item-pinyin"
                         />
                       )}
                       <button

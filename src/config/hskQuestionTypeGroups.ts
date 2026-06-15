@@ -1,4 +1,5 @@
 import type { HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
+import { defaultCompoundForType } from './hskQuestionTypeRegistry';
 
 export const HSK_SECTION_TYPE_META: Record<
   HskSectionModule,
@@ -32,6 +33,14 @@ export const JUDGMENT_QUESTION_TYPES = ['L06', 'R08'] as const satisfies readonl
 
 export function isJudgmentQuestionType(typeId: HskQuestionTypeCode): boolean {
   return (JUDGMENT_QUESTION_TYPES as readonly string[]).includes(typeId);
+}
+
+/** 整题级「例题」开关（复合题 / 带子题编辑的在子题层标记） */
+export function supportsQuestionExampleFlag(typeId: HskQuestionTypeCode): boolean {
+  if (typeId === 'R09' || typeId.startsWith('W')) return false;
+  if (typeId === 'L02' || typeId === 'L05' || typeId === 'R02' || typeId === 'R03' || typeId === 'R07') return false;
+  if (defaultCompoundForType(typeId)) return false;
+  return typeId.startsWith('L') || typeId.startsWith('R');
 }
 
 /** 题目编辑页题型下拉顺序（对齐 HSK-Exams QuestionEditPage） */

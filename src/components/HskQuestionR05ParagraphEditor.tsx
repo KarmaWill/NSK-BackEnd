@@ -1,3 +1,5 @@
+import { PinyinCountInput, PinyinInlineField } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
 import {
   rekeyR05WordBank,
   wordOptionLabel,
@@ -10,12 +12,14 @@ type Props = {
   wordBank: HskR05WordOption[];
   blankIndices: number[];
   blankAnswers: Record<number, string>;
+  blankPinyins: Record<number, string>;
   levelNumber: number;
   showPinyinFields?: boolean;
   onParagraphChange: (next: string) => void;
   onParagraphPinyinChange: (next: string) => void;
   onWordBankChange: (next: HskR05WordOption[]) => void;
   onBlankAnswersChange: (next: Record<number, string>) => void;
+  onBlankPinyinsChange: (next: Record<number, string>) => void;
 };
 
 export function HskQuestionR05ParagraphEditor({
@@ -24,12 +28,14 @@ export function HskQuestionR05ParagraphEditor({
   wordBank,
   blankIndices,
   blankAnswers,
+  blankPinyins,
   levelNumber,
   showPinyinFields = false,
   onParagraphChange,
   onParagraphPinyinChange,
   onWordBankChange,
   onBlankAnswersChange,
+  onBlankPinyinsChange,
 }: Props) {
   const showPinyin = levelNumber <= 2 || showPinyinFields;
 
@@ -65,6 +71,13 @@ export function HskQuestionR05ParagraphEditor({
     onBlankAnswersChange(next);
   };
 
+  const updateBlankPinyin = (blankIndex: number, pinyin: string) => {
+    const next = { ...blankPinyins };
+    if (pinyin.trim()) next[blankIndex] = pinyin;
+    else delete next[blankIndex];
+    onBlankPinyinsChange(next);
+  };
+
   return (
     <>
       <div className="hsk-question-edit-section-divider" />
@@ -91,13 +104,16 @@ export function HskQuestionR05ParagraphEditor({
         </div>
 
         <div className="hsk-question-r05-field">
-          <label>段落拼音（可选）</label>
-          <input
-            type="text"
+          <label>段落拼音（可选 · 整句逐字 ruby）</label>
+          <span className="hsk-question-r02-block-hint">
+            词级连写或字级分写均可，如：péngyou hǎo 或 péng you hǎo；填空处不算字、自动跳过
+          </span>
+          <PinyinCountInput
             value={paragraphPinyin}
-            onChange={(e) => onParagraphPinyinChange(e.target.value)}
-            placeholder="段落拼音（可选）"
-            className="hsk-question-r02-item-text"
+            onChange={onParagraphPinyinChange}
+            targetHanCount={countHanInText(paragraph)}
+            targetText={paragraph}
+            placeholder="如：péngyou hǎo 或 péng you hǎo"
           />
         </div>
 
@@ -120,12 +136,10 @@ export function HskQuestionR05ParagraphEditor({
                   className="hsk-question-r02-item-text"
                 />
                 {showPinyin && (
-                  <input
-                    type="text"
+                  <PinyinInlineField
                     value={option.pinyin ?? ''}
-                    onChange={(e) => updateWord(idx, { pinyin: e.target.value })}
+                    onChange={(v) => updateWord(idx, { pinyin: v })}
                     placeholder="拼音"
-                    className="hsk-question-r02-item-pinyin"
                   />
                 )}
                 <button
@@ -148,14 +162,14 @@ export function HskQuestionR05ParagraphEditor({
         <div className="hsk-question-r05-subsection">
           <label className="hsk-question-r02-pairing-title">正确答案映射</label>
           <p className="hsk-question-r05-mapping-hint">
-            为每个填空选择其在全局选项池中对应的正确选项
+            为每个填空选择正确选项；可填「填空拼音提示」，将显示在该填空上方（如 miàntiáo、de），留空则该填空不显示拼音
           </p>
           {blankIndices.length === 0 ? (
             <p className="hsk-question-r05-mapping-empty">请先在段落文本中标记填空位置</p>
           ) : (
             <div className="hsk-question-r02-pairing-list">
               {blankIndices.map((blankIndex) => (
-                <div key={blankIndex} className="hsk-question-r02-pairing-row">
+                <div key={blankIndex} className="hsk-question-r05-blank-row">
                   <span className="hsk-question-r02-pairing-num">{blankIndex}</span>
                   <label className="hsk-question-r02-pairing-label">第{blankIndex}空：</label>
                   <select
@@ -170,6 +184,13 @@ export function HskQuestionR05ParagraphEditor({
                       </option>
                     ))}
                   </select>
+                  <input
+                    type="text"
+                    className="hsk-question-r05-blank-pinyin-input"
+                    value={blankPinyins[blankIndex] ?? ''}
+                    onChange={(e) => updateBlankPinyin(blankIndex, e.target.value)}
+                    placeholder="填空拼音（可选）"
+                  />
                 </div>
               ))}
             </div>

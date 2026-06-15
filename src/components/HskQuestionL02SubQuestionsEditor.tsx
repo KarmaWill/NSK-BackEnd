@@ -12,6 +12,10 @@ function subDisplayId(sub: HskSubQuestionPayload, index: number): string {
   return `sq${sub.id ?? index + 1}`;
 }
 
+function reindexSubQuestions(subs: HskSubQuestionPayload[]): HskSubQuestionPayload[] {
+  return subs.map((sub, idx) => ({ ...sub, id: idx + 1 }));
+}
+
 export function HskQuestionL02SubQuestionsEditor({
   subQuestions,
   imageOptions,
@@ -22,15 +26,17 @@ export function HskQuestionL02SubQuestionsEditor({
   const imageKeys = imageOptions.map((o) => o.key);
 
   const addSubQuestion = () => {
-    onChange([
-      ...subQuestions,
-      {
-        id: subQuestions.length + 1,
-        question: '',
-        answer: imageKeys[0] ?? 'A',
-        score: 1,
-      },
-    ]);
+    onChange(
+      reindexSubQuestions([
+        ...subQuestions,
+        {
+          id: subQuestions.length + 1,
+          question: '',
+          answer: imageKeys[0] ?? 'A',
+          score: 1,
+        },
+      ]),
+    );
   };
 
   const updateSub = (index: number, patch: Partial<HskSubQuestionPayload>) => {
@@ -40,16 +46,36 @@ export function HskQuestionL02SubQuestionsEditor({
   };
 
   const removeSub = (index: number) => {
+    if (subQuestions.length <= 1) return;
     const removedId = subDisplayId(subQuestions[index], index);
-    const next = subQuestions.filter((_, i) => i !== index);
-    onChange(next);
+    const next = reindexSubQuestions(subQuestions.filter((_, i) => i !== index));
     const nextPairings = { ...pairings };
     for (const [imageKey, subId] of Object.entries(nextPairings)) {
       if (subId === removedId) {
         nextPairings[imageKey] = '';
       }
     }
+    onChange(next);
     onPairingsChange(nextPairings);
+  };
+
+  const toggleExample = (index: number) => {
+    const nextIsExample = !subQuestions[index].isExample;
+    onChange(
+      subQuestions.map((sub, idx) => {
+        if (idx === index) {
+          return {
+            ...sub,
+            isExample: nextIsExample,
+            score: nextIsExample ? 0 : sub.score > 0 ? sub.score : 1,
+          };
+        }
+        if (nextIsExample && sub.isExample) {
+          return { ...sub, isExample: false, score: sub.score > 0 ? sub.score : 1 };
+        }
+        return sub;
+      }),
+    );
   };
 
   const updatePairing = (imageKey: string, value: string) => {
@@ -72,42 +98,27 @@ export function HskQuestionL02SubQuestionsEditor({
         </button>
       </div>
 
-      <div className="hsk-question-r01-split">
-        <div className="hsk-question-r01-split-col">
-          <label className="hsk-question-r01-col-label">图片</label>
-          <div className="hsk-question-r01-image-list">
-            {imageOptions.map((opt) => (
-              <div key={opt.key} className="hsk-question-r01-compact-image">
-                <span className="hsk-question-r01-compact-image-key">{opt.key}</span>
-                {opt.image ? (
-                  <img src={opt.image} alt={opt.text || opt.key} />
-                ) : (
-                  <div className="hsk-question-r01-compact-image-placeholder">
-                    <span aria-hidden>🖼</span>
-                    <span>点击选择图片</span>
-                    <span className="is-pending">⏳ 待配图</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="hsk-question-r01-split-col">
-          <label className="hsk-question-r01-col-label">
-            子题目 <span className="required">*</span>
-          </label>
-          <div className="hsk-question-r01-sentence-list">
-            {subQuestions.map((sub, idx) => (
-              <div key={`${sub.id ?? idx}-${idx}`} className="hsk-question-l02-sub-row">
-                <span className="hsk-question-r01-sentence-key">{subDisplayId(sub, idx)}</span>
-                <input
-                  type="text"
-                  value={sub.question ?? ''}
-                  onChange={(e) => updateSub(idx, { question: e.target.value })}
-                  placeholder="问题内容（选填）"
-                  className="hsk-question-r01-sentence-text"
-                />
+      <div className="hsk-question-l02-sub-section">
+        <label className="hsk-question-r01-col-label">
+          子题目 <span className="required">*</span>
+        </label>
+        <div className="hsk-question-r01-sentence-list">
+          {subQuestions.map((sub, idx) => (
+            <div
+              key={`${sub.id ?? idx}-${idx}`}
+              className={`hsk-question-l02-sub-row${sub.isExample ? ' is-example' : ''}`}
+            >
+              <span className="hsk-question-r01-sentence-key">
+                {sub.isExample ? '例题' : subDisplayId(sub, idx)}
+              </span>
+              <input
+                type="text"
+                value={sub.question ?? ''}
+                onChange={(e) => updateSub(idx, { question: e.target.value })}
+                placeholder="问题内容（选填）"
+                className="hsk-question-r01-sentence-text"
+              />
+              {!sub.isExample && (
                 <input
                   type="number"
                   min={1}
@@ -117,17 +128,30 @@ export function HskQuestionL02SubQuestionsEditor({
                   className="hsk-question-l02-sub-score"
                   title="本题分值"
                 />
-                <button
-                  type="button"
-                  className="hsk-question-edit-text-option-remove"
-                  onClick={() => removeSub(idx)}
-                  aria-label={`删除子题 ${idx + 1}`}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
+              )}
+              <label className="hsk-question-l02-sub-example-toggle">
+                <span className="hsk-question-l02-sub-example-label">例题</span>
+                <span className="toggle-wrap">
+                  <input
+                    type="checkbox"
+                    checked={!!sub.isExample}
+                    onChange={() => toggleExample(idx)}
+                  />
+                  <div className="toggle-track" />
+                  <div className="toggle-thumb" />
+                </span>
+              </label>
+              <button
+                type="button"
+                className="hsk-question-edit-text-option-remove"
+                onClick={() => removeSub(idx)}
+                disabled={subQuestions.length <= 1}
+                aria-label={`删除子题 ${idx + 1}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -150,7 +174,7 @@ export function HskQuestionL02SubQuestionsEditor({
                   const id = subDisplayId(sub, idx);
                   return (
                     <option key={id} value={id}>
-                      {id}
+                      {sub.isExample ? '例题' : id}
                       {sub.question ? ` · ${sub.question}` : ''}
                     </option>
                   );

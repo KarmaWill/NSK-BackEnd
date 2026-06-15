@@ -1,4 +1,4 @@
-import { parseParagraphBlankIndices } from './hskR05ParagraphFill';
+import { normalizeBlankPinyins, parseParagraphBlankIndices } from './hskR05ParagraphFill';
 
 export type HskR06BlankOption = {
   key: string;
@@ -114,6 +114,7 @@ export function resolveR06Content(
         paragraph?: string;
         paragraphPinyin?: string;
         blanks?: Array<Partial<HskR06Blank> & { index: number }>;
+        blankPinyins?: Record<number | string, string>;
       }
     | undefined,
   correctAnswer: string,
@@ -121,11 +122,14 @@ export function resolveR06Content(
   article: string;
   articlePinyin: string;
   blanks: HskR06Blank[];
+  blankPinyins: Record<number, string>;
 } {
   const article = content?.article ?? content?.paragraph ?? '';
   const articlePinyin = content?.articlePinyin ?? content?.paragraphPinyin ?? '';
   const blanks = syncR06Blanks(article, content?.blanks, correctAnswer);
-  return { article, articlePinyin, blanks };
+  const blankIndices = blanks.map((blank) => blank.index);
+  const blankPinyins = normalizeBlankPinyins(content?.blankPinyins, blankIndices);
+  return { article, articlePinyin, blanks, blankPinyins };
 }
 
 export function renderR06ArticlePreviewHtml(article: string): string {
@@ -148,4 +152,13 @@ export function renderR06ArticlePreviewHtml(article: string): string {
 export function blankOptionLabel(option: HskR06BlankOption): string {
   const text = option.text?.trim();
   return text ? `${option.key}. ${text}` : `${option.key}.`;
+}
+
+export function resolveR06BlankFillText(
+  blank: HskR06Blank,
+  answerKey: string | undefined,
+): string {
+  if (!answerKey) return String(blank.index);
+  const option = blank.options.find((item) => item.key === answerKey);
+  return option?.text?.trim() || answerKey;
 }

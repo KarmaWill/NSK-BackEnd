@@ -1,4 +1,6 @@
 import type { HskRuntimeOption } from '../types/hskExams';
+import { PinyinCountInput } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
 import { type HskMatchSentence } from '../utils/hskR01Match';
 
 type Props = {
@@ -64,65 +66,44 @@ export function HskQuestionR01MatchEditor({
         </div>
       </div>
 
-      <div className="hsk-question-r01-split">
-        <div className="hsk-question-r01-split-col">
-          <label className="hsk-question-r01-col-label">图片</label>
-          <div className="hsk-question-r01-image-list">
-            {imageOptions.map((opt) => (
-              <div key={opt.key} className="hsk-question-r01-compact-image">
-                <span className="hsk-question-r01-compact-image-key">{opt.key}</span>
-                {opt.image ? (
-                  <img src={opt.image} alt={opt.text || opt.key} />
-                ) : (
-                  <div className="hsk-question-r01-compact-image-placeholder">
-                    <span aria-hidden>🖼</span>
-                    <span>点击选择图片</span>
-                    <span className="is-pending">⏳ 待配图</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="hsk-question-r01-split-col">
-          <label className="hsk-question-r01-col-label">
-            句子 <span className="required">*</span>
-          </label>
-          <div className="hsk-question-r01-sentence-list">
-            {sentences.map((sentence, idx) => (
-              <div key={`${sentence.key}-${idx}`} className="hsk-question-r01-sentence-row">
-                <span className="hsk-question-r01-sentence-key">{sentence.key}</span>
-                <input
-                  type="text"
-                  value={sentence.text}
-                  onChange={(e) => updateSentence(idx, { text: e.target.value })}
-                  placeholder="句子文字"
-                  className="hsk-question-r01-sentence-text"
+      <div className="hsk-question-r01-sentence-panel">
+        <label className="hsk-question-r01-col-label">
+          句子 <span className="required">*</span>
+        </label>
+        <div className="hsk-question-r01-sentence-list">
+          {sentences.map((sentence, idx) => (
+            <div key={`${sentence.key}-${idx}`} className="hsk-question-r01-sentence-row">
+              <span className="hsk-question-r01-sentence-key">{sentence.key}</span>
+              <input
+                type="text"
+                value={sentence.text}
+                onChange={(e) => updateSentence(idx, { text: e.target.value })}
+                placeholder="句子文字"
+                className="hsk-question-r01-sentence-text"
+              />
+              {showPinyin && (
+                <PinyinCountInput
+                  value={sentence.pinyin ?? ''}
+                  onChange={(v) => updateSentence(idx, { pinyin: v })}
+                  targetHanCount={countHanInText(sentence.text)}
+                  targetText={sentence.text}
+                  placeholder="词级：xiaoyu jintian；字级：xiao yu jin tian"
+                  className="hsk-question-r03-sentence-pinyin-input"
                 />
-                {showPinyin && (
-                  <input
-                    type="text"
-                    value={sentence.pinyin ?? ''}
-                    onChange={(e) => updateSentence(idx, { pinyin: e.target.value })}
-                    placeholder="拼音"
-                    className="hsk-question-r01-sentence-pinyin"
-                  />
-                )}
-                <button
-                  type="button"
-                  className="hsk-question-edit-text-option-remove"
-                  onClick={() => removeSentence(idx)}
-                  aria-label={`删除句子 ${sentence.key}`}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <button type="button" className="hsk-question-edit-sub-add-btn" onClick={addSentence}>
-              + 添加句子
-            </button>
-          </div>
+              )}
+              <button
+                type="button"
+                className="hsk-question-edit-text-option-remove"
+                onClick={() => removeSentence(idx)}
+                aria-label={`删除句子 ${sentence.key}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button type="button" className="hsk-question-edit-sub-add-btn" onClick={addSentence}>
+            + 添加句子
+          </button>
         </div>
       </div>
 

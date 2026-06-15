@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PinyinCountInput, PinyinInlineField } from '../components/PinyinCountInput';
 
 type LangKey = 'EN' | 'ES' | 'FR' | 'PT' | 'CN' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
 type AudioRef = { id: string; name: string; duration: string; size: string };
@@ -453,10 +454,10 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
                 {nameLangTab === 'CN' && (
                   <div className="form-group">
                     <label className="form-label">中文拼音</label>
-                    <input
-                      className="form-input"
+                    <PinyinInlineField
                       value={editing.namePinyin}
-                      onChange={(e) => patchEditing({ namePinyin: e.target.value })}
+                      onChange={(v) => patchEditing({ namePinyin: v })}
+                      className="form-input"
                       placeholder="仅中文配置拼音"
                     />
                   </div>
@@ -505,11 +506,11 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
                       />
                       {segmentLangTab === 'CN' ? (
                         <div style={{ display: 'grid', gap: 8 }}>
-                          <input
-                            className="form-input"
+                          <PinyinCountInput
                             value={seg.pinyin}
-                            onChange={(e) => patchEditingSegment(idx, { pinyin: e.target.value })}
-                            placeholder="该句中文拼音"
+                            onChange={(v) => patchEditingSegment(idx, { pinyin: v })}
+                            placeholder="该句中文拼音（词级或字级均可）"
+                            className="form-input"
                           />
                           <div style={{ display: 'flex', gap: 8 }}>
                             <input

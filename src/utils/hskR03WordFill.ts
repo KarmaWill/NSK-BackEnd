@@ -4,6 +4,8 @@ export type HskR03SentenceBlank = {
   id: string;
   sentence: string;
   pinyin?: string;
+  /** 例题：预览展示示范填空，不计入计分答案 */
+  isExample?: boolean;
 };
 
 export type HskR03WordItem = {
@@ -56,6 +58,7 @@ export function buildR03CorrectAnswer(
   words: HskR03WordItem[],
 ): string {
   return blanks
+    .filter((blank) => !blank.isExample)
     .map((blank) => {
       const wordId = pairings[blank.id];
       if (!wordId) return '';
@@ -71,7 +74,12 @@ export function pairingsFromR03Data(
   blanks: HskR03SentenceBlank[],
   words: HskR03WordItem[],
   legacyBlanks?: LegacySentenceBlank[],
+  storedPairings?: Record<string, string>,
 ): Record<string, string> {
+  if (storedPairings && Object.keys(storedPairings).length > 0) {
+    return { ...storedPairings };
+  }
+
   const result: Record<string, string> = {};
 
   if (legacyBlanks?.length) {
@@ -104,6 +112,7 @@ export function resolveR03SentenceBlanks(
       id: item.id ?? `blank${idx + 1}`,
       sentence: item.sentence ?? '',
       pinyin: item.pinyin ?? '',
+      isExample: !!(item as HskR03SentenceBlank).isExample,
     }));
   }
 

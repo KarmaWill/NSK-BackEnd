@@ -39,14 +39,13 @@ export function HskQuestionW04Editor({
         </div>
 
         <div className="form-group">
-          <label>
-            关键词 <span className="required">*</span>
-          </label>
+          <label>关键词</label>
+          <span className="hsk-question-r02-block-hint">多个关键词用逗号分隔，如：周末,朋友,旅游</span>
           <input
             type="text"
             value={keyword}
             onChange={(e) => onKeywordChange(e.target.value)}
-            placeholder="多个关键词用逗号分隔"
+            placeholder="周末,朋友,旅游"
           />
         </div>
 

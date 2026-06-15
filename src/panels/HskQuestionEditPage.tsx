@@ -8,8 +8,13 @@ import { HskQuestionSingleImageSection } from '../components/HskQuestionSingleIm
 import { HskQuestionTagsLinksSection } from '../components/HskQuestionTagsLinksSection';
 import { HskQuestionDifficultySelect } from '../components/HskQuestionDifficultySelect';
 import { HskQuestionEditTypeSelect } from '../components/HskQuestionEditTypeSelect';
-import { autoTranslateTitleByLang, resolveExplanationByLang, type LangKey } from '../config/languages';
-import { isImageOptionQuestionType, isJudgmentQuestionType } from '../config/hskQuestionTypeGroups';
+import {
+  autoTranslateTitleByLang,
+  resolveExplanationByLang,
+  type ExplanationEditorTab,
+  type LangKey,
+} from '../config/languages';
+import { isImageOptionQuestionType, isJudgmentQuestionType, supportsQuestionExampleFlag } from '../config/hskQuestionTypeGroups';
 import { HskQuestionWorkflowProgress } from '../components/HskQuestionWorkflowProgress';
 import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
 import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTypeDef, HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
@@ -86,13 +91,16 @@ import {
   resolveR07Content,
   syncR07AggregatedScore,
 } from '../utils/hskR07Reading';
-import { normalizeJudgmentQuestion, resolveJudgmentContent, buildJudgmentContentPatch } from '../utils/hskJudgmentQuestions';
+import { normalizeJudgmentQuestion } from '../utils/hskJudgmentQuestions';
 import {
+  buildR09CorrectAnswer,
   buildR09PayloadPatch,
   normalizeR09Question,
   relabelR09Options,
-  resolveR09Content,
   resolveR09Options,
+  resolveR09SubItems,
+  syncR09AggregatedScore,
+  type HskR09SubItem,
 } from '../utils/hskR09ImageWord';
 import {
   buildW01CorrectAnswer,
@@ -108,8 +116,10 @@ import {
 import {
   buildW02CorrectAnswer,
   buildW02PayloadPatch,
+  isW02HintComplete,
   normalizeW02Question,
   resolveW02PinyinHints,
+  resolveW02ShowFillFeedback,
   type HskW02PinyinHint,
 } from '../utils/hskW02PinyinFill';
 import {
@@ -165,7 +175,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
   const [tabletPreview, setTabletPreview] = useState(false);
   const [previewResetKey, setPreviewResetKey] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [explanationLangTab, setExplanationLangTab] = useState<LangKey>('CN');
+  const [explanationLangTab, setExplanationLangTab] = useState<ExplanationEditorTab>('CN');
 
   useEffect(() => {
     let next = structuredClone(question);
@@ -242,6 +252,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             sentenceBlanks?: HskR03SentenceBlank[];
             wordItems?: HskR03WordItem[];
             wordBank?: string[];
+            pairings?: Record<string, string>;
           }
         | undefined;
       const sentenceBlanks = resolveR03SentenceBlanks(
@@ -261,6 +272,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
         sentenceBlanks,
         wordItems,
         content?.sentenceBlanks,
+        content?.pairings,
       );
       const runtimeOptions = wordItemsToRuntimeOptions(wordItems);
       setDraft({
@@ -277,6 +289,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             ...(next.payload?.content ?? {}),
             sentenceBlanks,
             wordItems,
+            pairings,
           },
         },
         correctAnswer:
@@ -459,6 +472,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
   const isL05 = draft.type_id === 'L05';
   const usesChoiceSubQuestions = isL05;
   const usesAggregatedScore = isL02 || isL05 || isR07;
+  const supportsExampleFlag = supportsQuestionExampleFlag(draft.type_id);
   const usesTextOptions =
     !usesImageOptions &&
     !isJudgment &&
@@ -556,12 +570,15 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
 
   const r03Pairings = useMemo(() => {
     if (!isR03) return {};
-    const content = draft.payload?.content as { sentenceBlanks?: HskR03SentenceBlank[] } | undefined;
+    const content = draft.payload?.content as
+      | { sentenceBlanks?: HskR03SentenceBlank[]; pairings?: Record<string, string> }
+      | undefined;
     return pairingsFromR03Data(
       draft.correctAnswer,
       r03SentenceBlanks,
       r03WordItems,
       content?.sentenceBlanks,
+      content?.pairings,
     );
   }, [isR03, draft.correctAnswer, r03SentenceBlanks, r03WordItems, draft.payload?.content]);
 
@@ -601,20 +618,15 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     );
   }, [isR07, draft.payload?.content, draft.payload?.subQuestions, draft.correctAnswer]);
 
-  const judgmentContent = useMemo(() => {
-    if (!isJudgment) return { sentence: '', sentencePinyin: '' };
-    return resolveJudgmentContent(draft);
-  }, [isJudgment, draft.payload?.content, draft.payload?.audioTranscript]);
-
-  const r09Content = useMemo(() => {
-    if (!isR09) return { sentence: '', sentencePinyin: '' };
-    return resolveR09Content(draft);
-  }, [isR09, draft.payload?.content]);
-
   const r09Options = useMemo(() => {
     if (!isR09) return [];
     return resolveR09Options(draft);
   }, [isR09, draft.payload?.runtimeOptions, draft.options]);
+
+  const r09SubItems = useMemo(() => {
+    if (!isR09) return [] as HskR09SubItem[];
+    return resolveR09SubItems(draft);
+  }, [isR09, draft.payload?.content, draft.correctAnswer, draft.score]);
 
   const w01ComponentParts = useMemo(() => {
     if (!isW01) return [];
@@ -630,6 +642,11 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     if (!isW02) return [] as HskW02PinyinHint[];
     return resolveW02PinyinHints(draft);
   }, [isW02, draft.payload?.content, draft.correctAnswer, draft.question_uid]);
+
+  const w02ShowFillFeedback = useMemo(() => {
+    if (!isW02) return true;
+    return resolveW02ShowFillFeedback(draft);
+  }, [isW02, draft.payload?.content]);
 
   const w03Content = useMemo(() => {
     if (!isW03) return { keywords: [] as string[], sampleAnswer: '', word: '' };
@@ -655,6 +672,15 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     setDraft((prev) => ({ ...prev, [key]: value, updatedAt: new Date().toISOString() }));
   };
 
+  const syncIsExample = (isExample: boolean) => {
+    setDraft((prev) => ({
+      ...prev,
+      isExample,
+      score: isExample ? 0 : prev.score > 0 ? prev.score : typeDef?.defaultScore ?? 1,
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
   const syncRuntimeOptions = (next: HskRuntimeOption[]) => {
     const rowOptions = next.map((o) => ({
       label: o.key,
@@ -678,20 +704,37 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
   };
 
   const syncL02SubQuestions = (next: HskSubQuestionPayload[]) => {
-    const keys = imageOptions.map((o) => o.key);
-    const totalScore = sumSubQuestionScores(next);
-    setDraft((prev) => ({
-      ...prev,
-      score: totalScore,
-      correctAnswer: buildLegacyL02CorrectAnswer(next, keys),
-      payload: { ...prev.payload, subQuestions: next },
-      updatedAt: new Date().toISOString(),
-    }));
+    setDraft((prev) => {
+      const keys =
+        prev.payload?.runtimeOptions?.map((o) => o.key) ??
+        (prev.options ?? []).map((o) => o.label);
+      const totalScore = sumSubQuestionScores(next);
+      return {
+        ...prev,
+        score: totalScore,
+        correctAnswer: buildLegacyL02CorrectAnswer(next, keys),
+        payload: { ...prev.payload, subQuestions: next },
+        updatedAt: new Date().toISOString(),
+      };
+    });
   };
 
   const syncL02Pairings = (pairings: Record<string, string | 'distractor' | ''>) => {
-    const nextSubs = applyL02ImagePairings(l02SubQuestions, imageOptionKeys, pairings);
-    syncL02SubQuestions(nextSubs);
+    setDraft((prev) => {
+      const keys =
+        prev.payload?.runtimeOptions?.map((o) => o.key) ??
+        (prev.options ?? []).map((o) => o.label);
+      const subs = prev.payload?.subQuestions ?? [];
+      const nextSubs = applyL02ImagePairings(subs, keys, pairings);
+      const totalScore = sumSubQuestionScores(nextSubs);
+      return {
+        ...prev,
+        score: totalScore,
+        correctAnswer: buildLegacyL02CorrectAnswer(nextSubs, keys),
+        payload: { ...prev.payload, subQuestions: nextSubs },
+        updatedAt: new Date().toISOString(),
+      };
+    });
   };
 
   const syncR01Sentences = (sentences: HskMatchSentence[]) => {
@@ -764,22 +807,40 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
           ...(prev.payload?.content ?? {}),
           sentenceBlanks,
           wordItems,
+          pairings,
         },
       },
       updatedAt: new Date().toISOString(),
     }));
   };
 
+  const syncR03All = (
+    sentenceBlanks: HskR03SentenceBlank[],
+    wordItems: HskR03WordItem[],
+    pairings: Record<string, string>,
+  ) => {
+    const selectedIds = new Set(Object.values(pairings).filter(Boolean));
+    const nextWordItems =
+      selectedIds.size > 0
+        ? wordItems.map((item) =>
+            selectedIds.has(item.id) && item.isDistractor
+              ? { ...item, isDistractor: false }
+              : item,
+          )
+        : wordItems;
+    syncR03Payload(sentenceBlanks, nextWordItems, pairings);
+  };
+
   const syncR03SentenceBlanks = (sentenceBlanks: HskR03SentenceBlank[]) => {
-    syncR03Payload(sentenceBlanks, r03WordItems, r03Pairings);
+    syncR03All(sentenceBlanks, r03WordItems, r03Pairings);
   };
 
   const syncR03WordItems = (wordItems: HskR03WordItem[]) => {
-    syncR03Payload(r03SentenceBlanks, wordItems, r03Pairings);
+    syncR03All(r03SentenceBlanks, wordItems, r03Pairings);
   };
 
   const syncR03Pairings = (pairings: Record<string, string>) => {
-    syncR03Payload(r03SentenceBlanks, r03WordItems, pairings);
+    syncR03All(r03SentenceBlanks, r03WordItems, pairings);
   };
 
   const syncR04Segments = (segments: HskR04Segment[]) => {
@@ -806,6 +867,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     paragraphPinyin?: string;
     wordBank?: HskR05WordOption[];
     blankAnswers?: Record<number, string>;
+    blankPinyins?: Record<number, string>;
   }) => {
     setDraft((prev) => {
       const current = resolveR05Content(
@@ -820,6 +882,11 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       const blankAnswers: Record<number, string> = {};
       for (const index of blankIndices) {
         if (sourceAnswers[index]) blankAnswers[index] = sourceAnswers[index];
+      }
+      const sourcePinyins = patch.blankPinyins ?? current.blankPinyins;
+      const blankPinyins: Record<number, string> = {};
+      for (const index of blankIndices) {
+        if (sourcePinyins[index]?.trim()) blankPinyins[index] = sourcePinyins[index].trim();
       }
       const runtimeOptions = wordBank.map((option) => ({
         key: option.key,
@@ -842,6 +909,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             paragraph,
             paragraphPinyin,
             wordBank,
+            blankPinyins,
           },
         },
         updatedAt: new Date().toISOString(),
@@ -853,6 +921,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     article?: string;
     articlePinyin?: string;
     blanks?: HskR06Blank[];
+    blankPinyins?: Record<number, string>;
   }) => {
     setDraft((prev) => {
       const current = resolveR06Content(
@@ -866,6 +935,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
         patch.blanks ?? current.blanks,
         prev.correctAnswer,
       );
+      const blankPinyins = patch.blankPinyins ?? current.blankPinyins;
       return {
         ...prev,
         correctAnswer: buildR06CorrectAnswer(blanks),
@@ -876,6 +946,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             article,
             articlePinyin,
             blanks,
+            blankPinyins,
           },
         },
         updatedAt: new Date().toISOString(),
@@ -966,30 +1037,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     }));
   };
 
-  const syncJudgmentSentence = (sentence: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      payload: buildJudgmentContentPatch(prev, { sentence }),
-      updatedAt: new Date().toISOString(),
-    }));
-  };
-
-  const syncR09Sentence = (sentence: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      payload: buildR09PayloadPatch(prev, { sentence }),
-      updatedAt: new Date().toISOString(),
-    }));
-  };
-
-  const syncR09SentencePinyin = (sentencePinyin: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      payload: buildR09PayloadPatch(prev, { sentencePinyin }),
-      updatedAt: new Date().toISOString(),
-    }));
-  };
-
   const syncR09Options = (next: HskRuntimeOption[]) => {
     setDraft((prev) => {
       const relabeled = relabelR09Options(next);
@@ -998,12 +1045,30 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
         text: opt.text ?? '',
         pinyin: opt.pinyin,
       }));
-      const validAnswer = relabeled.some((o) => o.key === prev.correctAnswer) ? prev.correctAnswer : '';
+      const subItems = resolveR09SubItems(prev).map((item) =>
+        relabeled.some((opt) => opt.key === item.answer) ? item : { ...item, answer: '' },
+      );
       return {
         ...prev,
-        correctAnswer: validAnswer,
+        correctAnswer: buildR09CorrectAnswer(subItems),
         options: rowOptions,
-        payload: buildR09PayloadPatch(prev, { options: relabeled }),
+        payload: buildR09PayloadPatch(prev, { options: relabeled, subItems }),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  const syncR09SubItems = (next: HskR09SubItem[]) => {
+    setDraft((prev) => {
+      const subItems = next;
+      const totalScore = syncR09AggregatedScore(subItems);
+      const hasImages = subItems.some((item) => !!item.imageUrl?.trim());
+      return {
+        ...prev,
+        score: totalScore || prev.score,
+        correctAnswer: buildR09CorrectAnswer(subItems),
+        imageStatus: hasImages ? 'ready' : prev.imageStatus === 'none' ? 'none' : 'pending',
+        payload: buildR09PayloadPatch(prev, { subItems }),
         updatedAt: new Date().toISOString(),
       };
     });
@@ -1042,6 +1107,14 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       ...prev,
       correctAnswer: buildW02CorrectAnswer(pinyinHints),
       payload: buildW02PayloadPatch(prev, { pinyinHints }),
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const syncW02ShowFillFeedback = (showFillFeedback: boolean) => {
+    setDraft((prev) => ({
+      ...prev,
+      payload: buildW02PayloadPatch(prev, { showFillFeedback }),
       updatedAt: new Date().toISOString(),
     }));
   };
@@ -1106,7 +1179,8 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
   };
 
   const handleAutoTranslateExplanation = () => {
-    const seed = (explanationByLang.CN ?? explanationByLang[explanationLangTab] ?? '').trim();
+    if (explanationLangTab === 'PY') return;
+    const seed = (explanationByLang.CN ?? explanationByLang[explanationLangTab as LangKey] ?? '').trim();
     if (!seed) return;
     const next = autoTranslateTitleByLang(seed);
     setDraft((prev) => ({
@@ -1126,10 +1200,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       showToast('请填写题干');
       return;
     }
-    if (isJudgment && !judgmentContent.sentence.trim()) {
-      showToast('请填写判断句');
-      return;
-    }
     if (isJudgment && !questionImageUrl) {
       showToast('请上传题目图片');
       return;
@@ -1138,24 +1208,36 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       showToast('请选择正确答案');
       return;
     }
-    if (isR09 && !r09Content.sentence.trim()) {
-      showToast('请填写填空句');
-      return;
-    }
-    if (isR09 && levelNumber <= 2 && !r09Content.sentencePinyin.trim()) {
-      showToast('请填写拼音');
-      return;
-    }
     if (isR09 && r09Options.filter((o) => o.text?.trim()).length < 2) {
       showToast('请至少填写 2 个词语选项');
       return;
     }
-    if (isR09 && !draft.correctAnswer) {
-      showToast('请选择正确答案');
+    if (isR09 && levelNumber <= 2 && r09Options.some((o) => o.text?.trim() && !o.pinyin?.trim())) {
+      showToast('请为每个词语填写拼音');
       return;
     }
-    if (isR09 && !questionImageUrl) {
-      showToast('请上传题目图片');
+    if (isR09 && r09SubItems.filter((item) => !item.isExample).length === 0) {
+      showToast('请至少添加 1 道计分题目');
+      return;
+    }
+    if (isR09 && r09SubItems.some((item) => !item.isExample && !item.dialogue.trim())) {
+      showToast('请填写每道题的对话内容');
+      return;
+    }
+    if (
+      isR09 &&
+      levelNumber <= 2 &&
+      r09SubItems.some((item) => item.dialogue.trim() && !item.dialoguePinyin?.trim())
+    ) {
+      showToast('请为每道题填写对话拼音');
+      return;
+    }
+    if (isR09 && r09SubItems.some((item) => !item.isExample && !item.imageUrl?.trim())) {
+      showToast('请为每道题上传图片');
+      return;
+    }
+    if (isR09 && r09SubItems.some((item) => !item.isExample && !item.answer)) {
+      showToast('请为每道题选择正确答案');
       return;
     }
     if (isW01 && w01ComponentParts.filter((p) => p.text.trim()).length < 2) {
@@ -1166,8 +1248,8 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
       showToast('请完善词语匹配配置');
       return;
     }
-    if (isW02 && w02Hints.some((h) => !h.textBefore.trim() || !h.pinyin.trim() || !h.answer.trim())) {
-      showToast('请完善每条挖空句的前文、拼音提示和正确答案');
+    if (isW02 && w02Hints.some((h) => !isW02HintComplete(h))) {
+      showToast('请完善每条挖空句：句子文本需含（pinyin）挖空标记，并填写正确答案');
       return;
     }
     if (isW03 && !questionImageUrl) {
@@ -1180,10 +1262,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     }
     if (isW04 && !w04Content.topic.trim()) {
       showToast('请填写主题 / 题目');
-      return;
-    }
-    if (isW04 && !w04Content.keyword.trim()) {
-      showToast('请填写关键词');
       return;
     }
     if (isW04 && w04Content.minWords < 1) {
@@ -1353,9 +1431,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                 )}
 
                 <HskQuestionJudgmentEditor
-                  sentence={judgmentContent.sentence}
                   correctAnswer={draft.correctAnswer}
-                  onSentenceChange={syncJudgmentSentence}
                   onCorrectAnswerChange={(answer) => update('correctAnswer', answer)}
                 />
 
@@ -1435,6 +1511,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                 onSentenceBlanksChange={syncR03SentenceBlanks}
                 onWordItemsChange={syncR03WordItems}
                 onPairingsChange={syncR03Pairings}
+                onBatchSync={syncR03All}
               />
             )}
 
@@ -1457,12 +1534,14 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                   wordBank={r05Content.wordBank}
                   blankIndices={r05Content.blankIndices}
                   blankAnswers={r05Content.blankAnswers}
+                  blankPinyins={r05Content.blankPinyins}
                   levelNumber={levelNumber}
                   showPinyinFields={draft.showPinyinFields}
                   onParagraphChange={(paragraph) => syncR05Content({ paragraph })}
                   onParagraphPinyinChange={(paragraphPinyin) => syncR05Content({ paragraphPinyin })}
                   onWordBankChange={(wordBank) => syncR05Content({ wordBank })}
                   onBlankAnswersChange={(blankAnswers) => syncR05Content({ blankAnswers })}
+                  onBlankPinyinsChange={(blankPinyins) => syncR05Content({ blankPinyins })}
                 />
                 <HskQuestionSingleImageSection
                   imageUrl={questionImageUrl ?? ''}
@@ -1476,11 +1555,13 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                 article={r06Content.article}
                 articlePinyin={r06Content.articlePinyin}
                 blanks={r06Content.blanks}
+                blankPinyins={r06Content.blankPinyins}
                 levelNumber={levelNumber}
                 showPinyinFields={draft.showPinyinFields}
                 onArticleChange={(article) => syncR06Content({ article })}
                 onArticlePinyinChange={(articlePinyin) => syncR06Content({ articlePinyin })}
                 onBlanksChange={(blanks) => syncR06Content({ blanks })}
+                onBlankPinyinsChange={(blankPinyins) => syncR06Content({ blankPinyins })}
               />
             )}
 
@@ -1504,25 +1585,13 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             )}
 
             {isR09 && (
-              <>
-                <HskQuestionR09Editor
-                  sentence={r09Content.sentence}
-                  sentencePinyin={r09Content.sentencePinyin}
-                  options={r09Options}
-                  correctAnswer={draft.correctAnswer}
-                  levelNumber={levelNumber}
-                  showPinyinFields={draft.showPinyinFields}
-                  onSentenceChange={syncR09Sentence}
-                  onSentencePinyinChange={syncR09SentencePinyin}
-                  onOptionsChange={syncR09Options}
-                  onCorrectAnswerChange={(answer) => update('correctAnswer', answer)}
-                />
-                <HskQuestionSingleImageSection
-                  imageUrl={questionImageUrl ?? ''}
-                  required
-                  onChange={updateImageUrl}
-                />
-              </>
+              <HskQuestionR09Editor
+                options={r09Options}
+                subItems={r09SubItems}
+                levelNumber={levelNumber}
+                onOptionsChange={syncR09Options}
+                onSubItemsChange={syncR09SubItems}
+              />
             )}
 
             {isW01 && (
@@ -1535,7 +1604,14 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             )}
 
             {isW02 && (
-              <HskQuestionW02Editor hints={w02Hints} onChange={syncW02Hints} />
+              <HskQuestionW02Editor
+                hints={w02Hints}
+                levelNumber={levelNumber}
+                showPinyinFields={draft.showPinyinFields}
+                showFillFeedback={w02ShowFillFeedback}
+                onChange={syncW02Hints}
+                onShowFillFeedbackChange={syncW02ShowFillFeedback}
+              />
             )}
 
             {isW03 && (
@@ -1608,11 +1684,38 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             <div className="hsk-question-edit-section-divider" />
             <SectionHeader icon="◎" title="评分参数" />
             <div className="hsk-question-edit-scoring-body">
+              {supportsExampleFlag && (
+                <div className="hsk-question-edit-example-field">
+                  <label className="hsk-question-edit-example-toggle">
+                    <span className="hsk-question-edit-example-toggle-label">设为例题</span>
+                    <span className="toggle-wrap">
+                      <input
+                        type="checkbox"
+                        checked={!!draft.isExample}
+                        onChange={(e) => syncIsExample(e.target.checked)}
+                      />
+                      <div className="toggle-track" />
+                      <div className="toggle-thumb" />
+                    </span>
+                  </label>
+                  <p className="hsk-question-edit-example-hint">
+                    {draft.isExample
+                      ? '已设为例题：不计入考试分值，预览显示「例如」'
+                      : '开启后标记为例题，供试卷例题位使用'}
+                  </p>
+                </div>
+              )}
               {usesAggregatedScore ? (
                 <div className="hsk-question-edit-scoring-total">
                   <label>大题总分</label>
-                  <p className="hsk-question-edit-scoring-total-value">{compoundTotalScore} 分</p>
-                  <p className="hsk-question-edit-scoring-total-hint">由各子题分值累加，不可手动修改</p>
+                  <p className="hsk-question-edit-scoring-total-value">
+                    {draft.isExample ? 0 : compoundTotalScore} 分
+                  </p>
+                  <p className="hsk-question-edit-scoring-total-hint">
+                    {draft.isExample
+                      ? '例题不计分'
+                      : '由各子题分值累加，不可手动修改'}
+                  </p>
                 </div>
               ) : (
                 <div className="hsk-question-edit-meta-field">
@@ -1621,9 +1724,10 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min={draft.isExample ? 0 : 1}
                     max={100}
-                    value={draft.score}
+                    value={draft.isExample ? 0 : draft.score}
+                    disabled={!!draft.isExample}
                     onChange={(e) => update('score', Number(e.target.value) || 1)}
                   />
                 </div>
