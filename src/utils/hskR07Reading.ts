@@ -78,10 +78,11 @@ export function resolveR07SubQuestions(
 export function formatR07SubDisplayId(sub: HskSubQuestionPayload, index: number): string {
   const raw = sub.id;
   if (typeof raw === 'number' && raw > 0) return String(raw);
-  if (typeof raw === 'string') {
-    const legacy = raw.match(/^r7q(\d+)$/i);
+  const rawStr = raw != null ? String(raw) : '';
+  if (rawStr) {
+    const legacy = rawStr.match(/^r7q(\d+)$/i);
     if (legacy) return legacy[1];
-    if (/^\d+$/.test(raw)) return raw;
+    if (/^\d+$/.test(rawStr)) return rawStr;
   }
   return String(index + 1);
 }

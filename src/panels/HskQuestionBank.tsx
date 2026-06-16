@@ -12,7 +12,7 @@ import {
   upsertTagCatalog,
   upsertTags,
 } from '../stores/hskExams';
-import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTagCatalog, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
+import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
 import { DEFAULT_HSK_QUESTION_TAG_CATALOG, HSK_QUESTION_LEVELS } from '../types/hskExams';
 import { HSK_QUESTION_STATUS_FILTER_OPTIONS } from '../config/hskQuestionWorkflow';
 import { buildDuplicateQuestionType, createBlankQuestionType } from '../utils/hskQuestionTypeDuplicate';
