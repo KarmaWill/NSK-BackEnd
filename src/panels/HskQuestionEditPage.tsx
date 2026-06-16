@@ -17,7 +17,8 @@ import {
 import { isImageOptionQuestionType, isJudgmentQuestionType, supportsQuestionExampleFlag } from '../config/hskQuestionTypeGroups';
 import { HskQuestionWorkflowProgress } from '../components/HskQuestionWorkflowProgress';
 import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
-import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTypeDef, HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
+import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTag, HskQuestionTagCatalog, HskQuestionTypeDef, HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
+import { DEFAULT_HSK_QUESTION_TAG_CATALOG } from '../types/hskExams';
 import { HSK_QUESTION_LEVELS } from '../types/hskExams';
 import { HskQuestionChoiceSubQuestionsEditor } from '../components/HskQuestionChoiceSubQuestionsEditor';
 import { HskQuestionL02SubQuestionsEditor } from '../components/HskQuestionL02SubQuestionsEditor';
@@ -138,9 +139,12 @@ import { levelToNumber } from '../config/hskQuestionTypes';
 type Props = {
   question: HskQuestionRow;
   types: HskQuestionTypeDef[];
-  tags: { id: string; label: string }[];
+  tags: HskQuestionTag[];
+  tagCatalog?: HskQuestionTagCatalog;
   onBack: () => void;
   onSave: (question: HskQuestionRow) => void;
+  onGlobalTagsChange?: (nextTags: HskQuestionTag[]) => void;
+  onTagCatalogChange?: (nextCatalog: HskQuestionTagCatalog) => void;
 };
 
 function SectionHeader({
@@ -169,7 +173,16 @@ const DEFAULT_IMAGE_OPTIONS: HskRuntimeOption[] = [
   { key: 'C', text: '图片C', image: '' },
 ];
 
-export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: Props) {
+export function HskQuestionEditPage({
+  question,
+  types,
+  tags,
+  tagCatalog = DEFAULT_HSK_QUESTION_TAG_CATALOG,
+  onBack,
+  onSave,
+  onGlobalTagsChange,
+  onTagCatalogChange,
+}: Props) {
   const [draft, setDraft] = useState<HskQuestionRow>(() => structuredClone(question));
   const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const [tabletPreview, setTabletPreview] = useState(false);
@@ -681,6 +694,22 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     }));
   };
 
+  const stemFieldEnabled =
+    (draft.payload?.content as { showStemField?: boolean } | undefined)?.showStemField ??
+    Boolean(draft.stem.trim());
+
+  const syncStemFieldEnabled = (enabled: boolean) => {
+    setDraft((prev) => ({
+      ...prev,
+      stem: enabled ? prev.stem : '',
+      payload: {
+        ...prev.payload,
+        content: { ...(prev.payload?.content ?? {}), showStemField: enabled },
+      },
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
   const syncRuntimeOptions = (next: HskRuntimeOption[]) => {
     const rowOptions = next.map((o) => ({
       label: o.key,
@@ -921,7 +950,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     article?: string;
     articlePinyin?: string;
     blanks?: HskR06Blank[];
-    blankPinyins?: Record<number, string>;
   }) => {
     setDraft((prev) => {
       const current = resolveR06Content(
@@ -935,18 +963,18 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
         patch.blanks ?? current.blanks,
         prev.correctAnswer,
       );
-      const blankPinyins = patch.blankPinyins ?? current.blankPinyins;
+      const { blankPinyins: _legacyBlankPinyins, ...restContent } =
+        (prev.payload?.content as Record<string, unknown> | undefined) ?? {};
       return {
         ...prev,
         correctAnswer: buildR06CorrectAnswer(blanks),
         payload: {
           ...prev.payload,
           content: {
-            ...(prev.payload?.content ?? {}),
+            ...restContent,
             article,
             articlePinyin,
             blanks,
-            blankPinyins,
           },
         },
         updatedAt: new Date().toISOString(),
@@ -1163,6 +1191,20 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     setDraft((prev) => ({ ...prev, tags: nextTags, updatedAt: new Date().toISOString() }));
   };
 
+  const handleGlobalTagsChange = (nextTags: HskQuestionTag[]) => {
+    onGlobalTagsChange?.(nextTags);
+    const labelSet = new Set(nextTags.map((tag) => tag.label));
+    setDraft((prev) => ({
+      ...prev,
+      tags: prev.tags.filter((label) => labelSet.has(label)),
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const handleTagCatalogChange = (nextCatalog: HskQuestionTagCatalog) => {
+    onTagCatalogChange?.(nextCatalog);
+  };
+
   const updateExplanationLang = (lang: LangKey, value: string) => {
     setDraft((prev) => {
       const nextByLang = {
@@ -1192,14 +1234,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
   };
 
   const handleSave = (status: HskQuestionStatus) => {
-    if (!isL02 && !isJudgment && !draft.stem.trim()) {
-      showToast('请填写题干');
-      return;
-    }
-    if (isJudgment && !draft.stem.trim()) {
-      showToast('请填写题干');
-      return;
-    }
     if (isJudgment && !questionImageUrl) {
       showToast('请上传题目图片');
       return;
@@ -1278,6 +1312,93 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
     }
     onSave({ ...draft, status });
   };
+
+  const exampleFieldEditor = supportsExampleFlag ? (
+    <div className="hsk-question-edit-example-field">
+      <div className={`hsk-question-edit-stem-toggle-bar${draft.isExample ? ' is-on' : ' is-off'}`}>
+        <div className="hsk-question-edit-stem-toggle-info">
+          <span className="hsk-question-edit-stem-toggle-title">设为例题</span>
+          <span className="hsk-question-edit-stem-toggle-status">
+            {draft.isExample
+              ? '已开启 · 不计分，预览显示「例如」'
+              : '已关闭 · 正常计分题目'}
+          </span>
+        </div>
+        <button
+          type="button"
+          className={`hsk-question-edit-stem-switch${draft.isExample ? ' is-on' : ' is-off'}`}
+          aria-pressed={!!draft.isExample}
+          onClick={() => syncIsExample(!draft.isExample)}
+        >
+          <span className="hsk-question-edit-stem-switch-track" aria-hidden>
+            <span className="hsk-question-edit-stem-switch-thumb" />
+          </span>
+          <span className="hsk-question-edit-stem-switch-label">
+            {draft.isExample ? '开启' : '关闭'}
+          </span>
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  const stemFieldEditor = (
+    <div className="form-group hsk-question-edit-stem-field">
+      <div className={`hsk-question-edit-stem-toggle-bar${stemFieldEnabled ? ' is-on' : ' is-off'}`}>
+        <div className="hsk-question-edit-stem-toggle-info">
+          <span className="hsk-question-edit-stem-toggle-title">题干 (stem)</span>
+          <span className="hsk-question-edit-stem-toggle-status">
+            {stemFieldEnabled
+              ? isJudgment
+                ? '已开启 · 预览显示顶部说明'
+                : '已开启 · 预览显示题干'
+              : isJudgment
+                ? '已关闭 · 预览不显示顶部说明'
+                : '已关闭 · 预览不显示题干'}
+          </span>
+        </div>
+        <button
+          type="button"
+          className={`hsk-question-edit-stem-switch${stemFieldEnabled ? ' is-on' : ' is-off'}`}
+          aria-pressed={stemFieldEnabled}
+          onClick={() => syncStemFieldEnabled(!stemFieldEnabled)}
+        >
+          <span className="hsk-question-edit-stem-switch-track" aria-hidden>
+            <span className="hsk-question-edit-stem-switch-thumb" />
+          </span>
+          <span className="hsk-question-edit-stem-switch-label">
+            {stemFieldEnabled ? '显示' : '隐藏'}
+          </span>
+        </button>
+      </div>
+      {stemFieldEnabled ? (
+        <textarea
+          rows={isJudgment ? 2 : 3}
+          value={draft.stem}
+          onChange={(e) => update('stem', e.target.value)}
+          placeholder={
+            isJudgment
+              ? draft.type_id === 'L06'
+                ? '如：请听句子，判断与图片内容是否一致。'
+                : '如：请看图片和句子，判断句子描述是否与图片一致。'
+              : '如需显示文字提示可填写，否则关闭开关'
+          }
+        />
+      ) : (
+        <p className="hsk-question-edit-stem-hint">
+          {isJudgment
+            ? '题干已隐藏：右侧预览不再显示绿色说明条；可重新打开开关后再编辑。'
+            : '题干已隐藏：右侧预览不再显示题干，仅保留音频、选项等内容。'}
+        </p>
+      )}
+    </div>
+  );
+
+  const stemSectionEditors = (
+    <div className="hsk-question-edit-stem-block">
+      {exampleFieldEditor}
+      {stemFieldEditor}
+    </div>
+  );
 
   if (fullscreenPreview) {
     return (
@@ -1400,25 +1521,11 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
               </div>
             </div>
 
-            {!isJudgment && <SectionHeader icon="📝" title="题干与作答" />}
+            <SectionHeader icon="📝" title="题干与作答" />
 
             {isJudgment ? (
               <>
-                <div className="form-group">
-                  <label>
-                    题干 (stem) <span className="required"> *</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={draft.stem}
-                    onChange={(e) => update('stem', e.target.value)}
-                    placeholder={
-                      draft.type_id === 'L06'
-                        ? '如：请听句子，判断与图片内容是否一致。'
-                        : '如：请看图片和句子，判断句子描述是否与图片一致。'
-                    }
-                  />
-                </div>
+                {stemSectionEditors}
 
                 {showAudioSection && (
                   <HskQuestionAudioSection
@@ -1443,18 +1550,7 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
               </>
             ) : (
               <>
-                <div className="form-group">
-                  <label>
-                    题干 (stem){!isL02 && <span className="required"> *</span>}
-                    {isL02 && <span className="is-optional"> （选填）</span>}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={draft.stem}
-                    onChange={(e) => update('stem', e.target.value)}
-                    placeholder={isL02 ? '如需显示文字提示可填写，否则留空' : '请输入题目题干…'}
-                  />
-                </div>
+                {stemSectionEditors}
 
             {showAudioSection && (
               <HskQuestionAudioSection
@@ -1555,13 +1651,9 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                 article={r06Content.article}
                 articlePinyin={r06Content.articlePinyin}
                 blanks={r06Content.blanks}
-                blankPinyins={r06Content.blankPinyins}
-                levelNumber={levelNumber}
-                showPinyinFields={draft.showPinyinFields}
                 onArticleChange={(article) => syncR06Content({ article })}
                 onArticlePinyinChange={(articlePinyin) => syncR06Content({ articlePinyin })}
                 onBlanksChange={(blanks) => syncR06Content({ blanks })}
-                onBlankPinyinsChange={(blankPinyins) => syncR06Content({ blankPinyins })}
               />
             )}
 
@@ -1573,6 +1665,8 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
                   subQuestions={r07Content.subQuestions}
                   levelNumber={levelNumber}
                   showPinyinFields={draft.showPinyinFields}
+                  questionUid={draft.question_uid}
+                  presetImageUrl={questionImageUrl ?? ''}
                   onArticleChange={(article) => syncR07Content({ article })}
                   onArticlePinyinChange={(articlePinyin) => syncR07Content({ articlePinyin })}
                   onSubQuestionsChange={(subQuestions) => syncR07Content({ subQuestions })}
@@ -1684,27 +1778,6 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             <div className="hsk-question-edit-section-divider" />
             <SectionHeader icon="◎" title="评分参数" />
             <div className="hsk-question-edit-scoring-body">
-              {supportsExampleFlag && (
-                <div className="hsk-question-edit-example-field">
-                  <label className="hsk-question-edit-example-toggle">
-                    <span className="hsk-question-edit-example-toggle-label">设为例题</span>
-                    <span className="toggle-wrap">
-                      <input
-                        type="checkbox"
-                        checked={!!draft.isExample}
-                        onChange={(e) => syncIsExample(e.target.checked)}
-                      />
-                      <div className="toggle-track" />
-                      <div className="toggle-thumb" />
-                    </span>
-                  </label>
-                  <p className="hsk-question-edit-example-hint">
-                    {draft.isExample
-                      ? '已设为例题：不计入考试分值，预览显示「例如」'
-                      : '开启后标记为例题，供试卷例题位使用'}
-                  </p>
-                </div>
-              )}
               {usesAggregatedScore ? (
                 <div className="hsk-question-edit-scoring-total">
                   <label>大题总分</label>
@@ -1748,7 +1821,11 @@ export function HskQuestionEditPage({ question, types, tags, onBack, onSave }: P
             <HskQuestionTagsLinksSection
               question={draft}
               tags={tags}
+              tagCatalog={tagCatalog}
               onTagsChange={updateTags}
+              onGlobalTagsChange={handleGlobalTagsChange}
+              onTagCatalogChange={handleTagCatalogChange}
+              onToast={showToast}
             />
           </div>
         </div>

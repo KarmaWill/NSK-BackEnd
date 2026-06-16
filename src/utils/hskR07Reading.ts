@@ -74,11 +74,16 @@ export function resolveR07SubQuestions(
   );
 }
 
+/** 预览/答题区题号：1、2、3…（不含 r7q 前缀与尾部句点） */
 export function formatR07SubDisplayId(sub: HskSubQuestionPayload, index: number): string {
   const raw = sub.id;
-  if (typeof raw === 'string' && /^r7q\d+$/i.test(raw)) return raw;
-  if (typeof raw === 'number') return `r7q${raw}`;
-  return `r7q${index + 1}`;
+  if (typeof raw === 'number' && raw > 0) return String(raw);
+  if (typeof raw === 'string') {
+    const legacy = raw.match(/^r7q(\d+)$/i);
+    if (legacy) return legacy[1];
+    if (/^\d+$/.test(raw)) return raw;
+  }
+  return String(index + 1);
 }
 
 export function rekeySubQuestionOptions(options: HskRuntimeOption[]): HskRuntimeOption[] {

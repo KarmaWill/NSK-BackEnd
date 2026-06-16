@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { HskQuestionRow, HskSubQuestionPayload } from '../types/hskExams';
-import { formatL05SubDisplayId, resolveL05SubQuestions } from '../utils/hskChoiceSubQuestions';
+import { resolveL05SubQuestions } from '../utils/hskChoiceSubQuestions';
 import { resolveL02SubQuestions } from '../utils/hskL02SubQuestions';
 import { resolveR01Sentences } from '../utils/hskR01Match';
 import {
@@ -25,12 +25,11 @@ import {
 import {
   resolveR05Content,
   tokenizeR05Paragraph,
-  wordOptionLabel,
 } from '../utils/hskR05ParagraphFill';
 import { splitPinyinWord } from '../utils/pinyinUtils';
 import {
-  blankOptionLabel,
-  resolveR06BlankFillText,
+  resolveR06BlankPreviewLabel,
+  resolveR06BlankPreviewPinyin,
   resolveR06Content,
   type HskR06Blank,
 } from '../utils/hskR06Cloze';
@@ -38,21 +37,23 @@ import {
   formatR07SubDisplayId,
   resolveR07Content,
 } from '../utils/hskR07Reading';
+import { looksLikeRichArticleHtml } from '../utils/hskRichArticleHtml';
 import {
   JUDGMENT_TF_OPTIONS,
   judgmentPreviewHint,
   resolveJudgmentContent,
+  resolvePreviewStem,
 } from '../utils/hskJudgmentQuestions';
 import { resolveR09Options, resolveR09SubItems, parseR09Dialogue, sliceR09DialoguePinyinByLines, flattenR09DialogueLines, type R09DialogueToken } from '../utils/hskR09ImageWord';
 import { resolveW01ComponentParts, resolveW01WordMatches } from '../utils/hskW01ComponentMatch';
 import {
   resolveW02PinyinHints,
   resolveW02ShowFillFeedback,
-  W02_PREVIEW_HINT,
 } from '../utils/hskW02PinyinFill';
-import { resolveW03Content, W03_PREVIEW_HINT } from '../utils/hskW03PictureSentence';
+import { resolveW03Content } from '../utils/hskW03PictureSentence';
 import { parseW04Keywords, resolveW04Content, countW04EssayChars, resolveW04WritingHint } from '../utils/hskW04TopicEssay';
 import { PinyinRubyText } from './PinyinRubyText';
+import { RichArticlePassagePreview } from './RichArticlePassagePreview';
 
 export function resolveQuestionImageUrl(question: HskQuestionRow): string | undefined {
   const content = question.payload?.content as Record<string, unknown> | undefined;
@@ -109,6 +110,21 @@ export function PreviewAudioBar({
       </div>
     </div>
   );
+}
+
+export function PreviewQuestionStem({
+  question,
+  className = 'hsk-preview-judgment-hint',
+  textOverride,
+}: {
+  question: HskQuestionRow;
+  className?: string;
+  textOverride?: string;
+}) {
+  const showStemField = (question.payload?.content as { showStemField?: boolean } | undefined)?.showStemField;
+  const text = textOverride !== undefined ? textOverride : resolvePreviewStem(question.stem, showStemField);
+  if (!text) return null;
+  return <div className={className}>{text}</div>;
 }
 
 export function PreviewImageBox({
@@ -174,18 +190,22 @@ export function PreviewJudgmentImage({
   const { sentence, sentencePinyin } = resolveJudgmentContent(question);
   const imageUrl = resolveQuestionImageUrl(question);
   const imagePending = isImagePending(question);
-  const hint = judgmentPreviewHint(question.type_id, question.stem);
+  const hint = judgmentPreviewHint(
+    question.type_id,
+    question.stem,
+    (question.payload?.content as { showStemField?: boolean } | undefined)?.showStemField,
+  );
   const options =
     question.payload?.runtimeOptions?.filter((o) => o.key === 'A' || o.key === 'B') ??
     JUDGMENT_TF_OPTIONS;
 
   return (
     <>
+      <PreviewQuestionStem question={question} textOverride={hint} />
       {needsAudio && (
         <PreviewAudioBar pending={!!audioPending} audioTranscript={audioTranscript || sentence} />
       )}
-      <div className="hsk-preview-judgment-hint">{hint}</div>
-      <PreviewImageBox pending={imagePending} imageUrl={imageUrl} alt={sentence || hint} size="lg" />
+      <PreviewImageBox pending={imagePending} imageUrl={imageUrl} alt={sentence ? sentence : undefined} size="lg" />
       {(sentence || sentencePinyin) && (
         <div className="hsk-preview-judgment-sentence">
           {sentencePinyin && <div className="hsk-preview-judgment-sentence-pinyin">{sentencePinyin}</div>}
@@ -202,8 +222,6 @@ export function PreviewJudgmentImage({
               aria-hidden
             >
               <span className="hsk-preview-judgment-tf-icon">{isTrue ? '✓' : '✗'}</span>
-              <span className="hsk-preview-judgment-tf-text">{opt.text ?? (isTrue ? '对' : '错')}</span>
-              {opt.pinyin && <span className="hsk-preview-judgment-tf-pinyin">{opt.pinyin}</span>}
             </div>
           );
         })}
@@ -214,18 +232,92 @@ export function PreviewJudgmentImage({
 
 export function PreviewTextOptions({
   options,
+  correctAnswer = '',
 }: {
-  options: Array<{ key: string; text: string }>;
+  options: Array<{ key: string; text: string; pinyin?: string }>;
+  correctAnswer?: string;
 }) {
+  const correctKey = (correctAnswer ?? '').trim().toUpperCase();
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [resultText, setResultText] = useState('');
+
+  const handleOptionClick = useCallback(
+    (key: string) => {
+      if (submitted) return;
+      setSelectedKey((prev) => (prev === key ? null : key));
+    },
+    [submitted],
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!selectedKey) return;
+    const isCorrect = correctKey ? selectedKey === correctKey : false;
+    setSubmitted(true);
+    setResultText(
+      isCorrect
+        ? '回答正确'
+        : correctKey
+          ? `回答错误，正确答案为 ${correctKey}`
+          : '已提交（未配置正确答案）',
+    );
+  }, [correctKey, selectedKey]);
+
   return (
-    <div className="hsk-preview-text-options">
-      {options.map((opt) => (
-        <div key={opt.key} className="hsk-preview-text-option">
-          <span className="hsk-preview-text-option-key">{opt.key}</span>
-          <span>{opt.text}</span>
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="hsk-preview-text-options">
+        {options.map((opt) => {
+          const text = opt.text?.trim() || '';
+          const pinyin = opt.pinyin?.trim() || '';
+          const selected = selectedKey === opt.key;
+          const rowClass = [
+            'hsk-preview-text-option',
+            'hsk-preview-text-option-btn',
+            selected ? 'is-selected' : '',
+            submitted && correctKey && opt.key === correctKey ? 'is-correct' : '',
+            submitted && selected && correctKey && selectedKey !== correctKey ? 'is-wrong' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const keyClass = [
+            'hsk-preview-text-option-key',
+            selected ? 'is-lit' : '',
+            submitted && correctKey && opt.key === correctKey ? 'is-correct' : '',
+            submitted && selected && correctKey && selectedKey !== correctKey ? 'is-wrong' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              className={rowClass}
+              onClick={() => handleOptionClick(opt.key)}
+              disabled={submitted}
+              aria-pressed={selected}
+            >
+              <span className={keyClass}>{opt.key}</span>
+              {pinyin && text ? (
+                <PinyinRubyText
+                  text={text}
+                  pinyin={pinyin}
+                  className="hsk-preview-text-option-ruby"
+                />
+              ) : (
+                <span className="hsk-preview-text-option-text">{text || `[选项${opt.key}]`}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <PreviewSubmitBar
+        canSubmit={Boolean(selectedKey)}
+        submitted={submitted}
+        resultText={resultText}
+        onSubmit={handleSubmit}
+      />
+    </>
   );
 }
 
@@ -255,6 +347,122 @@ export function PreviewImageOptionGrid({
         </div>
       ))}
     </div>
+  );
+}
+
+function PreviewSubmitBar({
+  canSubmit,
+  submitted,
+  resultText,
+  onSubmit,
+}: {
+  canSubmit: boolean;
+  submitted: boolean;
+  resultText?: string;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="hsk-preview-submit-wrap">
+      {submitted && resultText && (
+        <p className={`hsk-preview-submit-result${resultText.includes('正确') ? ' is-success' : ' is-error'}`}>
+          {resultText}
+        </p>
+      )}
+      <button
+        type="button"
+        className="hsk-preview-submit-btn"
+        disabled={!canSubmit || submitted}
+        onClick={onSubmit}
+      >
+        提交
+      </button>
+    </div>
+  );
+}
+
+/** L01 听音选图：可点选 + 提交（对齐 HSK-Exams 答题流程） */
+export function PreviewL01ImageChoice({
+  question,
+  audioPending,
+  audioTranscript,
+  imagePending,
+}: {
+  question: HskQuestionRow;
+  audioPending: boolean;
+  audioTranscript?: string;
+  imagePending?: boolean;
+}) {
+  const options = normalizePreviewOptions(question);
+  const correctKey = (question.correctAnswer ?? '').trim().toUpperCase().charAt(0) || 'A';
+  const pending = imagePending ?? isImagePending(question);
+
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [resultText, setResultText] = useState('');
+
+  const handleOptionClick = useCallback(
+    (key: string) => {
+      if (submitted) return;
+      setSelectedKey((prev) => (prev === key ? null : key));
+    },
+    [submitted],
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!selectedKey) return;
+    const isCorrect = selectedKey === correctKey;
+    setSubmitted(true);
+    setResultText(isCorrect ? '回答正确' : `回答错误，正确答案为 ${correctKey}`);
+  }, [correctKey, selectedKey]);
+
+  return (
+    <>
+      <PreviewQuestionStem question={question} />
+      <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
+      <div className="hsk-preview-image-option-grid">
+        {options.map((opt) => {
+          const selected = selectedKey === opt.key;
+          const cardClass = [
+            'hsk-preview-image-option-card',
+            'hsk-preview-image-option-btn',
+            selected ? 'is-selected' : '',
+            submitted && opt.key === correctKey ? 'is-correct' : '',
+            submitted && selected && selectedKey !== correctKey ? 'is-wrong' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              className={cardClass}
+              onClick={() => handleOptionClick(opt.key)}
+              disabled={submitted}
+              aria-pressed={selected}
+            >
+              <span className="hsk-preview-image-option-label">{opt.key}</span>
+              {opt.image ? (
+                <img src={opt.image} alt={opt.text || opt.key} className="hsk-preview-image-option-img" />
+              ) : (
+                <div className={`hsk-preview-image-box is-sm is-placeholder${pending ? ' is-pending' : ''}`}>
+                  {pending && <span className="hsk-preview-status-badge is-corner">⏳ 待配图</span>}
+                  <span className="hsk-preview-image-icon" aria-hidden>
+                    ⏳
+                  </span>
+                  <span className="hsk-preview-image-label">待配图</span>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <PreviewSubmitBar
+        canSubmit={Boolean(selectedKey)}
+        submitted={submitted}
+        resultText={resultText}
+        onSubmit={handleSubmit}
+      />
+    </>
   );
 }
 
@@ -319,11 +527,42 @@ export function PreviewL02Match({
   const [selectedSubKey, setSelectedSubKey] = useState<string | null>(null);
   const [selectedImageKey, setSelectedImageKey] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [resultText, setResultText] = useState('');
 
   const effectiveAnswers = useMemo(
     () => ({ ...fixedExampleAnswers, ...answers }),
     [fixedExampleAnswers, answers],
   );
+
+  const scoringSubs = useMemo(
+    () =>
+      subQuestions
+        .map((sub, idx) => ({ sub, idx, subKey: l02SubKey(sub, idx) }))
+        .filter(({ sub }) => !sub.isExample),
+    [subQuestions],
+  );
+
+  const canSubmit =
+    scoringSubs.length > 0 &&
+    scoringSubs.every(({ subKey }) => Boolean(effectiveAnswers[subKey]));
+
+  const handleSubmit = useCallback(() => {
+    if (!canSubmit) return;
+    const wrongCount = scoringSubs.filter(({ sub, subKey }) => {
+      const expected = (sub.answer ?? '').trim().toUpperCase();
+      const actual = (effectiveAnswers[subKey] ?? '').trim().toUpperCase();
+      return expected && actual !== expected;
+    }).length;
+    setSubmitted(true);
+    setSelectedSubKey(null);
+    setSelectedImageKey(null);
+    setResultText(
+      wrongCount === 0
+        ? '全部正确'
+        : `${wrongCount} 题有误，请检查后重新作答`,
+    );
+  }, [canSubmit, effectiveAnswers, scoringSubs]);
 
   const imageToSub = useMemo(() => {
     const map: Record<string, string> = {};
@@ -357,7 +596,7 @@ export function PreviewL02Match({
 
   const handleSubClick = useCallback(
     (subKey: string, isExample: boolean) => {
-      if (isExample) return;
+      if (submitted || isExample) return;
       if (answers[subKey]) {
         clearSubAnswer(subKey);
         setSelectedSubKey(null);
@@ -371,11 +610,12 @@ export function PreviewL02Match({
       setSelectedSubKey(subKey);
       setSelectedImageKey(null);
     },
-    [answers, clearSubAnswer, selectedSubKey],
+    [answers, clearSubAnswer, selectedSubKey, submitted],
   );
 
   const handleImageClick = useCallback(
     (imageKey: string) => {
+      if (submitted) return;
       const exampleSubKey = imageToSub[imageKey];
       if (exampleSubKey && fixedExampleAnswers[exampleSubKey]) return;
 
@@ -393,17 +633,15 @@ export function PreviewL02Match({
       }
       setSelectedImageKey((prev) => (prev === imageKey ? null : imageKey));
     },
-    [assignPair, clearSubAnswer, fixedExampleAnswers, imageToSub, selectedSubKey],
+    [assignPair, clearSubAnswer, fixedExampleAnswers, imageToSub, selectedSubKey, submitted],
   );
 
   let scoringIndex = 0;
 
   return (
     <>
+      <PreviewQuestionStem question={question} />
       <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
-      <div className="hsk-preview-l02-hint">
-        请先点击小题，再点击对应图片完成配对；再次点击可取消配对
-      </div>
       <div className="hsk-preview-l02-range">
         {hasExample && scoringCount > 0
           ? `例如 · 第 1-${scoringCount} 题`
@@ -427,6 +665,7 @@ export function PreviewL02Match({
                 selected={!isExample && selectedSubKey === subKey}
                 matched={Boolean(effectiveAnswers[subKey])}
                 onClick={() => handleSubClick(subKey, isExample)}
+                disabled={isExample || submitted}
               />
             );
           })}
@@ -442,6 +681,7 @@ export function PreviewL02Match({
                 type="button"
                 className={`hsk-preview-l02-image-card${matched ? ' is-matched' : ''}${matchedToExample ? ' is-example-match' : ''}${selected ? ' is-selected' : ''}`}
                 onClick={() => handleImageClick(opt.key)}
+                disabled={submitted}
               >
                 <span className="hsk-preview-l02-image-label">{opt.key}</span>
                 {opt.image ? (
@@ -454,6 +694,12 @@ export function PreviewL02Match({
           })}
         </div>
       </div>
+      <PreviewSubmitBar
+        canSubmit={canSubmit}
+        submitted={submitted}
+        resultText={resultText}
+        onSubmit={handleSubmit}
+      />
     </>
   );
 }
@@ -466,6 +712,7 @@ function PreviewL02QuestionRow({
   selected,
   matched,
   onClick,
+  disabled,
 }: {
   index: number;
   sub: HskSubQuestionPayload;
@@ -474,6 +721,7 @@ function PreviewL02QuestionRow({
   selected: boolean;
   matched: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   const rowClass = [
     'hsk-preview-l02-question-row',
@@ -489,7 +737,7 @@ function PreviewL02QuestionRow({
       type="button"
       className={rowClass}
       onClick={onClick}
-      disabled={isExample}
+      disabled={disabled ?? isExample}
       aria-label={isExample ? '例题' : `第 ${index + 1} 题`}
     >
       {isExample ? (
@@ -598,9 +846,7 @@ export function PreviewR01Match({ question }: { question: HskQuestionRow }) {
 
   return (
     <>
-      <div className="hsk-preview-r01-hint">
-        请先点击文字，再点击对应图片完成配对；再次点击可取消配对
-      </div>
+      <PreviewQuestionStem question={question} />
       <div className="hsk-preview-r01-body">
         <div className="hsk-preview-r01-text-col">
           <div className="hsk-preview-r01-col-title">文字</div>
@@ -809,9 +1055,7 @@ export function PreviewR02Match({ question }: { question: HskQuestionRow }) {
 
   return (
     <>
-      <div className="hsk-preview-r01-hint">
-        请先点击问题，再点击对应回答完成配对；再次点击可取消配对
-      </div>
+      <PreviewQuestionStem question={question} />
       {hasExample && (
         <div className="hsk-preview-r02-range">
           {scoringCount > 0 ? `例如 · 第 1-${scoringCount} 题` : '例如'}
@@ -1038,9 +1282,7 @@ export function PreviewR03WordFill({ question }: { question: HskQuestionRow }) {
 
   return (
     <>
-      <div className="hsk-preview-r01-hint">
-        请先点击句子选中，再点击词语填入；再次点击已填句子或词语可取消
-      </div>
+      <PreviewQuestionStem question={question} />
       {hasExample && (
         <div className="hsk-preview-r02-range">
           {scoringCount > 0 ? `例如 · 第 1-${scoringCount} 题` : '例如'}
@@ -1203,6 +1445,7 @@ export function PreviewR04Sort({ question }: { question: HskQuestionRow }) {
 
   return (
     <>
+      <PreviewQuestionStem question={question} />
       <div className="hsk-preview-r04-sort-list">
         {shuffled.map((segment) => {
           const used = usedKeys.has(segment.key);
@@ -1280,7 +1523,7 @@ type PinyinRenderItem =
   | { kind: 'plain'; key: string; char: string }
   | { kind: 'blank-r03'; key: string; embeddedPinyin?: string }
   | { kind: 'blank-r05'; key: string; blankIndex: number; embeddedPinyin?: string }
-  | { kind: 'blank-r06'; key: string; blankIndex: number };
+  | { kind: 'blank-r06'; key: string; blankIndex: number; embeddedPinyin?: string };
 
 /**
  * 将 paragraph tokens + 词级拼音 组合成可渲染的 PinyinRenderItem 列表。
@@ -1309,7 +1552,12 @@ function buildPinyinRenderItems(
           embeddedPinyin: token.embeddedPinyin,
         });
       } else if (blankKind === 'r06') {
-        items.push({ kind: 'blank-r06', key: `bl-${token.index}`, blankIndex: token.index });
+        items.push({
+          kind: 'blank-r06',
+          key: `bl-${token.index}`,
+          blankIndex: token.index,
+          embeddedPinyin: token.embeddedPinyin,
+        });
       } else {
         items.push({
           kind: 'blank-r05',
@@ -1387,6 +1635,33 @@ function RubyWordItem({ pinyin, chars }: { pinyin: string; chars: string[] }) {
     <span className="hsk-preview-r05-word-ruby-wrap">
       <span className="hsk-preview-r05-word-ruby-py">{pinyin}</span>
       <span className="hsk-preview-r05-word-ruby-chars">{chars.join('')}</span>
+    </span>
+  );
+}
+
+/** 选项按钮：A. + word-ruby（整词拼音在上，如 xiaoyu ↔ 小雨） */
+function PreviewOptionWordRuby({
+  optionKey,
+  text,
+  pinyin,
+}: {
+  optionKey: string;
+  text?: string;
+  pinyin?: string;
+}) {
+  const han = text?.trim() ?? '';
+  const py = pinyin?.trim() ?? '';
+  if (!han) {
+    return <span className="hsk-preview-option-key-label">{optionKey}.</span>;
+  }
+  return (
+    <span className="hsk-preview-option-ruby-row">
+      <span className="hsk-preview-option-key">{optionKey}.</span>
+      {py ? (
+        <RubyWordItem pinyin={py} chars={[...han]} />
+      ) : (
+        <span className="hsk-preview-option-text">{han}</span>
+      )}
     </span>
   );
 }
@@ -1598,6 +1873,7 @@ export function PreviewR05ParagraphFill({ question }: { question: HskQuestionRow
 
   return (
     <>
+      <PreviewQuestionStem question={question} />
       <div className="hsk-preview-r05-passage">
         <div className="hsk-preview-r05-section-title">📄 阅读材料</div>
         {imageUrl && (
@@ -1644,10 +1920,11 @@ export function PreviewR05ParagraphFill({ question }: { question: HskQuestionRow
                 className={itemClass}
                 onClick={() => handleWordClick(option.key)}
               >
-                <span className="hsk-preview-r05-word-label">{wordOptionLabel(option)}</span>
-                {option.pinyin?.trim() && (
-                  <span className="hsk-preview-r05-word-pinyin">{option.pinyin}</span>
-                )}
+                <PreviewOptionWordRuby
+                  optionKey={option.key}
+                  text={option.text}
+                  pinyin={option.pinyin}
+                />
               </button>
             );
           })}
@@ -1667,7 +1944,6 @@ export function PreviewR05ParagraphFill({ question }: { question: HskQuestionRow
 function PreviewR06ArticleBody({
   article,
   articlePinyin,
-  blankPinyins,
   blanks,
   answers,
   activeBlankIndex,
@@ -1675,7 +1951,6 @@ function PreviewR06ArticleBody({
 }: {
   article: string;
   articlePinyin: string;
-  blankPinyins: Record<number, string>;
   blanks: HskR06Blank[];
   answers: Record<number, string>;
   activeBlankIndex: number | null;
@@ -1695,8 +1970,13 @@ function PreviewR06ArticleBody({
           const blank = blanks.find((b) => b.index === item.blankIndex);
           const answerKey = answers[item.blankIndex];
           const filled = Boolean(answerKey);
-          const display = blank ? resolveR06BlankFillText(blank, answerKey) : String(item.blankIndex);
-          const py = !filled ? blankPinyins[item.blankIndex]?.trim() : '';
+          const display = resolveR06BlankPreviewLabel(blank, item.blankIndex, answerKey);
+          const py = resolveR06BlankPreviewPinyin(
+            blank,
+            item.blankIndex,
+            answerKey,
+            item.embeddedPinyin,
+          );
           const blankClass = [
             'hsk-preview-r06-blank',
             filled ? 'is-filled' : '',
@@ -1783,69 +2063,179 @@ export function PreviewR06Cloze({ question }: { question: HskQuestionRow }) {
 
   return (
     <>
-      <div className="hsk-preview-r06-passage">
-        <div className="hsk-preview-r05-section-title">📄 阅读材料</div>
-        {resolved.article.trim() ? (
-          <PreviewR06ArticleBody
-            article={resolved.article}
-            articlePinyin={resolved.articlePinyin}
-            blankPinyins={resolved.blankPinyins}
-            blanks={resolved.blanks}
-            answers={answers}
-            activeBlankIndex={activeBlankIndex}
-            onBlankClick={handleBlankClick}
-          />
-        ) : (
-          <p className="hsk-preview-r05-passage-empty">暂无文章内容</p>
-        )}
-      </div>
+      <PreviewQuestionStem question={question} />
+      <div className="hsk-preview-r06-panel">
+        <div className="hsk-preview-r06-passage">
+          <div className="hsk-preview-r05-section-title">📄 阅读材料</div>
+          {resolved.article.trim() ? (
+            <PreviewR06ArticleBody
+              article={resolved.article}
+              articlePinyin={resolved.articlePinyin}
+              blanks={resolved.blanks}
+              answers={answers}
+              activeBlankIndex={activeBlankIndex}
+              onBlankClick={handleBlankClick}
+            />
+          ) : (
+            <p className="hsk-preview-r05-passage-empty">暂无文章内容</p>
+          )}
+        </div>
 
-      <div className="hsk-preview-r06-choices">
-        <div className="hsk-preview-r05-section-title">✏️ 选择填空</div>
-        <p className="hsk-preview-r06-hint">点击下方选项填入文章中的对应空白；再次点击可取消</p>
-        {resolved.blanks.map((blank, idx) => {
-          const blockActive = activeBlankIndex === blank.index;
-          const blockClass = [
-            'hsk-preview-r06-choice-block',
-            blockActive ? 'is-active' : '',
+        <div className="hsk-preview-r06-choices">
+          <div className="hsk-preview-r05-section-title">✏️ 选择填空</div>
+          <p className="hsk-preview-r06-hint">点击下方选项填入文章中的对应空白；再次点击可取消</p>
+          {resolved.blanks.map((blank, idx) => {
+            const blockActive = activeBlankIndex === blank.index;
+            const blockClass = [
+              'hsk-preview-r06-choice-block',
+              blockActive ? 'is-active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            return (
+              <div key={`${blank.index}-${idx}`} className={blockClass}>
+                <div className="hsk-preview-r06-choice-title">{idx + 1}.</div>
+                <div className="hsk-preview-r06-choice-grid">
+                  {blank.options.map((option) => {
+                    const selected = answers[blank.index] === option.key;
+                    const itemClass = [
+                      'hsk-preview-r06-choice-item',
+                      selected ? 'is-selected' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={itemClass}
+                        onClick={() => handleOptionClick(blank.index, option.key)}
+                      >
+                        <PreviewOptionWordRuby
+                          optionKey={option.key}
+                          text={option.text}
+                          pinyin={option.pinyin}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hsk-preview-r06-submit-wrap">
+          <button type="button" className="hsk-preview-r04-submit-btn" disabled>
+            提交
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function r07SubKey(sub: HskSubQuestionPayload, index: number): string {
+  return String(sub.id ?? index + 1);
+}
+
+function PreviewR07SubQuestionRow({
+  index,
+  sub,
+  selectedKey,
+  submitted,
+  onSelect,
+}: {
+  index: number;
+  sub: HskSubQuestionPayload;
+  selectedKey: string;
+  submitted: boolean;
+  onSelect: (optionKey: string) => void;
+}) {
+  const stem = sub.question?.trim() ?? '';
+  const correctKey = (sub.answer ?? '').trim().toUpperCase();
+  const options =
+    sub.options && sub.options.length >= 2
+      ? sub.options
+      : [
+          { key: 'A', text: '' },
+          { key: 'B', text: '' },
+          { key: 'C', text: '' },
+          { key: 'D', text: '' },
+        ];
+
+  const slotClass = [
+    'hsk-preview-r07-answer-slot',
+    selectedKey ? 'is-filled' : '',
+    submitted && selectedKey && selectedKey.toUpperCase() === correctKey ? 'is-correct' : '',
+    submitted && selectedKey && correctKey && selectedKey.toUpperCase() !== correctKey
+      ? 'is-wrong'
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <div className="hsk-preview-r07-question">
+      <div className="hsk-preview-r07-question-head">
+        <div className="hsk-preview-r07-question-head-main">
+          <span className="hsk-preview-r07-question-id">{formatR07SubDisplayId(sub, index)}.</span>
+          {stem ? <span className="hsk-preview-r07-question-stem">{stem}</span> : null}
+        </div>
+        <div className={slotClass} aria-hidden>
+          {selectedKey || '?'}
+        </div>
+      </div>
+      <div className="hsk-preview-r07-option-list">
+        {options.map((opt) => {
+          const text = opt.text?.trim() || '';
+          const pinyin = opt.pinyin?.trim() || '';
+          const selected = selectedKey === opt.key;
+          const rowClass = [
+            'hsk-preview-r07-option-item',
+            selected ? 'is-selected' : '',
+            submitted && correctKey && opt.key.toUpperCase() === correctKey ? 'is-correct' : '',
+            submitted && selected && correctKey && selectedKey.toUpperCase() !== correctKey
+              ? 'is-wrong'
+              : '',
           ]
             .filter(Boolean)
             .join(' ');
+          const keyClass = [
+            'hsk-preview-r07-option-key',
+            selected ? 'is-lit' : '',
+            submitted && correctKey && opt.key.toUpperCase() === correctKey ? 'is-correct' : '',
+            submitted && selected && correctKey && selectedKey.toUpperCase() !== correctKey
+              ? 'is-wrong'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+
           return (
-            <div key={`${blank.index}-${idx}`} className={blockClass}>
-              <div className="hsk-preview-r06-choice-title">{idx + 1}.</div>
-              <div className="hsk-preview-r06-choice-grid">
-                {blank.options.map((option) => {
-                  const selected = answers[blank.index] === option.key;
-                  const itemClass = [
-                    'hsk-preview-r06-choice-item',
-                    selected ? 'is-selected' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ');
-                  return (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className={itemClass}
-                      onClick={() => handleOptionClick(blank.index, option.key)}
-                    >
-                      {blankOptionLabel(option)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <button
+              key={opt.key}
+              type="button"
+              className={rowClass}
+              onClick={() => onSelect(opt.key)}
+              disabled={submitted}
+              aria-pressed={selected}
+            >
+              <span className={keyClass}>{opt.key}</span>
+              {pinyin && text ? (
+                <PinyinRubyText
+                  text={text}
+                  pinyin={pinyin}
+                  className="hsk-preview-r07-option-ruby"
+                />
+              ) : (
+                <span className="hsk-preview-r07-option-text">{text || `[选项${opt.key}]`}</span>
+              )}
+            </button>
           );
         })}
       </div>
-
-      <div className="hsk-preview-r04-submit-wrap">
-        <button type="button" className="hsk-preview-r04-submit-btn" disabled>
-          提交
-        </button>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -1860,45 +2250,89 @@ export function PreviewR07Reading({ question }: { question: HskQuestionRow }) {
     question.correctAnswer,
   );
 
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [resultText, setResultText] = useState('');
+
+  const subKeys = useMemo(
+    () => resolved.subQuestions.map((sub, idx) => r07SubKey(sub, idx)),
+    [resolved.subQuestions],
+  );
+
+  const canSubmit =
+    resolved.subQuestions.length > 0 && subKeys.every((key) => Boolean(answers[key]));
+
+  const handleSelect = useCallback(
+    (subKey: string, optionKey: string) => {
+      if (submitted) return;
+      setAnswers((prev) => {
+        if (prev[subKey] === optionKey) {
+          const next = { ...prev };
+          delete next[subKey];
+          return next;
+        }
+        return { ...prev, [subKey]: optionKey };
+      });
+    },
+    [submitted],
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!canSubmit) return;
+    const wrongCount = resolved.subQuestions.filter((sub, idx) => {
+      const expected = (sub.answer ?? '').trim().toUpperCase();
+      const actual = (answers[subKeys[idx]] ?? '').trim().toUpperCase();
+      return expected && actual !== expected;
+    }).length;
+    setSubmitted(true);
+    setResultText(
+      wrongCount === 0 ? '全部正确' : `${wrongCount} 题有误，请检查后重新作答`,
+    );
+  }, [answers, canSubmit, resolved.subQuestions, subKeys]);
+
   return (
     <>
+      <PreviewQuestionStem question={question} />
       {resolved.article.trim() && (
         <div className="hsk-preview-r07-passage">
           <div className="hsk-preview-r05-section-title">📄 阅读材料</div>
-          {resolved.articlePinyin?.trim() && (
-            <div className="hsk-preview-r05-passage-pinyin">{resolved.articlePinyin}</div>
+          {looksLikeRichArticleHtml(resolved.article) ? (
+            <RichArticlePassagePreview
+              html={resolved.article}
+              pinyin={resolved.articlePinyin}
+              className="hsk-preview-r07-passage-rich"
+            />
+          ) : (
+            <div className="hsk-preview-r07-passage-text" style={{ textIndent: '2em' }}>
+              {resolved.articlePinyin?.trim() ? (
+                <PinyinRubyText text={resolved.article} pinyin={resolved.articlePinyin} />
+              ) : (
+                resolved.article
+              )}
+            </div>
           )}
-          <div className="hsk-preview-r07-passage-text" style={{ textIndent: '2em' }}>
-            {resolved.article}
-          </div>
         </div>
       )}
 
       <div className="hsk-preview-r07-questions">
-        {resolved.subQuestions.map((sub, idx) => {
-          const displayId = formatR07SubDisplayId(sub, idx);
-          const stem = sub.question?.trim();
-          const options = sub.options ?? [];
-          return (
-            <div key={`${displayId}-${idx}`} className="hsk-preview-r07-question">
-              <div className="hsk-preview-r07-question-head">
-                <span className="hsk-preview-r07-question-id">{displayId}.</span>
-                {stem && <span className="hsk-preview-r07-question-stem">{stem}</span>}
-                <span className="hsk-preview-r07-answer-slot" aria-hidden>
-                  ?
-                </span>
-              </div>
-              <div className="hsk-preview-r07-option-keys">
-                {options.map((option) => (
-                  <span key={option.key} className="hsk-preview-r07-option-key">
-                    {option.key}
-                  </span>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {resolved.subQuestions.map((sub, idx) => (
+          <PreviewR07SubQuestionRow
+            key={`${subKeys[idx]}-${idx}`}
+            index={idx}
+            sub={sub}
+            selectedKey={answers[subKeys[idx]] ?? ''}
+            submitted={submitted}
+            onSelect={(optionKey) => handleSelect(subKeys[idx], optionKey)}
+          />
+        ))}
       </div>
+
+      <PreviewSubmitBar
+        canSubmit={canSubmit}
+        submitted={submitted}
+        resultText={resultText}
+        onSubmit={handleSubmit}
+      />
     </>
   );
 }
@@ -1914,22 +2348,93 @@ export function PreviewL05MultiSub({
   audioTranscript?: string;
 }) {
   const subQuestions = resolveL05SubQuestions(question.payload?.subQuestions);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [resultText, setResultText] = useState('');
+
+  const subKeys = useMemo(
+    () => subQuestions.map((sub, idx) => l05SubKey(sub, idx)),
+    [subQuestions],
+  );
+
+  const canSubmit =
+    subQuestions.length > 0 && subKeys.every((key) => Boolean(answers[key]));
+
+  const handleSelect = useCallback(
+    (subKey: string, optionKey: string) => {
+      if (submitted) return;
+      setAnswers((prev) => {
+        if (prev[subKey] === optionKey) {
+          const next = { ...prev };
+          delete next[subKey];
+          return next;
+        }
+        return { ...prev, [subKey]: optionKey };
+      });
+    },
+    [submitted],
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!canSubmit) return;
+    const wrongCount = subQuestions.filter((sub, idx) => {
+      const expected = (sub.answer ?? '').trim().toUpperCase();
+      const actual = (answers[subKeys[idx]] ?? '').trim().toUpperCase();
+      return expected && actual !== expected;
+    }).length;
+    setSubmitted(true);
+    setResultText(
+      wrongCount === 0
+        ? '全部正确'
+        : `${wrongCount} 题有误，请检查后重新作答`,
+    );
+  }, [answers, canSubmit, subKeys, subQuestions]);
 
   return (
     <>
+      <PreviewQuestionStem question={question} />
       <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
       <div className="hsk-preview-l05-list">
         {subQuestions.map((sub, idx) => (
-          <PreviewL05SubQuestionRow key={`${formatL05SubDisplayId(sub, idx)}-${idx}`} index={idx} sub={sub} />
+          <PreviewL05SubQuestionRow
+            key={`${subKeys[idx]}-${idx}`}
+            index={idx}
+            sub={sub}
+            selectedKey={answers[subKeys[idx]] ?? ''}
+            submitted={submitted}
+            onSelect={(optionKey) => handleSelect(subKeys[idx], optionKey)}
+          />
         ))}
       </div>
+      <PreviewSubmitBar
+        canSubmit={canSubmit}
+        submitted={submitted}
+        resultText={resultText}
+        onSubmit={handleSubmit}
+      />
     </>
   );
 }
 
-function PreviewL05SubQuestionRow({ index, sub }: { index: number; sub: HskSubQuestionPayload }) {
-  const displayId = formatL05SubDisplayId(sub, index);
+function l05SubKey(sub: HskSubQuestionPayload, index: number): string {
+  return String(sub.id ?? index + 1);
+}
+
+function PreviewL05SubQuestionRow({
+  index,
+  sub,
+  selectedKey,
+  submitted,
+  onSelect,
+}: {
+  index: number;
+  sub: HskSubQuestionPayload;
+  selectedKey: string;
+  submitted: boolean;
+  onSelect: (optionKey: string) => void;
+}) {
   const stem = sub.question?.trim() ?? '';
+  const correctKey = (sub.answer ?? '').trim().toUpperCase();
   const options =
     sub.options && sub.options.length >= 2
       ? sub.options
@@ -1943,20 +2448,66 @@ function PreviewL05SubQuestionRow({ index, sub }: { index: number; sub: HskSubQu
   return (
     <div className="hsk-preview-l05-sub">
       <div className="hsk-preview-l05-sub-head">
-        <span className="hsk-preview-l05-sub-title">
-          {displayId}.{stem ? ` ${stem}` : ''}
-        </span>
-        <div className="hsk-preview-l05-answer-slot" aria-hidden>
-          ?
+        <div className="hsk-preview-l05-sub-head-main">
+          <span className="hsk-preview-l05-sub-num">{index + 1}.</span>
+          {stem ? <span className="hsk-preview-l05-sub-stem">{stem}</span> : null}
+        </div>
+        <div
+          className={`hsk-preview-l05-answer-slot${selectedKey ? ' is-filled' : ''}${submitted && selectedKey && selectedKey.toUpperCase() === correctKey ? ' is-correct' : ''}${submitted && selectedKey && selectedKey.toUpperCase() !== correctKey ? ' is-wrong' : ''}`}
+          aria-hidden
+        >
+          {selectedKey || '?'}
         </div>
       </div>
       <div className="hsk-preview-l05-sub-options">
-        {options.map((opt) => (
-          <div key={opt.key} className="hsk-preview-l05-sub-option">
-            <span className="hsk-preview-l05-sub-option-key">{opt.key}</span>
-            <span className="hsk-preview-l05-sub-option-text">{opt.text?.trim() || ''}</span>
-          </div>
-        ))}
+        {options.map((opt) => {
+          const text = opt.text?.trim() || '';
+          const pinyin = opt.pinyin?.trim() || '';
+          const selected = selectedKey === opt.key;
+          const rowClass = [
+            'hsk-preview-l05-sub-option',
+            'hsk-preview-l05-sub-option-btn',
+            selected ? 'is-selected' : '',
+            submitted && correctKey && opt.key.toUpperCase() === correctKey ? 'is-correct' : '',
+            submitted && selected && correctKey && selectedKey.toUpperCase() !== correctKey
+              ? 'is-wrong'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const keyClass = [
+            'hsk-preview-l05-sub-option-key',
+            selected ? 'is-lit' : '',
+            submitted && correctKey && opt.key.toUpperCase() === correctKey ? 'is-correct' : '',
+            submitted && selected && correctKey && selectedKey.toUpperCase() !== correctKey
+              ? 'is-wrong'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              className={rowClass}
+              onClick={() => onSelect(opt.key)}
+              disabled={submitted}
+              aria-pressed={selected}
+            >
+              <span className={keyClass}>{opt.key}</span>
+              {pinyin && text ? (
+                <PinyinRubyText
+                  text={text}
+                  pinyin={pinyin}
+                  className="hsk-preview-l05-sub-option-ruby"
+                />
+              ) : (
+                <span className="hsk-preview-l05-sub-option-text">{text || `[选项${opt.key}]`}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1993,6 +2544,7 @@ export function PreviewR09ImageWord({ question }: { question: HskQuestionRow }) 
 
   return (
     <div className="hsk-preview-r09-wrap">
+      <PreviewQuestionStem question={question} />
       <div className="hsk-preview-r09-word-bank">
         {options.map((opt) => (
           <button
@@ -2198,38 +2750,159 @@ export function PreviewW01ComponentMatch({ question }: { question: HskQuestionRo
   const componentParts = resolveW01ComponentParts(question);
   const wordMatches = resolveW01WordMatches(question);
 
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [resultText, setResultText] = useState('');
+
+  const clearMatchAnswer = useCallback((matchId: string) => {
+    setAnswers((prev) => {
+      if (!prev[matchId]) return prev;
+      const next = { ...prev };
+      delete next[matchId];
+      return next;
+    });
+  }, []);
+
+  const assignPart = useCallback((matchId: string, partKey: string) => {
+    setAnswers((prev) => {
+      const next = { ...prev };
+      for (const [id, key] of Object.entries(next)) {
+        if (id !== matchId && key === partKey) {
+          delete next[id];
+        }
+      }
+      next[matchId] = partKey;
+      return next;
+    });
+  }, []);
+
+  const handleMatchRowClick = useCallback(
+    (matchId: string) => {
+      if (submitted) return;
+      if (answers[matchId]) {
+        clearMatchAnswer(matchId);
+        setSelectedMatchId(null);
+        return;
+      }
+      setSelectedMatchId((prev) => (prev === matchId ? null : matchId));
+    },
+    [answers, clearMatchAnswer, submitted],
+  );
+
+  const handlePartClick = useCallback(
+    (partKey: string) => {
+      if (submitted || !selectedMatchId) return;
+      assignPart(selectedMatchId, partKey);
+      setSelectedMatchId(null);
+    },
+    [assignPart, selectedMatchId, submitted],
+  );
+
+  const canSubmit = wordMatches.length > 0 && wordMatches.every((match) => Boolean(answers[match.id]));
+
+  const handleSubmit = useCallback(() => {
+    if (!canSubmit) return;
+    const wrongCount = wordMatches.filter((match) => answers[match.id] !== match.componentKey).length;
+    setSubmitted(true);
+    setResultText(
+      wrongCount === 0
+        ? '全部正确'
+        : `${wrongCount} 题有误，请检查后重新作答`,
+    );
+  }, [answers, canSubmit, wordMatches]);
+
   return (
     <div className="hsk-preview-w01-wrap">
+      <PreviewQuestionStem question={question} />
       <div className="hsk-preview-w01-parts-label">部件选项</div>
       <div className="hsk-preview-w01-parts-row">
-        {componentParts.map((part) => (
-          <span key={part.key} className="hsk-preview-w01-part-chip">
-            <span className="hsk-preview-w01-part-text">{part.text || '?'}</span>
-            <span className="hsk-preview-w01-part-key">{part.key}</span>
-          </span>
-        ))}
+        {componentParts.map((part) => {
+          const usedByMatchId = Object.entries(answers).find(([, key]) => key === part.key)?.[0];
+          const chipClass = [
+            'hsk-preview-w01-part-chip',
+            'hsk-preview-w01-part-btn',
+            selectedMatchId ? 'is-selectable' : '',
+            usedByMatchId ? 'is-used' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          return (
+            <button
+              key={part.key}
+              type="button"
+              className={chipClass}
+              onClick={() => handlePartClick(part.key)}
+              disabled={submitted || !selectedMatchId}
+            >
+              <span className="hsk-preview-w01-part-key">{part.key}</span>
+              <span className="hsk-preview-w01-part-text">{part.text || '?'}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="hsk-preview-w01-match-list">
-        {wordMatches.map((match, idx) => (
-          <div key={`${match.id}-${idx}`} className="hsk-preview-w01-match-row">
-            <div className="hsk-preview-w01-match-incomplete">
-              {match.incompletePinyin && (
-                <div className="hsk-preview-w01-match-sub">{match.incompletePinyin}</div>
-              )}
-              <div className="hsk-preview-w01-match-main">{match.incomplete || '?'}</div>
-            </div>
-            <span className="hsk-preview-w01-match-arrow" aria-hidden>
-              →
-            </span>
-            <div className="hsk-preview-w01-match-complete">
-              {match.pinyin && <div className="hsk-preview-w01-match-sub">{match.pinyin}</div>}
-              <div className="hsk-preview-w01-match-main">{match.word || '?'}</div>
-            </div>
-            <div className="hsk-preview-w01-match-answer">{match.componentKey || '?'}</div>
-          </div>
-        ))}
+        {wordMatches.map((match, idx) => {
+          const assignedKey = answers[match.id] ?? '';
+          const isSelected = selectedMatchId === match.id;
+          const isMatched = Boolean(assignedKey);
+          const isCorrect = submitted && assignedKey === match.componentKey;
+          const isWrong = submitted && assignedKey && assignedKey !== match.componentKey;
+          const rowClass = [
+            'hsk-preview-w01-match-row',
+            'hsk-preview-w01-match-row-btn',
+            isSelected ? 'is-selected' : '',
+            isMatched ? 'is-matched' : '',
+            isCorrect ? 'is-correct' : '',
+            isWrong ? 'is-wrong' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const answerClass = [
+            'hsk-preview-w01-match-answer',
+            isMatched ? 'is-filled' : '',
+            isCorrect ? 'is-correct' : '',
+            isWrong ? 'is-wrong' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+          return (
+            <button
+              key={`${match.id}-${idx}`}
+              type="button"
+              className={rowClass}
+              onClick={() => handleMatchRowClick(match.id)}
+              disabled={submitted}
+            >
+              <div className="hsk-preview-w01-match-incomplete">
+                {match.incompletePinyin && (
+                  <div className="hsk-preview-w01-match-sub">{match.incompletePinyin}</div>
+                )}
+                <div className="hsk-preview-w01-match-main">{match.incomplete || '?'}</div>
+              </div>
+              <span className="hsk-preview-w01-match-arrow" aria-hidden>
+                →
+              </span>
+              <div className="hsk-preview-w01-match-complete">
+                {match.pinyin && <div className="hsk-preview-w01-match-sub">{match.pinyin}</div>}
+                <div className="hsk-preview-w01-match-main">{match.word || '?'}</div>
+              </div>
+              <div className={answerClass} aria-hidden>
+                {assignedKey || '?'}
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      <PreviewSubmitBar
+        canSubmit={canSubmit}
+        submitted={submitted}
+        resultText={resultText}
+        onSubmit={handleSubmit}
+      />
     </div>
   );
 }
@@ -2381,7 +3054,7 @@ export function PreviewW02PinyinFill({ question }: { question: HskQuestionRow })
 
   return (
     <div className="hsk-preview-w02-wrap">
-      <div className="hsk-preview-w02-hint">{W02_PREVIEW_HINT}</div>
+      <PreviewQuestionStem question={question} />
       <div className="hsk-preview-w02-list">
         {hints.map((hint, idx) => (
           <PreviewW02SentenceLine
@@ -2400,12 +3073,13 @@ export function PreviewW02PinyinFill({ question }: { question: HskQuestionRow })
 
 /** W03 看图造句（对齐 HSK-Exams ExamRenderer） */
 export function PreviewW03PictureSentence({ question }: { question: HskQuestionRow }) {
-  const { keywords, word } = resolveW03Content(question);
+  const { word } = resolveW03Content(question);
   const imageUrl = resolveQuestionImageUrl(question);
   const imagePending = isImagePending(question);
 
   return (
     <div className="hsk-preview-w03-wrap">
+      <PreviewQuestionStem question={question} />
       {imagePending && !imageUrl ? (
         <div className="hsk-preview-w03-image-pending">
           <span className="hsk-preview-status-badge">⏳ 待配图</span>
@@ -2417,21 +3091,9 @@ export function PreviewW03PictureSentence({ question }: { question: HskQuestionR
         </div>
       ) : null}
       <div className="hsk-preview-w03-panel">
-        <div className="hsk-preview-w03-hint">{W03_PREVIEW_HINT}</div>
-        {keywords.length > 0 ? (
-          <>
-            <div className="hsk-preview-w03-keywords">
-              {keywords.map((keyword, idx) => (
-                <span key={`${keyword}-${idx}`} className="hsk-preview-w03-keyword-tag">
-                  {keyword}
-                </span>
-              ))}
-            </div>
-            <div className="hsk-preview-w03-word-chip">{word}</div>
-          </>
-        ) : (
-          <div className="hsk-preview-w03-word-chip is-placeholder">关键词</div>
-        )}
+        <div className={`hsk-preview-w03-word-chip${word ? '' : ' is-placeholder'}`}>
+          {word || '关键词'}
+        </div>
         <textarea
           className="hsk-preview-w03-writing"
           placeholder="请在此处输入句子…"
@@ -2455,6 +3117,7 @@ export function PreviewW04TopicEssay({ question }: { question: HskQuestionRow })
 
   return (
     <div className="hsk-preview-w04-wrap">
+      <PreviewQuestionStem question={question} />
       <div className="hsk-preview-w04-panel">
         {prompt && <div className="hsk-preview-w04-prompt">{prompt}</div>}
         {keywords.length > 0 && (

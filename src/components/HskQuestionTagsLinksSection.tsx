@@ -1,24 +1,32 @@
 import { useState } from 'react';
 import { HskQuestionTagPicker } from './HskQuestionTagPicker';
-import type { HskQuestionRow, HskQuestionTag } from '../types/hskExams';
+import type { HskQuestionRow, HskQuestionTag, HskQuestionTagCatalog } from '../types/hskExams';
 
 type Props = {
   question: HskQuestionRow;
   tags: HskQuestionTag[];
+  tagCatalog: HskQuestionTagCatalog;
   onTagsChange: (next: string[]) => void;
+  onGlobalTagsChange: (nextTags: HskQuestionTag[]) => void;
+  onTagCatalogChange: (nextCatalog: HskQuestionTagCatalog) => void;
+  onToast?: (message: string) => void;
 };
 
-export function HskQuestionTagsLinksSection({ question, tags, onTagsChange }: Props) {
+export function HskQuestionTagsLinksSection({
+  question,
+  tags,
+  tagCatalog,
+  onTagsChange,
+  onGlobalTagsChange,
+  onTagCatalogChange,
+  onToast,
+}: Props) {
   const [expanded, setExpanded] = useState(true);
 
   const hasLinks =
     question.linked_courses.length > 0 ||
     question.linked_papers.length > 0 ||
     question.linked_videos.length > 0;
-
-  const removeTag = (label: string) => {
-    onTagsChange(question.tags.filter((t) => t !== label));
-  };
 
   return (
     <>
@@ -37,28 +45,14 @@ export function HskQuestionTagsLinksSection({ question, tags, onTagsChange }: Pr
         <div className="hsk-question-edit-tags-links-body">
           <div className="hsk-question-edit-tag-section">
             <label>标签</label>
-            {question.tags.length > 0 && (
-              <div className="hsk-question-edit-tag-pills">
-                {question.tags.map((label) => (
-                  <span key={label} className="hsk-question-edit-tag-pill">
-                    {label}
-                    <button
-                      type="button"
-                      className="hsk-question-edit-tag-pill-remove"
-                      aria-label={`移除 ${label}`}
-                      onClick={() => removeTag(label)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
             <HskQuestionTagPicker
               tags={tags}
+              tagCatalog={tagCatalog}
               selected={question.tags}
               onChange={onTagsChange}
-              hideSelectedPills
+              onGlobalTagsChange={onGlobalTagsChange}
+              onTagCatalogChange={onTagCatalogChange}
+              onToast={onToast}
             />
           </div>
 

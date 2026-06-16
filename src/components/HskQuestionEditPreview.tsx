@@ -4,7 +4,7 @@ import {
   isAudioPending,
   isImagePending,
   PreviewAudioBar,
-  PreviewImageOptionGrid,
+  PreviewL01ImageChoice,
   PreviewL02Match,
   PreviewL05MultiSub,
   PreviewR01Match,
@@ -20,6 +20,7 @@ import {
   PreviewW03PictureSentence,
   PreviewW04TopicEssay,
   PreviewJudgmentImage,
+  PreviewQuestionStem,
   PreviewTextOptions,
 } from './HskQuestionPreviewParts';
 
@@ -42,11 +43,13 @@ function normalizeOptions(question: HskQuestionRow) {
     question.payload?.runtimeOptions?.map((o) => ({
       key: o.key,
       text: o.text || `[选项${o.key}]`,
+      pinyin: o.pinyin,
       image: o.image,
     })) ??
     (question.options ?? []).map((o) => ({
       key: o.label,
       text: o.text || `[选项${o.label}]`,
+      pinyin: o.pinyin,
       image: o.image,
     }))
   );
@@ -60,7 +63,6 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
   const audioPending = isAudioPending(question, needsAudio);
   const imagePending = isImagePending(question);
   const options = normalizeOptions(question);
-  const stem = question.stem?.trim() || '[题目内容 — 从题库中抽取]';
 
   if (TRUE_FALSE_TYPES.has(typeId)) {
     return (
@@ -75,10 +77,12 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
 
   if (typeId === 'L01') {
     return (
-      <>
-        <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
-        <PreviewImageOptionGrid options={options} pending={imagePending || question.imageStatus === 'pending'} />
-      </>
+      <PreviewL01ImageChoice
+        question={question}
+        audioPending={audioPending}
+        audioTranscript={audioTranscript}
+        imagePending={imagePending || question.imageStatus === 'pending'}
+      />
     );
   }
 
@@ -153,9 +157,9 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
   if (typeId === 'L03' || typeId === 'L04') {
     return (
       <>
+        <PreviewQuestionStem question={question} />
         <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
-        {stem && typeId === 'L04' && <p className="hsk-preview-prompt">{stem}</p>}
-        <PreviewTextOptions options={options} />
+        <PreviewTextOptions options={options} correctAnswer={question.correctAnswer ?? ''} />
       </>
     );
   }
@@ -163,10 +167,10 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
   if (needsAudio) {
     return (
       <>
+        <PreviewQuestionStem question={question} />
         <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
-        <p className="hsk-preview-stem">{stem}</p>
         {options.length > 0 ? (
-          <PreviewTextOptions options={options} />
+          <PreviewTextOptions options={options} correctAnswer={question.correctAnswer ?? ''} />
         ) : (
           <div className="hsk-preview-writing-area" />
         )}
@@ -176,9 +180,9 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
 
   return (
     <>
-      <p className="hsk-preview-stem">{stem}</p>
+      <PreviewQuestionStem question={question} />
       {options.length > 0 ? (
-        <PreviewTextOptions options={options} />
+        <PreviewTextOptions options={options} correctAnswer={question.correctAnswer ?? ''} />
       ) : (
         <div className="hsk-preview-writing-area" />
       )}

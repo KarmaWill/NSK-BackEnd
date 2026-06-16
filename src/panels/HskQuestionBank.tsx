@@ -9,9 +9,11 @@ import {
   mergeTypeCounts,
   upsertQuestionTypes,
   upsertQuestions,
+  upsertTagCatalog,
+  upsertTags,
 } from '../stores/hskExams';
-import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
-import { HSK_QUESTION_LEVELS } from '../types/hskExams';
+import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTagCatalog, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
+import { DEFAULT_HSK_QUESTION_TAG_CATALOG, HSK_QUESTION_LEVELS } from '../types/hskExams';
 import { HSK_QUESTION_STATUS_FILTER_OPTIONS } from '../config/hskQuestionWorkflow';
 import { buildDuplicateQuestionType, createBlankQuestionType } from '../utils/hskQuestionTypeDuplicate';
 import { isLegacyGenericTypeId } from '../config/hskQuestionTypes';
@@ -42,11 +44,15 @@ export function HskQuestionBank() {
   const [localTypes, setLocalTypes] = useState(store.questionTypes);
   const [localQuestions, setLocalQuestions] = useState(store.questions);
   const [localTags, setLocalTags] = useState(store.tags);
+  const [localTagCatalog, setLocalTagCatalog] = useState(
+    store.tagCatalog ?? DEFAULT_HSK_QUESTION_TAG_CATALOG,
+  );
 
   useEffect(() => {
     setLocalTypes(store.questionTypes);
     setLocalQuestions(store.questions);
     setLocalTags(store.tags);
+    setLocalTagCatalog(store.tagCatalog ?? DEFAULT_HSK_QUESTION_TAG_CATALOG);
   }, [store]);
 
   const questionTypes = useMemo(
@@ -159,7 +165,23 @@ export function HskQuestionBank() {
         question={editingQuestion}
         types={localTypes}
         tags={localTags}
+        tagCatalog={localTagCatalog}
         onBack={() => setEditingQuestion(null)}
+        onGlobalTagsChange={(nextTags) => {
+          const labelSet = new Set(nextTags.map((tag) => tag.label));
+          const nextQuestions = localQuestions.map((question) => ({
+            ...question,
+            tags: question.tags.filter((label) => labelSet.has(label)),
+          }));
+          setLocalTags(nextTags);
+          setLocalQuestions(nextQuestions);
+          upsertTags({ ...store, questions: nextQuestions, tagCatalog: localTagCatalog }, nextTags);
+          upsertQuestions({ ...store, tags: nextTags, tagCatalog: localTagCatalog }, nextQuestions);
+        }}
+        onTagCatalogChange={(nextCatalog) => {
+          setLocalTagCatalog(nextCatalog);
+          upsertTagCatalog({ ...store, tags: localTags, questions: localQuestions }, nextCatalog);
+        }}
         onSave={(next) => {
           const updated = localQuestions.map((q) =>
             q.question_uid === next.question_uid ? next : q,

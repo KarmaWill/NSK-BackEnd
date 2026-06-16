@@ -56,7 +56,7 @@ function buildSegmentRubyItems(segmentText: string, pinyinWord: string, startCou
   return items;
 }
 
-function buildRubyItems(text: string, pinyinInput: string): RubyItem[] {
+export function buildPinyinRubyItems(text: string, pinyinInput: string): RubyItem[] {
   const pinyinWords = pinyinInput?.trim()
     ? pinyinInput.trim().split(/\s+/).filter(Boolean)
     : [];
@@ -137,7 +137,7 @@ function buildRubyItems(text: string, pinyinInput: string): RubyItem[] {
   return items;
 }
 
-function RubyWordItem({ pinyin, chars }: { pinyin: string; chars: string[] }) {
+export function PinyinRubyWordItem({ pinyin, chars }: { pinyin: string; chars: string[] }) {
   const hanCount = chars.filter((c) => HAN_RE_CHAR.test(c)).length;
   if (!pinyin) {
     return <span className="hsk-preview-r05-plain-ch">{chars.join('')}</span>;
@@ -170,10 +170,11 @@ export function PinyinRubyText({ text, pinyin, className = 'hsk-preview-r05-pass
   const trimmedText = text.trim();
   if (!trimmedPinyin || !trimmedText) return null;
 
-  const items = buildRubyItems(trimmedText, trimmedPinyin);
+  const items = buildPinyinRubyItems(trimmedText, trimmedPinyin);
+  const Wrapper = className ? 'div' : 'span';
 
   return (
-    <div className={className}>
+    <Wrapper className={className || undefined}>
       {items.map((item) => {
         if (item.kind === 'plain') {
           return (
@@ -182,8 +183,8 @@ export function PinyinRubyText({ text, pinyin, className = 'hsk-preview-r05-pass
             </span>
           );
         }
-        return <RubyWordItem key={item.key} pinyin={item.pinyin} chars={item.chars} />;
+        return <PinyinRubyWordItem key={item.key} pinyin={item.pinyin} chars={item.chars} />;
       })}
-    </div>
+    </Wrapper>
   );
 }

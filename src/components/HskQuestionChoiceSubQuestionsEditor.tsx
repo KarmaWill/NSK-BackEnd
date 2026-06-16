@@ -1,5 +1,6 @@
 import type { HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
-import { PinyinInlineField } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
+import { PinyinCountInput } from './PinyinCountInput';
 import { createL05SubQuestion } from '../utils/hskChoiceSubQuestions';
 
 type Props = {
@@ -24,7 +25,9 @@ export function HskQuestionChoiceSubQuestionsEditor({
   showPinyinFields = false,
   onChange,
 }: Props) {
-  const showPinyin = levelNumber <= 2 || showPinyinFields;
+  // L05 选项始终展示拼音字段（GB/T 16159 词级对齐）；HSK1-2 保存时在 EditPage 校验必填
+  const showPinyin = true;
+  const pinyinRequired = levelNumber <= 2 || showPinyinFields;
 
   const updateSub = (index: number, patch: Partial<HskSubQuestionPayload>) => {
     const next = [...subQuestions];
@@ -109,7 +112,7 @@ export function HskQuestionChoiceSubQuestionsEditor({
                 type="text"
                 value={sub.question ?? ''}
                 onChange={(e) => updateSub(subIdx, { question: e.target.value })}
-                placeholder="问题内容（选填）"
+                placeholder="词间用空格，如：他 喜欢 什么？"
               />
             </div>
 
@@ -128,22 +131,36 @@ export function HskQuestionChoiceSubQuestionsEditor({
                       >
                         {isCorrect ? '✓' : opt.key}
                       </button>
-                      <input
-                        type="text"
-                        value={opt.text ?? ''}
-                        onChange={(e) => updateOption(subIdx, optIdx, { text: e.target.value })}
-                        placeholder="选项文字"
-                        className="hsk-question-edit-sub-option-text"
-                      />
-                      {showPinyin && (
-                        <PinyinInlineField
-                          value={opt.pinyin ?? ''}
-                          onChange={(v) => updateOption(subIdx, optIdx, { pinyin: v })}
-                          placeholder={levelNumber <= 2 ? '拼音 *' : '拼音'}
-                          className="hsk-question-edit-sub-option-pinyin"
-                          required={levelNumber <= 2}
-                        />
-                      )}
+
+                      <div className="hsk-question-edit-sub-option-fields">
+                        <div className="hsk-question-edit-sub-option-field">
+                          <span className="hsk-question-edit-sub-option-field-label">选项文字</span>
+                          <input
+                            type="text"
+                            value={opt.text ?? ''}
+                            onChange={(e) => updateOption(subIdx, optIdx, { text: e.target.value })}
+                            placeholder="词间用空格，如：朋友 世界"
+                            className="hsk-question-edit-sub-option-text"
+                          />
+                        </div>
+
+                        {showPinyin && (
+                          <div className="hsk-question-edit-sub-option-field">
+                            <span className="hsk-question-edit-sub-option-field-label">
+                              拼音{pinyinRequired ? ' *' : ''}
+                            </span>
+                            <PinyinCountInput
+                              value={opt.pinyin ?? ''}
+                              onChange={(v) => updateOption(subIdx, optIdx, { pinyin: v })}
+                              targetHanCount={countHanInText(opt.text ?? '')}
+                              targetText={opt.text ?? ''}
+                              placeholder="词级：péngyou shìjiè"
+                              className="hsk-question-edit-sub-option-pinyin"
+                            />
+                          </div>
+                        )}
+                      </div>
+
                       <button
                         type="button"
                         className="hsk-question-edit-text-option-remove"

@@ -1,4 +1,5 @@
-import type { HskQuestionTag } from '../types/hskExams';
+import type { HskQuestionTag, HskQuestionTagCatalog } from '../types/hskExams';
+import { DEFAULT_HSK_QUESTION_TAG_CATALOG } from '../types/hskExams';
 
 /** 与 5174 端 TagManager / mockData.INITIAL_TAGS 对齐的 22 个题型特征标签 */
 export const HSK_DEFAULT_TAG_LABELS = [
@@ -80,12 +81,86 @@ export const HSK_TAG_CATEGORIES: HskTagCategoryDef[] = [
 
 const ALL_PRESET_TAG_LABELS = new Set(HSK_TAG_CATEGORIES.flatMap((c) => c.tags));
 
-export function getQuestionTagPickerCategories(allTags: HskQuestionTag[]): HskTagCategoryDef[] {
+export const HSK_QUESTION_TAG_MAX_LENGTH = 20;
+export const HSK_QUESTION_TAG_CATEGORY_MAX_LENGTH = 20;
+
+export const HSK_PRESET_TAG_CATEGORY_NAMES = HSK_TAG_CATEGORIES.map((cat) => cat.category);
+
+export function sanitizeQuestionTagInput(value: string): string {
+  return value.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, '').slice(0, HSK_QUESTION_TAG_MAX_LENGTH);
+}
+
+export function sanitizeQuestionTagCategoryInput(value: string): string {
+  return value.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g, '').slice(0, HSK_QUESTION_TAG_CATEGORY_MAX_LENGTH);
+}
+
+export function isPresetTagCategory(category: string): boolean {
+  return HSK_PRESET_TAG_CATEGORY_NAMES.includes(category);
+}
+
+export function resolveTagCategory(
+  label: string,
+  categories: HskTagCategoryDef[] = HSK_TAG_CATEGORIES,
+  allTags: HskQuestionTag[] = [],
+): string {
+  const stored = allTags.find((tag) => tag.label === label);
+  if (stored?.category) return stored.category;
+  for (const cat of categories) {
+    if (cat.tags.includes(label)) return cat.category;
+  }
+  return '自定义标签';
+}
+
+export function groupSelectedTagsByCategory(
+  selected: string[],
+  categories: HskTagCategoryDef[],
+  allTags: HskQuestionTag[] = [],
+): Array<{ category: string; labels: string[] }> {
+  const order = categories.map((cat) => cat.category);
+  const grouped = new Map<string, string[]>();
+
+  for (const label of selected) {
+    const category = resolveTagCategory(label, categories, allTags);
+    const list = grouped.get(category) ?? [];
+    list.push(label);
+    grouped.set(category, list);
+  }
+
+  const known = order.filter((category) => grouped.has(category));
+  const extra = [...grouped.keys()].filter((category) => !order.includes(category));
+  return [...known, ...extra].map((category) => ({
+    category,
+    labels: grouped.get(category) ?? [],
+  }));
+}
+
+export function getQuestionTagPickerCategories(
+  allTags: HskQuestionTag[],
+  catalog: HskQuestionTagCatalog = DEFAULT_HSK_QUESTION_TAG_CATALOG,
+): HskTagCategoryDef[] {
+  const hidden = new Set(catalog.hiddenCategories);
+  const preset = HSK_TAG_CATEGORIES.filter((cat) => !hidden.has(cat.category));
+  const custom = catalog.customCategories
+    .filter((category) => !hidden.has(category))
+    .map((category) => ({ category, tags: [] as readonly string[] }));
+  const merged: HskTagCategoryDef[] = [...preset, ...custom];
   const uncategorized = allTags
-    .map((t) => t.label)
-    .filter((label) => !ALL_PRESET_TAG_LABELS.has(label));
-  if (uncategorized.length === 0) return [...HSK_TAG_CATEGORIES];
-  return [...HSK_TAG_CATEGORIES, { category: '自定义标签', tags: uncategorized }];
+    .filter((tag) => !ALL_PRESET_TAG_LABELS.has(tag.label) && !tag.category)
+    .map((tag) => tag.label);
+  if (uncategorized.length > 0 && !hidden.has('自定义标签')) {
+    merged.push({ category: '自定义标签', tags: uncategorized });
+  }
+  return merged;
+}
+
+export function countTagsInCategory(
+  category: string,
+  allTags: HskQuestionTag[],
+  categories: HskTagCategoryDef[],
+): number {
+  const catDef = categories.find((cat) => cat.category === category);
+  if (!catDef) return 0;
+  return getTagLabelsInCategory(category, catDef.tags, allTags).length;
 }
 
 export function getTagLabelsInCategory(
@@ -95,9 +170,15 @@ export function getTagLabelsInCategory(
 ): string[] {
   const storeLabels = new Set(allTags.map((t) => t.label));
   if (category === '自定义标签') {
-    return allTags.map((t) => t.label).filter((label) => !ALL_PRESET_TAG_LABELS.has(label));
+    return allTags
+      .filter((tag) => !ALL_PRESET_TAG_LABELS.has(tag.label) && !tag.category)
+      .map((tag) => tag.label);
   }
-  return presetTags.filter((label) => storeLabels.has(label));
+  const presetInStore = presetTags.filter((label) => storeLabels.has(label));
+  const customInCategory = allTags
+    .filter((tag) => tag.category === category && !presetTags.includes(tag.label))
+    .map((tag) => tag.label);
+  return [...presetInStore, ...customInCategory];
 }
 
 export function createDefaultQuestionTags(): HskQuestionTag[] {

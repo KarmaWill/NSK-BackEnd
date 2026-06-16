@@ -8,14 +8,12 @@ export function getQuestionRequiredFieldSummary(typeId: HskQuestionTypeCode) {
   const needsAudio = registry?.editorFields.includes('audio') ?? false;
 
   const parts: string[] = [];
-  if (!/^L0[126]/.test(typeId)) parts.push('题干 (stem)');
   if (needsAudio) parts.push('音频文件');
   if (typeId === 'L02') {
     parts.push('至少1张图片');
     parts.push('至少1道子题');
   }
   if (isJudgmentQuestionType(typeId)) {
-    parts.push('题干 (stem)');
     parts.push('题目图片');
     parts.push('正确答案');
   }

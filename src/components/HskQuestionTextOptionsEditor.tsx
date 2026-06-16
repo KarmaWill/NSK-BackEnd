@@ -1,5 +1,6 @@
 import type { HskQuestionTypeCode, HskRuntimeOption } from '../types/hskExams';
-import { PinyinInlineField } from './PinyinCountInput';
+import { countHanInText } from '../utils/pinyinUtils';
+import { PinyinCountInput } from './PinyinCountInput';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const;
 
@@ -100,32 +101,44 @@ export function HskQuestionTextOptionsEditor({
           return (
             <div key={`${opt.key}-${idx}`} className="hsk-question-edit-text-option-row">
               <span className="hsk-question-edit-text-option-key">{opt.key}</span>
-              <input
-                type="text"
-                value={opt.text ?? ''}
-                onChange={(e) => updateOption(idx, { text: e.target.value })}
-                placeholder="中文文本"
-                className="hsk-question-edit-text-option-text"
-              />
-              {showPinyin && (
-                <PinyinInlineField
-                  value={opt.pinyin ?? ''}
-                  onChange={(v) => updateOption(idx, { pinyin: v })}
-                  placeholder={levelNumber <= 2 ? '拼音 *' : '拼音'}
-                  className="hsk-question-edit-text-option-pinyin"
-                  required={levelNumber <= 2}
-                />
-              )}
-              {isListeningChoice && (
-                <>
-                  <span className="hsk-question-edit-text-option-count is-text">
-                    {(opt.text ?? '').length}/200
-                  </span>
-                  {showPinyin && (
-                    <span className="hsk-question-edit-text-option-count is-pinyin">
-                      {(opt.pinyin ?? '').length}/1000
+
+              <div className="hsk-question-edit-text-option-fields">
+                <div className="hsk-question-edit-text-option-field">
+                  <input
+                    type="text"
+                    value={opt.text ?? ''}
+                    onChange={(e) => updateOption(idx, { text: e.target.value })}
+                    placeholder="词间用空格，如：朋友 世界"
+                    className="hsk-question-edit-text-option-text"
+                  />
+                  {isListeningChoice && (
+                    <span className="hsk-question-edit-text-option-count is-text">
+                      {(opt.text ?? '').length}/200
                     </span>
                   )}
+                </div>
+
+                {showPinyin && (
+                  <div className="hsk-question-edit-text-option-field">
+                    <PinyinCountInput
+                      value={opt.pinyin ?? ''}
+                      onChange={(v) => updateOption(idx, { pinyin: v })}
+                      targetHanCount={countHanInText(opt.text ?? '')}
+                      targetText={opt.text ?? ''}
+                      placeholder="词级：péngyou shìjiè"
+                      className="hsk-question-edit-text-option-pinyin"
+                    />
+                    {isListeningChoice && (
+                      <span className="hsk-question-edit-text-option-count is-pinyin">
+                        {(opt.pinyin ?? '').length}/1000
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="hsk-question-edit-text-option-actions">
+                {isListeningChoice && (
                   <button
                     type="button"
                     className={`hsk-question-edit-text-option-correct${isCorrect ? ' is-active' : ''}`}
@@ -134,18 +147,18 @@ export function HskQuestionTextOptionsEditor({
                   >
                     ✓
                   </button>
-                </>
-              )}
-              {canRemove && (
-                <button
-                  type="button"
-                  className="hsk-question-edit-text-option-remove"
-                  aria-label={`移除选项 ${opt.key}`}
-                  onClick={() => removeOption(idx)}
-                >
-                  ×
-                </button>
-              )}
+                )}
+                {canRemove && (
+                  <button
+                    type="button"
+                    className="hsk-question-edit-text-option-remove"
+                    aria-label={`移除选项 ${opt.key}`}
+                    onClick={() => removeOption(idx)}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

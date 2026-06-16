@@ -11,28 +11,19 @@ type Props = {
   article: string;
   articlePinyin: string;
   blanks: HskR06Blank[];
-  blankPinyins: Record<number, string>;
-  levelNumber: number;
-  showPinyinFields?: boolean;
   onArticleChange: (next: string) => void;
   onArticlePinyinChange: (next: string) => void;
   onBlanksChange: (next: HskR06Blank[]) => void;
-  onBlankPinyinsChange: (next: Record<number, string>) => void;
 };
 
 export function HskQuestionR06ClozeEditor({
   article,
   articlePinyin,
   blanks,
-  blankPinyins,
-  levelNumber,
-  showPinyinFields = false,
   onArticleChange,
   onArticlePinyinChange,
   onBlanksChange,
-  onBlankPinyinsChange,
 }: Props) {
-  const showPinyin = levelNumber <= 2 || showPinyinFields;
 
   const updateBlanks = (next: HskR06Blank[]) => {
     onBlanksChange(next);
@@ -76,13 +67,6 @@ export function HskQuestionR06ClozeEditor({
     });
   };
 
-  const updateBlankPinyin = (blankIndex: number, pinyin: string) => {
-    const next = { ...blankPinyins };
-    if (pinyin.trim()) next[blankIndex] = pinyin;
-    else delete next[blankIndex];
-    onBlankPinyinsChange(next);
-  };
-
   const addBlankOption = (blankIndex: number) => {
     const blank = blanks[blankIndex];
     updateBlank(blankIndex, {
@@ -108,7 +92,9 @@ export function HskQuestionR06ClozeEditor({
           <label>
             文章 <span className="required">*</span>
           </label>
-          <span className="hsk-question-r02-block-hint">用（1）（2）或 () 标记填空位置</span>
+          <span className="hsk-question-r02-block-hint">
+            用（1）（2）或 () 标记填空位置；（0）不显示拼音提示，（拼音）可内嵌提示
+          </span>
           <textarea
             value={article}
             onChange={(e) => onArticleChange(e.target.value)}
@@ -137,6 +123,7 @@ export function HskQuestionR06ClozeEditor({
             <label>
               填空选项 <span className="required">*</span>
             </label>
+            <span className="hsk-question-r02-block-hint">每个选项分别配置文字与拼音</span>
           </div>
 
           <div className="hsk-question-r06-blank-list">
@@ -169,13 +156,6 @@ export function HskQuestionR06ClozeEditor({
                       </option>
                     ))}
                   </select>
-                  <input
-                    type="text"
-                    className="hsk-question-r05-blank-pinyin-input"
-                    value={blankPinyins[blank.index] ?? ''}
-                    onChange={(e) => updateBlankPinyin(blank.index, e.target.value)}
-                    placeholder="填空拼音（可选）"
-                  />
                 </div>
 
                 <div className="hsk-question-r06-option-list">
@@ -189,13 +169,11 @@ export function HskQuestionR06ClozeEditor({
                         placeholder="选项"
                         className="hsk-question-r02-item-text"
                       />
-                      {showPinyin && (
-                        <PinyinInlineField
-                          value={option.pinyin ?? ''}
-                          onChange={(v) => updateBlankOption(blankIdx, optionIdx, { pinyin: v })}
-                          placeholder="拼音"
-                        />
-                      )}
+                      <PinyinInlineField
+                        value={option.pinyin ?? ''}
+                        onChange={(v) => updateBlankOption(blankIdx, optionIdx, { pinyin: v })}
+                        placeholder="拼音"
+                      />
                       <button
                         type="button"
                         className="hsk-question-edit-text-option-remove"

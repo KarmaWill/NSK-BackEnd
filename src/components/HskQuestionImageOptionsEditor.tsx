@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import type { HskRuntimeOption } from '../types/hskExams';
 import { HskResourceModal } from './HskResourceModal';
 
@@ -27,6 +27,17 @@ type RowProps = {
   onCorrectToggle: () => void;
 };
 
+function mediaFileName(url: string): string {
+  if (!url) return '';
+  try {
+    if (url.startsWith('blob:')) return '本地图片文件';
+    const parts = url.split('/');
+    return decodeURIComponent(parts[parts.length - 1] || url);
+  } catch {
+    return url;
+  }
+}
+
 function ImageOptionRow({
   option,
   showCorrectToggle,
@@ -39,6 +50,7 @@ function ImageOptionRow({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [resourceModalOpen, setResourceModalOpen] = useState(false);
   const imageUrl = option.image ?? '';
+  const fileName = useMemo(() => mediaFileName(imageUrl), [imageUrl]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -49,6 +61,17 @@ function ImageOptionRow({
 
   return (
     <div className="hsk-question-image-option-card">
+      {canRemove && (
+        <button
+          type="button"
+          className="hsk-question-image-option-remove"
+          aria-label={`移除选项 ${option.key}`}
+          onClick={onRemove}
+        >
+          ×
+        </button>
+      )}
+
       <div className="hsk-question-image-option-card-head">
         <span className="hsk-question-image-option-label">{option.key}</span>
       </div>
@@ -61,7 +84,7 @@ function ImageOptionRow({
         >
           <span className="hsk-question-media-pick-icon" aria-hidden>🖼</span>
           <span className="hsk-question-media-pick-text">
-            {imageUrl ? '已选择图片' : '点击选择图片资源'}
+            {imageUrl ? fileName : '点击选择图片资源'}
           </span>
         </button>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => setResourceModalOpen(true)}>
@@ -76,41 +99,33 @@ function ImageOptionRow({
         />
       </div>
 
-      <div className="hsk-question-image-option-preview-wrap">
-        <div className="hsk-question-image-option-preview">
-          {imageUrl ? (
-            <img src={imageUrl} alt={`选项 ${option.key}`} />
-          ) : (
-            <>
-              <span className="hsk-question-image-option-preview-icon" aria-hidden>
-                图
-              </span>
-              <span className="hsk-question-image-option-preview-label">图片预览区</span>
-            </>
-          )}
+      {imageUrl ? (
+        <div className="hsk-question-media-selected hsk-question-image-media-tag">
+          <span className="hsk-question-media-selected-name" title={fileName}>
+            {fileName}
+          </span>
+          <button
+            type="button"
+            className="hsk-question-media-remove"
+            aria-label={`清除选项 ${option.key} 图片`}
+            onClick={() => onImageChange('')}
+          >
+            ×
+          </button>
         </div>
-        <div className="hsk-question-image-option-actions">
-          {showCorrectToggle && (
-            <button
-              type="button"
-              className={`hsk-question-image-correct-btn${isCorrect ? ' is-active' : ''}`}
-              onClick={onCorrectToggle}
-            >
-              {isCorrect ? '●' : '○'} 设为正确答案
-            </button>
-          )}
-          {canRemove && (
-            <button
-              type="button"
-              className="hsk-question-image-option-remove"
-              aria-label={`移除选项 ${option.key}`}
-              onClick={onRemove}
-            >
-              ×
-            </button>
-          )}
+      ) : null}
+
+      {showCorrectToggle ? (
+        <div className="hsk-question-image-option-footer">
+          <button
+            type="button"
+            className={`hsk-question-image-correct-btn${isCorrect ? ' is-active' : ''}`}
+            onClick={onCorrectToggle}
+          >
+            {isCorrect ? '●' : '○'} 设为正确答案
+          </button>
         </div>
-      </div>
+      ) : null}
 
       <HskResourceModal
         open={resourceModalOpen}

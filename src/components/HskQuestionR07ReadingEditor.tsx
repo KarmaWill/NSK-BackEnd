@@ -1,6 +1,7 @@
 import type { HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
+import { HskRichArticleEditor } from './HskRichArticleEditor';
 import { PinyinCountInput, PinyinInlineField } from './PinyinCountInput';
-import { countHanInText } from '../utils/pinyinUtils';
+import { countHanInRichArticle, stripRichArticleHtml } from '../utils/hskRichArticleHtml';
 import {
   createR07SubQuestion,
   optionDisplayLabel,
@@ -13,6 +14,8 @@ type Props = {
   subQuestions: HskSubQuestionPayload[];
   levelNumber: number;
   showPinyinFields?: boolean;
+  questionUid?: string;
+  presetImageUrl?: string;
   onArticleChange: (next: string) => void;
   onArticlePinyinChange: (next: string) => void;
   onSubQuestionsChange: (next: HskSubQuestionPayload[]) => void;
@@ -33,6 +36,8 @@ export function HskQuestionR07ReadingEditor({
   subQuestions,
   levelNumber,
   showPinyinFields = false,
+  questionUid,
+  presetImageUrl = '',
   onArticleChange,
   onArticlePinyinChange,
   onSubQuestionsChange,
@@ -93,25 +98,25 @@ export function HskQuestionR07ReadingEditor({
           <label>
             阅读文章 <span className="required">*</span>
           </label>
-          <textarea
+          <HskRichArticleEditor
             value={article}
-            onChange={(e) => onArticleChange(e.target.value)}
-            rows={6}
-            placeholder="输入阅读理解的文章全文..."
-            className="hsk-question-r05-textarea"
+            onChange={onArticleChange}
+            remountKey={questionUid}
+            presetImageUrl={presetImageUrl}
+            placeholder="输入阅读理解的文章全文…"
           />
         </div>
 
         <div className="hsk-question-r05-field">
           <label>文章拼音（可选 · 整句逐字 ruby）</label>
           <span className="hsk-question-r02-block-hint">
-            词级连写或字级分写均可，如：péngyou hǎo 或 péng you hǎo
+            词级连写或字级分写均可，如：péngyou hǎo 或 péng you hǎo；富文本文章按纯文字计字
           </span>
           <PinyinCountInput
             value={articlePinyin}
             onChange={onArticlePinyinChange}
-            targetHanCount={countHanInText(article)}
-            targetText={article}
+            targetHanCount={countHanInRichArticle(article)}
+            targetText={stripRichArticleHtml(article)}
             placeholder="如：péngyou hǎo 或 péng you hǎo"
           />
         </div>

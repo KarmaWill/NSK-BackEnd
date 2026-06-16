@@ -25,12 +25,30 @@ export function resolveJudgmentContent(
   };
 }
 
-export function judgmentPreviewHint(typeId: HskQuestionTypeCode, stem?: string): string {
+export function isStemFieldEnabled(showStemField?: boolean, stem?: string): boolean {
+  return showStemField ?? Boolean(stem?.trim());
+}
+
+export function resolvePreviewStem(stem?: string, showStemField?: boolean): string {
+  if (!isStemFieldEnabled(showStemField, stem)) return '';
+  return stem?.trim() ?? '';
+}
+
+export function judgmentPreviewHint(
+  typeId: HskQuestionTypeCode,
+  stem?: string,
+  showStemField?: boolean,
+): string {
+  if (!isStemFieldEnabled(showStemField, stem)) return '';
+
+  const defaultHint =
+    typeId === 'L06'
+      ? '请听句子，判断与图片内容是否一致'
+      : '看图片和句子，判断句子描述是否与图片一致';
+
   const trimmed = stem?.trim();
   if (trimmed) return trimmed.replace(/[。．.!！?？]+$/, '');
-  return typeId === 'L06'
-    ? '请听句子，判断与图片内容是否一致'
-    : '看图片和句子，判断句子描述是否与图片一致';
+  return defaultHint;
 }
 
 export function normalizeJudgmentQuestion(question: HskQuestionRow): HskQuestionRow {

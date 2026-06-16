@@ -13,8 +13,10 @@ import type {
   HskPublishStatus,
   HskQuestionRow,
   HskQuestionTag,
+  HskQuestionTagCatalog,
   HskQuestionTypeDef,
 } from '../types/hskExams';
+import { DEFAULT_HSK_QUESTION_TAG_CATALOG } from '../types/hskExams';
 import { compileExamDelivery, validateDeliveryCompile } from '../utils/hskCompileDelivery';
 import { syncHskDeliveryToServer } from '../services/hskDeliveryService';
 import {
@@ -212,6 +214,7 @@ export function createDefaultHskStore(): HskExamStoreSnapshot {
     questionTypes: structuredClone(HSK_QUESTION_TYPE_DEFS),
     questions,
     tags: seedTags(),
+    tagCatalog: { ...DEFAULT_HSK_QUESTION_TAG_CATALOG },
     templates: [template],
     templateStatus: { [template.id]: template.status },
     papers: [paper],
@@ -247,6 +250,14 @@ function normalizeStore(raw: unknown): HskExamStoreSnapshot {
     tags: ensureQuestionTags(
       Array.isArray(data.tags) && data.tags.length ? data.tags : fallback.tags,
     ),
+    tagCatalog: {
+      customCategories: Array.isArray(data.tagCatalog?.customCategories)
+        ? data.tagCatalog.customCategories
+        : fallback.tagCatalog?.customCategories ?? [],
+      hiddenCategories: Array.isArray(data.tagCatalog?.hiddenCategories)
+        ? data.tagCatalog.hiddenCategories
+        : fallback.tagCatalog?.hiddenCategories ?? [],
+    },
     templates: Array.isArray(data.templates) && data.templates.length ? data.templates : fallback.templates,
     templateStatus: data.templateStatus && typeof data.templateStatus === 'object' ? data.templateStatus : fallback.templateStatus,
     papers: Array.isArray(data.papers) ? data.papers : fallback.papers,
@@ -307,6 +318,10 @@ export function upsertQuestions(store: HskExamStoreSnapshot, questions: HskQuest
 
 export function upsertTags(store: HskExamStoreSnapshot, tags: HskQuestionTag[]) {
   saveHskStore({ ...store, tags });
+}
+
+export function upsertTagCatalog(store: HskExamStoreSnapshot, tagCatalog: HskQuestionTagCatalog) {
+  saveHskStore({ ...store, tagCatalog });
 }
 
 export function saveTemplate(store: HskExamStoreSnapshot, template: HskPaperTemplate) {

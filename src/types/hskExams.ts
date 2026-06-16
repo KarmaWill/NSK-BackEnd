@@ -150,6 +150,8 @@ export type HskQuestionTag = {
   id: string;
   label: string;
   description?: string;
+  /** 自定义标签所属分类；内置预设标签无需填写 */
+  category?: string;
 };
 
 export type HskSectionGroup = {
@@ -283,10 +285,21 @@ export type HskExamAnalyzeResult = {
   }>;
 };
 
+export type HskQuestionTagCatalog = {
+  customCategories: string[];
+  hiddenCategories: string[];
+};
+
+export const DEFAULT_HSK_QUESTION_TAG_CATALOG: HskQuestionTagCatalog = {
+  customCategories: [],
+  hiddenCategories: [],
+};
+
 export type HskExamStoreSnapshot = {
   questionTypes: HskQuestionTypeDef[];
   questions: HskQuestionRow[];
   tags: HskQuestionTag[];
+  tagCatalog?: HskQuestionTagCatalog;
   templates: HskPaperTemplate[];
   templateStatus: Record<string, HskPublishStatus>;
   papers: HskComposedPaper[];

@@ -26,6 +26,7 @@ type LibraryInlineAddSelectProps = {
   renderAddExtras?: () => ReactNode;
   canDeleteOption?: (value: string) => boolean;
   onDeleteOption?: (value: string) => void;
+  onDeleteOptionRequest?: (option: InlineAddSelectOption) => void;
   deleteConfirmHint?: (label: string) => ReactNode;
   disabled?: boolean;
   style?: CSSProperties;
@@ -89,6 +90,7 @@ export function LibraryInlineAddSelect({
   renderAddExtras,
   canDeleteOption,
   onDeleteOption,
+  onDeleteOptionRequest,
   deleteConfirmHint,
   disabled,
   style,
@@ -184,14 +186,22 @@ export function LibraryInlineAddSelect({
   };
 
   const openDeleteConfirm = (opt: InlineAddSelectOption) => {
+    if (onDeleteOptionRequest) {
+      onDeleteOptionRequest(opt);
+      closePanel();
+      return;
+    }
     setAddMode(false);
     setAddInput('');
     setDeleteTarget(opt);
     setDeleteConfirmText('');
   };
 
-  const canDelete = (opt: InlineAddSelectOption) =>
-    !!onDeleteOption && !!canDeleteOption?.(opt.value);
+  const canDelete = (opt: InlineAddSelectOption) => {
+    if (!onDeleteOption && !onDeleteOptionRequest) return false;
+    if (!canDeleteOption) return true;
+    return canDeleteOption(opt.value);
+  };
 
   return (
     <div

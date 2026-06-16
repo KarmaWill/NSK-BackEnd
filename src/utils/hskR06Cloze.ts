@@ -162,3 +162,39 @@ export function resolveR06BlankFillText(
   const option = blank.options.find((item) => item.key === answerKey);
   return option?.text?.trim() || answerKey;
 }
+
+/** （0）标记的空不在预览中显示拼音提示；（1）（2）或 （拼音） 形式的空可显示 */
+export function shouldShowR06BlankPinyinHint(blankIndex: number): boolean {
+  return blankIndex !== 0;
+}
+
+export function resolveR06BlankPreviewLabel(
+  blank: HskR06Blank | undefined,
+  blankIndex: number,
+  answerKey: string | undefined,
+): string {
+  if (answerKey && blank) return resolveR06BlankFillText(blank, answerKey);
+  if (blankIndex === 0) return '（）';
+  return String(blankIndex);
+}
+
+export function resolveR06OptionPinyin(
+  blank: HskR06Blank | undefined,
+  answerKey: string | undefined,
+): string {
+  if (!blank || !answerKey) return '';
+  const option = blank.options.find((item) => item.key === answerKey);
+  return option?.pinyin?.trim() ?? '';
+}
+
+/** 预览空位上方拼音：已选时用选项拼音；未选时仅用文章内嵌 （拼音）；（0）永不显示 */
+export function resolveR06BlankPreviewPinyin(
+  blank: HskR06Blank | undefined,
+  blankIndex: number,
+  answerKey: string | undefined,
+  embeddedPinyin?: string,
+): string {
+  if (!shouldShowR06BlankPinyinHint(blankIndex)) return '';
+  if (answerKey) return resolveR06OptionPinyin(blank, answerKey);
+  return embeddedPinyin?.trim() ?? '';
+}
