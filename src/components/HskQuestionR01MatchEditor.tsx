@@ -25,6 +25,21 @@ export function HskQuestionR01MatchEditor({
   const showPinyin = levelNumber <= 2 || showPinyinFields;
   const imageKeys = imageOptions.map((o) => o.key);
 
+  const toggleExample = (index: number) => {
+    const nextIsExample = !sentences[index].isExample;
+    onSentencesChange(
+      sentences.map((sentence, idx) => {
+        if (idx === index) {
+          return { ...sentence, isExample: nextIsExample };
+        }
+        if (nextIsExample && sentence.isExample) {
+          return { ...sentence, isExample: false };
+        }
+        return sentence;
+      }),
+    );
+  };
+
   const updateSentence = (index: number, patch: Partial<HskMatchSentence>) => {
     const next = [...sentences];
     next[index] = { ...next[index], ...patch };
@@ -72,33 +87,54 @@ export function HskQuestionR01MatchEditor({
         </label>
         <div className="hsk-question-r01-sentence-list">
           {sentences.map((sentence, idx) => (
-            <div key={`${sentence.key}-${idx}`} className="hsk-question-r01-sentence-row">
-              <span className="hsk-question-r01-sentence-key">{sentence.key}</span>
-              <input
-                type="text"
-                value={sentence.text}
-                onChange={(e) => updateSentence(idx, { text: e.target.value })}
-                placeholder="句子文字"
-                className="hsk-question-r01-sentence-text"
-              />
-              {showPinyin && (
-                <PinyinCountInput
-                  value={sentence.pinyin ?? ''}
-                  onChange={(v) => updateSentence(idx, { pinyin: v })}
-                  targetHanCount={countHanInText(sentence.text)}
-                  targetText={sentence.text}
-                  placeholder="词级：xiaoyu jintian；字级：xiao yu jin tian"
-                  className="hsk-question-r03-sentence-pinyin-input"
-                />
-              )}
+            <div
+              key={`${sentence.key}-${idx}`}
+              className={`hsk-question-r01-sentence-card${sentence.isExample ? ' is-example' : ''}`}
+            >
               <button
                 type="button"
-                className="hsk-question-edit-text-option-remove"
+                className="hsk-question-edit-text-option-remove hsk-question-r01-sentence-remove"
                 onClick={() => removeSentence(idx)}
                 aria-label={`删除句子 ${sentence.key}`}
               >
                 ×
               </button>
+              <div className="hsk-question-r01-sentence-card-body">
+                <span className="hsk-question-r01-sentence-key">
+                  {sentence.isExample ? '例题' : sentence.key}
+                </span>
+                <input
+                  type="text"
+                  value={sentence.text}
+                  onChange={(e) => updateSentence(idx, { text: e.target.value })}
+                  placeholder="句子文字（词间空格分词，如：小雨 今天 去 吃）"
+                  className="hsk-question-r01-sentence-text"
+                />
+                {showPinyin && (
+                  <PinyinCountInput
+                    value={sentence.pinyin ?? ''}
+                    onChange={(v) => updateSentence(idx, { pinyin: v })}
+                    targetHanCount={countHanInText(sentence.text)}
+                    targetText={sentence.text}
+                    placeholder="词级：xiaoyu jintian qu chi；字级：xiao yu jin tian"
+                    className="hsk-question-r03-sentence-pinyin-input"
+                  />
+                )}
+              </div>
+              <div className="hsk-question-r01-sentence-card-footer">
+                <label className="hsk-question-l02-sub-example-toggle">
+                  <span className="hsk-question-l02-sub-example-label">例题</span>
+                  <span className="toggle-wrap">
+                    <input
+                      type="checkbox"
+                      checked={!!sentence.isExample}
+                      onChange={() => toggleExample(idx)}
+                    />
+                    <div className="toggle-track" />
+                    <div className="toggle-thumb" />
+                  </span>
+                </label>
+              </div>
             </div>
           ))}
           <button type="button" className="hsk-question-edit-sub-add-btn" onClick={addSentence}>
@@ -124,7 +160,7 @@ export function HskQuestionR01MatchEditor({
                 <option value="">— 不匹配 —</option>
                 {sentences.map((sentence) => (
                   <option key={sentence.key} value={sentence.key}>
-                    {sentence.key}
+                    {sentence.isExample ? '例题' : sentence.key}
                     {sentence.text ? ` · ${sentence.text}` : ''}
                   </option>
                 ))}

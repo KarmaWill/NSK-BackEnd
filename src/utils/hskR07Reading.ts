@@ -39,6 +39,7 @@ export function normalizeR07SubQuestion(
     ...sub,
     id: sub.id ?? index + 1,
     question: sub.question ?? '',
+    questionPinyin: sub.questionPinyin ?? '',
     answer: sub.answer || fallbackAnswer || '',
     score: sub.score > 0 ? sub.score : 2,
     options,
@@ -101,6 +102,7 @@ export function resolveR07Content(
         articlePinyin?: string;
         paragraph?: string;
         paragraphPinyin?: string;
+        paragraphIndent?: boolean;
       }
     | undefined,
   subQuestions: HskSubQuestionPayload[] | undefined,
@@ -108,11 +110,13 @@ export function resolveR07Content(
 ): {
   article: string;
   articlePinyin: string;
+  paragraphIndent: boolean;
   subQuestions: HskSubQuestionPayload[];
 } {
   return {
     article: content?.article ?? content?.paragraph ?? '',
     articlePinyin: content?.articlePinyin ?? content?.paragraphPinyin ?? '',
+    paragraphIndent: content?.paragraphIndent ?? true,
     subQuestions: resolveR07SubQuestions(subQuestions, correctAnswer),
   };
 }

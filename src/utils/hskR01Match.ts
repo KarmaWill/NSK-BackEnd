@@ -4,6 +4,7 @@ export type HskMatchSentence = {
   key: string;
   text: string;
   pinyin?: string;
+  isExample?: boolean;
 };
 
 export function defaultR01Sentences(count = 3): HskMatchSentence[] {

@@ -92,7 +92,8 @@ import {
   resolveR07Content,
   syncR07AggregatedScore,
 } from '../utils/hskR07Reading';
-import { normalizeJudgmentQuestion } from '../utils/hskJudgmentQuestions';
+import { buildJudgmentContentPatch, normalizeJudgmentQuestion, resolveJudgmentContent } from '../utils/hskJudgmentQuestions';
+import { applyPinyinParagraphIndent, applyRichArticleParagraphIndent } from '../utils/hskRichArticleHtml';
 import {
   buildR09CorrectAnswer,
   buildR09PayloadPatch,
@@ -401,6 +402,7 @@ export function HskQuestionEditPage({
             ...(next.payload?.content ?? {}),
             article: resolved.article,
             articlePinyin: resolved.articlePinyin,
+            paragraphIndent: resolved.paragraphIndent,
           },
         },
       });
@@ -477,6 +479,7 @@ export function HskQuestionEditPage({
   const isR05 = draft.type_id === 'R05';
   const isR06 = draft.type_id === 'R06';
   const isR07 = draft.type_id === 'R07';
+  const isR08 = draft.type_id === 'R08';
   const isR09 = draft.type_id === 'R09';
   const isW01 = draft.type_id === 'W01';
   const isW02 = draft.type_id === 'W02';
@@ -670,6 +673,11 @@ export function HskQuestionEditPage({
     if (!isW04) return { topic: '', keyword: '', minWords: 50, prompt: '', instruction: '' };
     return resolveW04Content(draft);
   }, [isW04, draft.payload?.content]);
+
+  const judgmentContent = useMemo(
+    () => resolveJudgmentContent(draft),
+    [draft.payload?.content, draft.payload?.audioTranscript],
+  );
 
   const showAudioSection = registry?.editorFields.includes('audio') || !!draft.audioUrl;
   const audioUrl = draft.payload?.audioUrl ?? draft.audioUrl ?? '';
@@ -985,6 +993,7 @@ export function HskQuestionEditPage({
   const syncR07Content = (patch: {
     article?: string;
     articlePinyin?: string;
+    paragraphIndent?: boolean;
     subQuestions?: HskSubQuestionPayload[];
   }) => {
     setDraft((prev) => {
@@ -995,6 +1004,7 @@ export function HskQuestionEditPage({
       );
       const article = patch.article ?? current.article;
       const articlePinyin = patch.articlePinyin ?? current.articlePinyin;
+      const paragraphIndent = patch.paragraphIndent ?? current.paragraphIndent;
       const subQuestions = patch.subQuestions ?? current.subQuestions;
       const totalScore = syncR07AggregatedScore(subQuestions);
       return {
@@ -1008,6 +1018,7 @@ export function HskQuestionEditPage({
             ...(prev.payload?.content ?? {}),
             article,
             articlePinyin,
+            paragraphIndent,
           },
         },
         updatedAt: new Date().toISOString(),
@@ -1051,6 +1062,22 @@ export function HskQuestionEditPage({
         updatedAt: new Date().toISOString(),
       };
     });
+  };
+
+  const updateJudgmentSentence = (sentence: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      payload: buildJudgmentContentPatch(prev, { sentence }),
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const updateJudgmentSentencePinyin = (sentencePinyin: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      payload: buildJudgmentContentPatch(prev, { sentencePinyin }),
+      updatedAt: new Date().toISOString(),
+    }));
   };
 
   const updateImageUrl = (url: string) => {
@@ -1241,6 +1268,17 @@ export function HskQuestionEditPage({
     if (isJudgment && draft.correctAnswer !== 'A' && draft.correctAnswer !== 'B') {
       showToast('请选择正确答案');
       return;
+    }
+    if (isR08) {
+      const { sentence, sentencePinyin } = resolveJudgmentContent(draft);
+      if (!sentence.trim()) {
+        showToast('请填写判断句');
+        return;
+      }
+      if (levelNumber <= 2 && sentence.trim() && !sentencePinyin.trim()) {
+        showToast('请填写判断句拼音');
+        return;
+      }
     }
     if (isR09 && r09Options.filter((o) => o.text?.trim()).length < 2) {
       showToast('请至少填写 2 个词语选项');
@@ -1538,8 +1576,15 @@ export function HskQuestionEditPage({
                 )}
 
                 <HskQuestionJudgmentEditor
+                  typeId={draft.type_id}
                   correctAnswer={draft.correctAnswer}
+                  sentence={judgmentContent.sentence}
+                  sentencePinyin={judgmentContent.sentencePinyin}
+                  levelNumber={levelNumber}
+                  showPinyinFields={draft.showPinyinFields}
                   onCorrectAnswerChange={(answer) => update('correctAnswer', answer)}
+                  onSentenceChange={updateJudgmentSentence}
+                  onSentencePinyinChange={updateJudgmentSentencePinyin}
                 />
 
                 <HskQuestionSingleImageSection
@@ -1662,6 +1707,7 @@ export function HskQuestionEditPage({
                 <HskQuestionR07ReadingEditor
                   article={r07Content.article}
                   articlePinyin={r07Content.articlePinyin}
+                  paragraphIndent={r07Content.paragraphIndent}
                   subQuestions={r07Content.subQuestions}
                   levelNumber={levelNumber}
                   showPinyinFields={draft.showPinyinFields}
@@ -1669,6 +1715,17 @@ export function HskQuestionEditPage({
                   presetImageUrl={questionImageUrl ?? ''}
                   onArticleChange={(article) => syncR07Content({ article })}
                   onArticlePinyinChange={(articlePinyin) => syncR07Content({ articlePinyin })}
+                  onParagraphIndentChange={(paragraphIndent) => {
+                    if (!r07Content) return;
+                    syncR07Content({
+                      paragraphIndent,
+                      article: applyRichArticleParagraphIndent(r07Content.article, paragraphIndent),
+                      articlePinyin: applyPinyinParagraphIndent(
+                        r07Content.articlePinyin,
+                        paragraphIndent,
+                      ),
+                    });
+                  }}
                   onSubQuestionsChange={(subQuestions) => syncR07Content({ subQuestions })}
                 />
                 <HskQuestionSingleImageSection

@@ -1,5 +1,4 @@
 import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
-import { isJudgmentQuestionType } from '../config/hskQuestionTypeGroups';
 import type { HskQuestionTypeCode } from '../types/hskExams';
 
 /** 对齐 HSK-Exams QuestionEditPage 底部必填提示 */
@@ -13,7 +12,12 @@ export function getQuestionRequiredFieldSummary(typeId: HskQuestionTypeCode) {
     parts.push('至少1张图片');
     parts.push('至少1道子题');
   }
-  if (isJudgmentQuestionType(typeId)) {
+  if (typeId === 'R08') {
+    parts.push('判断句');
+    parts.push('题目图片');
+    parts.push('正确答案');
+  }
+  if (typeId === 'L06') {
     parts.push('题目图片');
     parts.push('正确答案');
   }

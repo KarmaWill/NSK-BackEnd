@@ -70,6 +70,8 @@ export type HskSubQuestionPayload = {
   answer: string;
   score: number;
   question?: string;
+  /** 子题题干拼音（R07 等） */
+  questionPinyin?: string;
   options?: HskRuntimeOption[];
   /** 子题是否为例题（不计分） */
   isExample?: boolean;

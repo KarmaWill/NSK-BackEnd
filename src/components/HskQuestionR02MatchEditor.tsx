@@ -129,53 +129,57 @@ export function HskQuestionR02MatchEditor({
             </label>
             <span className="hsk-question-r02-block-hint">最少 2 个</span>
           </div>
-          <div className="hsk-question-r02-item-list">
+          <div className="hsk-question-r01-sentence-list">
             {questionItems.map((item, idx) => (
               <div
                 key={`${item.id}-${idx}`}
-                className={`hsk-question-r02-item-row${item.isExample ? ' is-example' : ''}`}
+                className={`hsk-question-r01-sentence-card${item.isExample ? ' is-example' : ''}`}
               >
-                <span className="hsk-question-r02-item-index">
-                  {item.isExample ? '例题' : idx + 1}
-                </span>
-                <input
-                  type="text"
-                  value={item.text}
-                  onChange={(e) => updateQuestion(idx, { text: e.target.value })}
-                  placeholder="问题文字（词间空格分词，如：小雨 今天 去 吃）"
-                  className="hsk-question-r02-item-text"
-                />
-                {showPinyin && (
-                  <PinyinCountInput
-                    value={item.pinyin ?? ''}
-                    onChange={(v) => updateQuestion(idx, { pinyin: v })}
-                    targetHanCount={countHanInText(item.text)}
-                    targetText={item.text}
-                    placeholder="词级：xiaoyu jintian qu chi"
-                    className="hsk-question-r03-sentence-pinyin-input"
-                  />
-                )}
-                <label className="hsk-question-l02-sub-example-toggle">
-                  <span className="hsk-question-l02-sub-example-label">例题</span>
-                  <span className="toggle-wrap">
-                    <input
-                      type="checkbox"
-                      checked={!!item.isExample}
-                      onChange={() => toggleExample(idx)}
-                    />
-                    <div className="toggle-track" />
-                    <div className="toggle-thumb" />
-                  </span>
-                </label>
                 <button
                   type="button"
-                  className="hsk-question-edit-text-option-remove"
+                  className="hsk-question-edit-text-option-remove hsk-question-r01-sentence-remove"
                   onClick={() => removeQuestion(idx)}
                   disabled={questionItems.length <= 2}
                   aria-label={`删除问题 ${idx + 1}`}
                 >
                   ×
                 </button>
+                <div className="hsk-question-r01-sentence-card-body">
+                  <span className="hsk-question-r01-sentence-key">
+                    {item.isExample ? '例题' : idx + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={item.text}
+                    onChange={(e) => updateQuestion(idx, { text: e.target.value })}
+                    placeholder="问题文字（词间空格分词，如：小雨 今天 去 吃）"
+                    className="hsk-question-r01-sentence-text"
+                  />
+                  {showPinyin && (
+                    <PinyinCountInput
+                      value={item.pinyin ?? ''}
+                      onChange={(v) => updateQuestion(idx, { pinyin: v })}
+                      targetHanCount={countHanInText(item.text)}
+                      targetText={item.text}
+                      placeholder="词级：xiaoyu jintian qu chi；字级：xiao yu jin tian"
+                      className="hsk-question-r03-sentence-pinyin-input"
+                    />
+                  )}
+                </div>
+                <div className="hsk-question-r01-sentence-card-footer">
+                  <label className="hsk-question-l02-sub-example-toggle">
+                    <span className="hsk-question-l02-sub-example-label">例题</span>
+                    <span className="toggle-wrap">
+                      <input
+                        type="checkbox"
+                        checked={!!item.isExample}
+                        onChange={() => toggleExample(idx)}
+                      />
+                      <div className="toggle-track" />
+                      <div className="toggle-thumb" />
+                    </span>
+                  </label>
+                </div>
               </div>
             ))}
           </div>

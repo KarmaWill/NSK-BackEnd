@@ -1,20 +1,28 @@
 import { countHanInText, splitPinyinWord } from './pinyinUtils';
 
-/** 将纯文本转为段落 HTML；首段带缩进类名 */
-export function plainTextToRichArticleHtml(value: string): string {
+export const RICH_ARTICLE_INDENT_CLASS = 'hsk-rich-article-indent';
+
+/** 将纯文本转为段落 HTML；可选每段段首空两格 */
+export function plainTextToRichArticleHtml(value: string, paragraphIndent = false): string {
   const trimmed = value.trim();
-  if (!trimmed) return '<p class="hsk-rich-article-indent"><br></p>';
+  if (!trimmed) {
+    const cls = paragraphIndent ? ` class="${RICH_ARTICLE_INDENT_CLASS}"` : '';
+    return `<p${cls}><br></p>`;
+  }
 
   const blocks = trimmed
     .split(/\n{2,}/)
     .map((block) => block.replace(/\n/g, '<br>'))
     .filter(Boolean);
 
-  if (blocks.length === 0) return '<p class="hsk-rich-article-indent"><br></p>';
+  if (blocks.length === 0) {
+    const cls = paragraphIndent ? ` class="${RICH_ARTICLE_INDENT_CLASS}"` : '';
+    return `<p${cls}><br></p>`;
+  }
 
   return blocks
-    .map((block, idx) => {
-      const cls = idx === 0 ? ' class="hsk-rich-article-indent"' : '';
+    .map((block) => {
+      const cls = paragraphIndent ? ` class="${RICH_ARTICLE_INDENT_CLASS}"` : '';
       return `<p${cls}>${block || '<br>'}</p>`;
     })
     .join('');
@@ -24,10 +32,13 @@ export function looksLikeRichArticleHtml(value: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(value);
 }
 
-export function articleHtmlFromValue(value: string): string {
-  if (!value?.trim()) return '<p class="hsk-rich-article-indent"><br></p>';
+export function articleHtmlFromValue(value: string, paragraphIndent = false): string {
+  if (!value?.trim()) {
+    const cls = paragraphIndent ? ` class="${RICH_ARTICLE_INDENT_CLASS}"` : '';
+    return `<p${cls}><br></p>`;
+  }
   if (looksLikeRichArticleHtml(value)) return value;
-  return plainTextToRichArticleHtml(value);
+  return plainTextToRichArticleHtml(value, paragraphIndent);
 }
 
 export function normalizeRichArticleHtml(html: string): string {
@@ -101,7 +112,7 @@ export function sanitizeRichArticleHtml(html: string): string {
         if (el.tagName === 'IMG' && (attr.name === 'src' || attr.name === 'alt' || attr.name === 'class')) {
           return;
         }
-        if (attr.name === 'class' && el.tagName === 'P' && el.className.includes('hsk-rich-article-indent')) {
+        if (attr.name === 'class' && el.tagName === 'P' && el.className.includes(RICH_ARTICLE_INDENT_CLASS)) {
           return;
         }
         el.removeAttribute(attr.name);
@@ -155,11 +166,13 @@ export function insertPresetImageInSecondParagraph(html: string, imageUrl: strin
   let paragraphs = [...body.querySelectorAll('p')];
 
   if (paragraphs.length === 0) {
-    body.innerHTML =
-      '<p class="hsk-rich-article-indent"><br></p><p><br></p>';
+    body.innerHTML = '<p><br></p><p><br></p>';
     paragraphs = [...body.querySelectorAll('p')];
   } else if (paragraphs.length === 1) {
     const second = doc.createElement('p');
+    if (paragraphs[0].classList.contains(RICH_ARTICLE_INDENT_CLASS)) {
+      second.classList.add(RICH_ARTICLE_INDENT_CLASS);
+    }
     second.innerHTML = '<br>';
     body.appendChild(second);
     paragraphs = [...body.querySelectorAll('p')];
@@ -171,10 +184,28 @@ export function insertPresetImageInSecondParagraph(html: string, imageUrl: strin
   return sanitizeRichArticleHtml(body.innerHTML);
 }
 
-export function ensureFirstParagraphIndent(html: string): string {
+export function applyRichArticleParagraphIndent(html: string, enabled: boolean): string {
   if (typeof document === 'undefined') return html;
   const doc = new DOMParser().parseFromString(articleHtmlFromValue(html), 'text/html');
-  const first = doc.body.querySelector('p');
-  if (first) first.classList.add('hsk-rich-article-indent');
+  doc.body.querySelectorAll('p').forEach((paragraph) => {
+    if (enabled) paragraph.classList.add(RICH_ARTICLE_INDENT_CLASS);
+    else paragraph.classList.remove(RICH_ARTICLE_INDENT_CLASS);
+  });
   return sanitizeRichArticleHtml(doc.body.innerHTML);
+}
+
+/** 段首空两格：拼音区用全角空格前缀，Enter 换行时自动插入 */
+export function applyPinyinParagraphIndent(value: string, enabled: boolean): string {
+  if (!value) return value;
+  const lines = value.split('\n');
+  if (enabled) {
+    return lines
+      .map((line) => (line.startsWith('\u3000\u3000') ? line : `\u3000\u3000${line}`))
+      .join('\n');
+  }
+  return lines.map((line) => line.replace(/^\u3000\u3000/, '')).join('\n');
+}
+
+export function ensureFirstParagraphIndent(html: string): string {
+  return applyRichArticleParagraphIndent(html, true);
 }

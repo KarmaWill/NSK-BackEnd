@@ -6,7 +6,7 @@
  * - PinyinInlineField：单词拼音输入，带轻量格式校验红点
  */
 
-import { useMemo } from 'react';
+import { useMemo, type KeyboardEvent } from 'react';
 import { isPinyinLike, validatePinyinAlign } from '../utils/pinyinUtils';
 
 // ─── PinyinCountInput ─────────────────────────────────────────────────────────
@@ -20,6 +20,11 @@ type PinyinCountInputProps = {
   targetText?: string;
   placeholder?: string;
   className?: string;
+  /** 长段拼音（如 R07 文章拼音）使用多行输入 */
+  multiline?: boolean;
+  rows?: number;
+  /** 段首空两格：多行时 Enter 自动插入全角空格前缀 */
+  paragraphIndent?: boolean;
 };
 
 /**
@@ -33,6 +38,9 @@ export function PinyinCountInput({
   targetText,
   placeholder,
   className = 'hsk-question-r02-item-text',
+  multiline = false,
+  rows = 6,
+  paragraphIndent = false,
 }: PinyinCountInputProps) {
   const result = useMemo(() => {
     if (targetHanCount == null) return null;
@@ -40,18 +48,55 @@ export function PinyinCountInput({
   }, [value, targetHanCount, targetText]);
 
   const showBadge = targetHanCount != null && value.trim().length > 0;
+  const wrapClass = [
+    'hsk-pinyin-count-wrap',
+    multiline ? 'is-multiline' : '',
+    multiline ? 'is-resizable' : '',
+    paragraphIndent ? 'is-paragraph-indent' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const handleTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!multiline || !paragraphIndent || event.key !== 'Enter' || event.shiftKey) return;
+    event.preventDefault();
+    const ta = event.currentTarget;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const insert = '\n\u3000\u3000';
+    const next = value.slice(0, start) + insert + value.slice(end);
+    onChange(next);
+    const pos = start + insert.length;
+    requestAnimationFrame(() => {
+      ta.selectionStart = pos;
+      ta.selectionEnd = pos;
+    });
+  };
 
   return (
-    <div className="hsk-pinyin-count-wrap">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={
-          placeholder ?? '词级或字级均可，如：péngyou hǎo 或 péng you hǎo'
-        }
-        className={className}
-      />
+    <div className={wrapClass}>
+      {multiline ? (
+        <textarea
+          rows={rows}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleTextareaKeyDown}
+          placeholder={
+            placeholder ?? '词级或字级均可，如：péngyou hǎo 或 péng you hǎo'
+          }
+          className={className || 'hsk-pinyin-count-textarea'}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={
+            placeholder ?? '词级或字级均可，如：péngyou hǎo 或 péng you hǎo'
+          }
+          className={className}
+        />
+      )}
       {showBadge && result && (
         <span
           className={`hsk-pinyin-count-badge${result.ok ? ' is-ok' : ' is-err'}`}

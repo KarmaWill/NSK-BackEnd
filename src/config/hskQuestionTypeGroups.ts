@@ -38,7 +38,7 @@ export function isJudgmentQuestionType(typeId: HskQuestionTypeCode): boolean {
 /** 整题级「例题」开关（复合题 / 带子题编辑的在子题层标记） */
 export function supportsQuestionExampleFlag(typeId: HskQuestionTypeCode): boolean {
   if (typeId === 'R09' || typeId.startsWith('W')) return false;
-  if (typeId === 'L02' || typeId === 'L05' || typeId === 'R02' || typeId === 'R03' || typeId === 'R07') return false;
+  if (typeId === 'L02' || typeId === 'L05' || typeId === 'R01' || typeId === 'R02' || typeId === 'R03' || typeId === 'R07') return false;
   if (defaultCompoundForType(typeId)) return false;
   return typeId.startsWith('L') || typeId.startsWith('R');
 }

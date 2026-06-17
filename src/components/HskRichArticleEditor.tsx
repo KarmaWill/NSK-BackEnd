@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, type ChangeEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import {
+  applyRichArticleParagraphIndent,
   articleHtmlFromValue,
   insertPresetImageInSecondParagraph,
   normalizeRichArticleHtml,
+  RICH_ARTICLE_INDENT_CLASS,
   sanitizeRichArticleHtml,
 } from '../utils/hskRichArticleHtml';
 
@@ -13,7 +15,17 @@ type Props = {
   remountKey?: string;
   presetImageUrl?: string;
   placeholder?: string;
+  /** 段首空两格：开启后每段（含 Enter 新段）应用缩进 */
+  paragraphIndent?: boolean;
+  onParagraphIndentChange?: (enabled: boolean) => void;
 };
+
+function syncEditorParagraphIndent(el: HTMLElement, enabled: boolean) {
+  el.querySelectorAll('p').forEach((paragraph) => {
+    if (enabled) paragraph.classList.add(RICH_ARTICLE_INDENT_CLASS);
+    else paragraph.classList.remove(RICH_ARTICLE_INDENT_CLASS);
+  });
+}
 
 export function HskRichArticleEditor({
   value,
@@ -21,24 +33,37 @@ export function HskRichArticleEditor({
   remountKey = 'default',
   presetImageUrl = '',
   placeholder = '输入阅读理解的文章全文…',
+  paragraphIndent = false,
+  onParagraphIndentChange,
 }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prevParagraphIndent = useRef(paragraphIndent);
 
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
-    el.innerHTML = articleHtmlFromValue(value);
-    el.querySelector('p')?.classList.add('hsk-rich-article-indent');
+    el.innerHTML = articleHtmlFromValue(value, paragraphIndent);
+    syncEditorParagraphIndent(el, paragraphIndent);
+    prevParagraphIndent.current = paragraphIndent;
   }, [remountKey]);
+
+  useEffect(() => {
+    if (prevParagraphIndent.current === paragraphIndent) return;
+    prevParagraphIndent.current = paragraphIndent;
+    const el = editorRef.current;
+    if (!el) return;
+    el.innerHTML = articleHtmlFromValue(value, paragraphIndent);
+    syncEditorParagraphIndent(el, paragraphIndent);
+  }, [paragraphIndent, value]);
 
   const syncFromEditor = useCallback(() => {
     const el = editorRef.current;
     if (!el) return;
-    el.querySelector('p')?.classList.add('hsk-rich-article-indent');
+    syncEditorParagraphIndent(el, paragraphIndent);
     const raw = normalizeRichArticleHtml(el.innerHTML) ?? el.innerHTML;
     onChange(sanitizeRichArticleHtml(raw));
-  }, [onChange]);
+  }, [onChange, paragraphIndent]);
 
   const runCommand = (command: string, commandValue?: string) => {
     const el = editorRef.current;
@@ -84,23 +109,43 @@ export function HskRichArticleEditor({
   const handleInsertPresetImage = () => {
     if (!presetImageUrl.trim()) return;
     const next = insertPresetImageInSecondParagraph(value, presetImageUrl);
+    const indented = applyRichArticleParagraphIndent(next, paragraphIndent);
     if (editorRef.current) {
-      editorRef.current.innerHTML = articleHtmlFromValue(next);
-      editorRef.current.querySelector('p')?.classList.add('hsk-rich-article-indent');
+      editorRef.current.innerHTML = articleHtmlFromValue(indented, paragraphIndent);
+      syncEditorParagraphIndent(editorRef.current, paragraphIndent);
     }
-    onChange(next);
+    onChange(indented);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' || event.shiftKey) return;
     event.preventDefault();
     document.execCommand('insertParagraph');
+    const el = editorRef.current;
+    if (el && paragraphIndent) {
+      syncEditorParagraphIndent(el, true);
+    }
     syncFromEditor();
+  };
+
+  const handleToggleParagraphIndent = () => {
+    onParagraphIndentChange?.(!paragraphIndent);
   };
 
   return (
     <div className="hsk-rich-article-editor-wrap">
       <div className="hsk-rich-article-toolbar" role="toolbar" aria-label="文章格式">
+        <button
+          type="button"
+          className={`hsk-rich-article-tool-btn${paragraphIndent ? ' is-active' : ''}`}
+          title="段首空两格（Enter 换段自动应用）"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleToggleParagraphIndent}
+          disabled={!onParagraphIndentChange}
+        >
+          段首空两格
+        </button>
+        <span className="hsk-rich-article-tool-divider" aria-hidden />
         <button
           type="button"
           className="hsk-rich-article-tool-btn"
@@ -158,7 +203,9 @@ export function HskRichArticleEditor({
         onKeyDown={handleKeyDown}
       />
       <p className="hsk-question-r02-block-hint hsk-rich-article-hint">
-        Enter 换段 · 首段自动空两字 · 「预设图片」插入到第二段
+        Enter 换段
+        {paragraphIndent ? ' · 已开启段首空两格' : ' · 可点「段首空两格」开启缩进'}
+        {' · 「预设图片」插入到第二段'}
       </p>
     </div>
   );

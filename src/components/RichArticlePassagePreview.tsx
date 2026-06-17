@@ -29,10 +29,9 @@ export function RichArticlePassagePreview({ html, pinyin = '', className }: Prop
 
         if (el.tagName === 'P') {
           const plain = el.textContent ?? '';
-          const indent =
-            el.classList.contains('hsk-rich-article-indent') || paragraphIndex === 0
-              ? ' hsk-rich-article-indent'
-              : '';
+          const indent = el.classList.contains('hsk-rich-article-indent')
+            ? ' hsk-rich-article-indent'
+            : '';
           const currentPinyin = pinyinByParagraph[paragraphIndex] ?? '';
           paragraphIndex += 1;
           const hasFormat = /<(strong|b|em|i|u)\b/i.test(el.innerHTML);

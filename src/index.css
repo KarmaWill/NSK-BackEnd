@@ -6247,7 +6247,7 @@ details.news-publish-card > summary::-webkit-details-marker {
 .hsk-question-r01-sentence-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .hsk-question-r01-sentence-row,
@@ -6259,6 +6259,61 @@ details.news-publish-card > summary::-webkit-details-marker {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #f9fafb;
+}
+
+.hsk-question-r01-sentence-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 40px 10px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.hsk-question-r01-sentence-card.is-example {
+  border-color: #c4b5fd;
+  background: #faf5ff;
+}
+
+.hsk-question-r01-sentence-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hsk-question-r01-sentence-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.hsk-question-r01-sentence-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hsk-question-r01-sentence-card .hsk-question-r01-sentence-text {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hsk-question-r01-sentence-card .hsk-pinyin-count-wrap {
+  width: 100%;
+}
+
+.hsk-question-r01-sentence-card .hsk-pinyin-count-wrap input {
+  width: 100%;
+  min-width: 0;
+  padding-right: 96px;
+  box-sizing: border-box;
 }
 
 .hsk-question-r01-sentence-key {
@@ -6405,6 +6460,29 @@ details.news-publish-card > summary::-webkit-details-marker {
   color: #dc2626;
 }
 
+.hsk-question-judgment-sentence-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hsk-question-judgment-sentence-section .hsk-pinyin-count-wrap {
+  width: 100%;
+}
+
+.hsk-question-judgment-sentence-section .hsk-pinyin-count-wrap input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hsk-preview-judgment-sentence-ruby {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #1f2937;
+}
+
 .hsk-question-judgment-body {
   display: flex;
   flex-direction: column;
@@ -6525,11 +6603,50 @@ details.news-publish-card > summary::-webkit-details-marker {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   min-height: 112px;
   padding: 20px 16px;
   border: 2px solid #e5e7eb;
   border-radius: 14px;
   background: #fff;
+}
+
+.hsk-preview-judgment-tf-btn-interactive {
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.hsk-preview-judgment-tf-btn-interactive:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.hsk-preview-judgment-tf-btn-interactive.is-selected {
+  box-shadow: 0 0 0 2px rgba(232, 93, 4, 0.12);
+}
+
+.hsk-preview-judgment-tf-btn-interactive.is-selected.is-true {
+  border-color: #e85d04;
+  background: #fff7ed;
+}
+
+.hsk-preview-judgment-tf-btn-interactive.is-selected.is-false {
+  border-color: #e85d04;
+  background: #fff7ed;
+}
+
+.hsk-preview-judgment-tf-btn-interactive.is-correct {
+  border-color: #0f6e56;
+  background: #f0fdf9;
+}
+
+.hsk-preview-judgment-tf-btn-interactive.is-wrong {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.hsk-preview-judgment-tf-btn-interactive:disabled {
+  cursor: default;
 }
 
 .hsk-preview-judgment-tf-btn.is-true {
@@ -11620,6 +11737,47 @@ details.news-publish-card > summary::-webkit-details-marker {
   margin-bottom: 10px;
 }
 
+.hsk-question-r07-sub-question-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.hsk-question-r07-sub-question-block .hsk-question-r01-sentence-text {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hsk-question-r07-sub-question-block .hsk-pinyin-count-wrap {
+  width: 100%;
+}
+
+.hsk-question-r07-sub-question-block .hsk-pinyin-count-wrap input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.hsk-question-r07-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.hsk-question-r07-option-card {
+  margin: 0;
+}
+
+.hsk-preview-r07-question-stem-ruby {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+}
+
 .hsk-question-r07-sub-answer {
   display: flex;
   align-items: center;
@@ -11654,8 +11812,7 @@ details.news-publish-card > summary::-webkit-details-marker {
   margin-bottom: 0;
 }
 
-.hsk-preview-r07-passage-rich .hsk-rich-article-indent,
-.hsk-preview-r07-passage-rich p:first-of-type {
+.hsk-preview-r07-passage-rich .hsk-rich-article-indent {
   text-indent: 2em;
 }
 
@@ -11704,6 +11861,13 @@ details.news-publish-card > summary::-webkit-details-marker {
   cursor: not-allowed;
 }
 
+.hsk-rich-article-tool-btn.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
 .hsk-rich-article-tool-btn--accent {
   border-color: #bfdbfe;
   color: #1d4ed8;
@@ -11747,8 +11911,7 @@ details.news-publish-card > summary::-webkit-details-marker {
   margin-bottom: 0;
 }
 
-.hsk-rich-article-editor .hsk-rich-article-indent,
-.hsk-rich-article-editor p:first-of-type {
+.hsk-rich-article-editor .hsk-rich-article-indent {
   text-indent: 2em;
 }
 
@@ -12171,6 +12334,53 @@ details.news-publish-card > summary::-webkit-details-marker {
 .hsk-pinyin-count-wrap input {
   flex: 1;
   padding-right: 96px; /* room for badge */
+}
+
+.hsk-pinyin-count-wrap.is-multiline {
+  align-items: stretch;
+  width: 100%;
+}
+
+.hsk-pinyin-count-wrap.is-multiline .hsk-pinyin-count-badge {
+  top: 8px;
+  bottom: auto;
+}
+
+.hsk-pinyin-count-wrap.is-multiline.is-resizable .hsk-pinyin-count-textarea {
+  resize: vertical;
+  min-height: 148px;
+  max-height: 480px;
+  overflow: auto;
+}
+
+.hsk-pinyin-count-wrap.is-paragraph-indent .hsk-pinyin-count-textarea {
+  white-space: pre-wrap;
+  line-height: 1.85;
+}
+
+.hsk-pinyin-count-textarea {
+  width: 100%;
+  min-height: 148px;
+  padding: 12px 96px 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  resize: vertical;
+  line-height: 1.85;
+  font: inherit;
+  font-size: 14px;
+  color: #374151;
+  box-sizing: border-box;
+}
+
+.hsk-pinyin-count-textarea:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.35);
+}
+
+.hsk-question-r05-field .hsk-pinyin-count-wrap.is-multiline {
+  margin-top: 4px;
 }
 
 .hsk-pinyin-count-badge {
