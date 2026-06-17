@@ -3345,6 +3345,42 @@ input[type="range"].swm-range {
   flex: 1;
 }
 
+.library-multilang-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--stone-dark);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.library-multilang-tab:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.library-multilang-tab.is-active {
+  border-color: var(--primary, #2563eb);
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.library-multilang-tab-flag {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.library-multilang-tab-code {
+  letter-spacing: 0.02em;
+}
+
 .library-multilang-panel .form-input {
   width: 100%;
   box-sizing: border-box;

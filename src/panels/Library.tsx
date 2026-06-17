@@ -47,6 +47,7 @@ import {
   formatVolumeLabelCn,
   primaryEnglishTitle,
   resolveTitleByLang,
+  LANG_TAB_META,
   type LangKey,
   type TitleByLang,
 } from '../config/languages';
@@ -2192,16 +2193,23 @@ function LibraryMultilangPanel({
     <div className={`library-multilang-panel${isDirty ? ' is-dirty' : ''}`}>
       <div className="library-multilang-toolbar">
         <div className="library-multilang-tabs">
-          {LANG_OPTIONS.map((o) => (
-            <button
-              key={o.key}
-              type="button"
-              className={`btn btn-sm ${langTab === o.key ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => onLangTabChange(o.key)}
-            >
-              {o.key} {o.label}
-            </button>
-          ))}
+          {LANG_OPTIONS.map((o) => {
+            const meta = LANG_TAB_META[o.key];
+            return (
+              <button
+                key={o.key}
+                type="button"
+                className={`library-multilang-tab${langTab === o.key ? ' is-active' : ''}`}
+                onClick={() => onLangTabChange(o.key)}
+                aria-label={o.label}
+              >
+                <span className="library-multilang-tab-flag" aria-hidden>
+                  {meta.flag}
+                </span>
+                <span className="library-multilang-tab-code">{meta.code}</span>
+              </button>
+            );
+          })}
         </div>
         <button type="button" className="btn btn-secondary btn-sm" onClick={handleAutoTranslate}>
           自动翻译
