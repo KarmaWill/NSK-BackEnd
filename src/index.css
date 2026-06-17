@@ -11851,6 +11851,18 @@ details.news-publish-card > summary::-webkit-details-marker {
   transition: border-color 0.15s, background 0.15s;
 }
 
+.hsk-rich-article-tool-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+}
+
+.hsk-rich-article-tool-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
 .hsk-rich-article-tool-btn:hover:not(:disabled) {
   border-color: #93c5fd;
   background: #eff6ff;

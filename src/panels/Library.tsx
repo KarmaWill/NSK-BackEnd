@@ -43,6 +43,7 @@ import {
 import {
   LANG_OPTIONS,
   autoTranslateTitleByLang,
+  createEmptyTitleByLang,
   formatVolumeLabelCn,
   primaryEnglishTitle,
   resolveTitleByLang,
@@ -57,6 +58,7 @@ type BookSeries = {
   sortOrder: number;
   name: string;
   nameEn?: string;
+  nameByLang?: TitleByLang;
   publisher: string;
   hskLevelMin: string;
   hskLevelMax: string;
@@ -1227,8 +1229,8 @@ type CreateSeriesModalProps = {
 
 function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }: CreateSeriesModalProps) {
   const isEdit = !!series;
-  const [name, setName] = useState('');
-  const [nameEn, setNameEn] = useState('');
+  const [nameLangTab, setNameLangTab] = useState<LangKey>('CN');
+  const [nameByLang, setNameByLang] = useState<TitleByLang>(() => createEmptyTitleByLang());
   const [publisher, setPublisher] = useState('');
   const [hskLevelMin, setHskLevelMin] = useState('HSK1级');
   const [hskLevelMax, setHskLevelMax] = useState('HSK1级');
@@ -1239,8 +1241,7 @@ function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }
   useEffect(() => {
     if (!open) return;
     if (series) {
-      setName(series.name);
-      setNameEn(series.nameEn ?? '');
+      setNameByLang(resolveTitleByLang(series.name, series.nameEn, series.nameByLang));
       setPublisher(series.publisher);
       setHskLevelMin(series.hskLevelMin);
       setHskLevelMax(series.hskLevelMax);
@@ -1248,8 +1249,8 @@ function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }
       setCoverColor(series.coverColor ?? DEFAULT_SERIES_COVER_COLOR);
       return;
     }
-    setName('');
-    setNameEn('');
+    setNameByLang(createEmptyTitleByLang());
+    setNameLangTab('CN');
     setPublisher(defaultPublisher ?? '');
     setHskLevelMin('HSK1级');
     setHskLevelMax('HSK1级');
@@ -1257,13 +1258,36 @@ function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }
     setCoverColor(DEFAULT_SERIES_COVER_COLOR);
   }, [open, series, defaultPublisher]);
 
+  const updateNameByLang = (lang: LangKey, value: string) => {
+    setNameByLang((prev) => ({ ...prev, [lang]: value }));
+  };
+
+  const runAutoTranslateSeriesName = () => {
+    const seed = (nameByLang.CN ?? nameByLang[nameLangTab] ?? '').trim();
+    if (!seed) return;
+    const next = autoTranslateTitleByLang(seed);
+    setNameByLang(
+      Object.fromEntries(
+        Object.entries(next).map(([key, val]) => [key, sanitizeTitleName(val ?? '')]),
+      ) as TitleByLang,
+    );
+  };
+
   const handleSubmit = () => {
-    if (!name.trim() || !publisher) return;
+    const cn = (nameByLang.CN ?? '').trim();
+    if (!cn || !publisher) return;
+    const normalizedByLang: TitleByLang = {
+      ...createEmptyTitleByLang(),
+      ...nameByLang,
+      CN: cn,
+    };
+    const en = (normalizedByLang.EN ?? '').trim();
     onSubmit({
       id: series?.id ?? `series-${Date.now()}`,
       sortOrder: series?.sortOrder ?? 0,
-      name: name.trim(),
-      nameEn: nameEn.trim() || undefined,
+      name: cn,
+      nameEn: en || undefined,
+      nameByLang: normalizedByLang,
       publisher,
       hskLevelMin,
       hskLevelMax,
@@ -1282,30 +1306,26 @@ function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }
           <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
         </div>
         <div className="modal-body">
-          <div className="form-row">
-            <div className="form-group">
-              <label>系列名称<span className="required">*</span></label>
-              <input
-                className="form-input"
-                value={name}
-                maxLength={LIBRARY_FIELD_LIMITS.title}
-                onChange={(e) => setName(sanitizeTitleName(e.target.value))}
-                placeholder="如 快乐中文系列"
-              />
-              <div className="form-hint">
-                {LIBRARY_FIELD_HINTS.title} · {name.length}/{LIBRARY_FIELD_LIMITS.title}
-              </div>
-            </div>
-            <div className="form-group">
-              <label>英文名称</label>
-              <input
-                className="form-input"
-                value={nameEn}
-                maxLength={LIBRARY_FIELD_LIMITS.title}
-                onChange={(e) => setNameEn(sanitizeTitleName(e.target.value))}
-                placeholder="如 Happy Chinese"
-              />
-            </div>
+          <div className="form-group">
+            <label>系列名称（多语言）<span className="required">*</span></label>
+            <LibraryMultilangPanel
+              langTab={nameLangTab}
+              onLangTabChange={setNameLangTab}
+              valueByLang={nameByLang}
+              onChange={updateNameByLang}
+              onAutoTranslate={runAutoTranslateSeriesName}
+              sanitizeValue={sanitizeTitleName}
+              maxLength={LIBRARY_FIELD_LIMITS.title}
+              fieldHint={LIBRARY_FIELD_HINTS.title}
+              placeholder={`${LANG_OPTIONS.find((l) => l.key === nameLangTab)?.label ?? nameLangTab}系列名称`}
+              hint={
+                nameLangTab === 'CN' && !(nameByLang.CN ?? '').trim() ? (
+                  <div className="form-hint" style={{ color: 'var(--rose)', marginTop: 8 }}>
+                    中文系列名称为必填项
+                  </div>
+                ) : undefined
+              }
+            />
           </div>
           <div className="form-group">
             <label>出版社<span className="required">*</span></label>
@@ -1394,7 +1414,7 @@ function CreateSeriesModal({ open, series, defaultPublisher, onClose, onSubmit }
             type="button"
             className="btn btn-primary"
             onClick={handleSubmit}
-            disabled={!name.trim() || !publisher}
+            disabled={!(nameByLang.CN ?? '').trim() || !publisher}
           >
             {isEdit ? '保存' : '创建系列'}
           </button>
@@ -1701,7 +1721,7 @@ export function Library() {
               <span>{selectedSeries.name}</span>
             </div>
             <div className="page-subtitle">
-              {selectedSeries.nameEn && `${selectedSeries.nameEn} · `}
+              {selectedSeries.nameEn && `${primaryEnglishTitle(selectedSeries.nameByLang, selectedSeries.nameEn)} · `}
               {selectedSeries.publisher} · {seriesBooks.length} 册
             </div>
           </div>
@@ -1906,6 +1926,10 @@ export function Library() {
       .join(' ');
     return s.name.toLowerCase().includes(query) ||
       s.nameEn?.toLowerCase().includes(query) ||
+      Object.values(resolveTitleByLang(s.name, s.nameEn, s.nameByLang))
+        .join(' ')
+        .toLowerCase()
+        .includes(query) ||
       s.publisher.toLowerCase().includes(query) ||
       bookTitles.includes(query);
   }).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -1995,8 +2019,10 @@ export function Library() {
                   <div className="library-series-title-row">
                     <div className="library-series-info">
                       <div className="library-series-name">{series.name}</div>
-                      {series.nameEn && (
-                        <div className="library-series-name-en">{series.nameEn}</div>
+                      {primaryEnglishTitle(series.nameByLang, series.nameEn) && (
+                        <div className="library-series-name-en">
+                          {primaryEnglishTitle(series.nameByLang, series.nameEn)}
+                        </div>
                       )}
                     </div>
                     <span className="hsk-badge" style={{ background: 'var(--primary-l)', color: 'var(--primary)', flexShrink: 0 }}>

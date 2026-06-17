@@ -137,13 +137,25 @@ export function HskRichArticleEditor({
       <div className="hsk-rich-article-toolbar" role="toolbar" aria-label="文章格式">
         <button
           type="button"
-          className={`hsk-rich-article-tool-btn${paragraphIndent ? ' is-active' : ''}`}
+          className={`hsk-rich-article-tool-btn hsk-rich-article-tool-btn--icon${paragraphIndent ? ' is-active' : ''}`}
           title="段首空两格（Enter 换段自动应用）"
+          aria-label="段首空两格"
+          aria-pressed={paragraphIndent}
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleToggleParagraphIndent}
           disabled={!onParagraphIndentChange}
         >
-          段首空两格
+          <svg
+            className="hsk-rich-article-tool-icon"
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden
+          >
+            <path d="M2 3.5h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M5.5 8h7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M2 12.5h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
         </button>
         <span className="hsk-rich-article-tool-divider" aria-hidden />
         <button
