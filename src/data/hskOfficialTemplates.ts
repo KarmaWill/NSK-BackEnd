@@ -28,8 +28,8 @@ export const KLZW_BOOK_TABS = [
 ] as const;
 
 export const KLZW_BOOK1_TESTS = [
-  { key: 'midterm', label: '期中测试', icon: '📝' },
-  { key: 'final', label: '期末测试', icon: '📋' },
+  { key: 'midterm', label: '期末测试', icon: '📝' },
+  { key: 'final', label: '期中测试', icon: '📋' },
   { key: 'unit_a', label: '单元测试A', icon: '📄' },
   { key: 'unit_b', label: '单元测试B', icon: '📑' },
 ] as const;
