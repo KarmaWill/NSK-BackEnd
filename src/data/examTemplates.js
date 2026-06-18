@@ -561,6 +561,60 @@ export const OFFICIAL_TEMPLATES = [
     fullScore: 200,
     passScore: 120,
     audioPlayCount: 2,
+    totalQuestions: 35,
+    totalDuration: 35,
+    timeBlocks: { prep: 5, listening: 10, buffer: 3, reading: 17, writing: 0 },
+    modules: [
+      {
+        id: 'listening', name: '听力', totalQuestions: 20,
+        sections: [
+          { id: 'L_p1', name: '第一部分', questionType: 'L06', isCompound: false,
+            groups: [{ questionCount: 5, hasExample: true, exampleCount: 2 }],
+            totalCount: 5, scoringCount: 3 },
+          { id: 'L_p2', name: '第二部分', questionType: 'L01', isCompound: false,
+            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
+            totalCount: 5, scoringCount: 4 },
+          { id: 'L_p3', name: '第三部分', questionType: 'L06', isCompound: false,
+            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
+            totalCount: 5, scoringCount: 4 },
+          { id: 'L_p4', name: '第四部分', questionType: 'L01', isCompound: false,
+            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
+            totalCount: 5, scoringCount: 4 },
+        ]
+      },
+      {
+        id: 'reading', name: '阅读', totalQuestions: 15,
+        sections: [
+          { id: 'R_p1', name: '第一部分', questionType: 'R08', isCompound: false,
+            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
+            totalCount: 5, scoringCount: 4 },
+          { id: 'R_p2', name: '第二部分', questionType: 'R01', isCompound: true,
+            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
+            totalCount: 5, scoringCount: 4 },
+          { id: 'R_p3', name: '第三部分', questionType: 'R09', isCompound: true,
+            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
+            totalCount: 5, scoringCount: 4 },
+        ]
+      }
+    ]
+  },
+
+  // ===== 快乐中文 期末 =====
+  {
+    id: 'klzw_final',
+    name: '第一册期末测试',
+    displayName: '快乐中文 · 第一册期末测试',
+    category: 'KLZW',
+    book: '1',
+    testType: 'final',
+    level: 'final',
+    isOfficial: true,
+    editableByAdmin: false,
+    version: 1,
+    lastUpdated: '2025-01-15',
+    fullScore: 200,
+    passScore: 120,
+    audioPlayCount: 2,
     totalQuestions: 40,
     totalDuration: 40,
     timeBlocks: { prep: 5, listening: 15, buffer: 3, reading: 17, writing: 0 },
@@ -595,60 +649,6 @@ export const OFFICIAL_TEMPLATES = [
             groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
             totalCount: 5, scoringCount: 4 },
           { id: 'R_p4', name: '第四部分', questionType: 'R03', isCompound: true,
-            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
-            totalCount: 5, scoringCount: 4 },
-        ]
-      }
-    ]
-  },
-
-  // ===== 快乐中文 期末 =====
-  {
-    id: 'klzw_final',
-    name: '第一册期末测试',
-    displayName: '快乐中文 · 第一册期末测试',
-    category: 'KLZW',
-    book: '1',
-    testType: 'final',
-    level: 'final',
-    isOfficial: true,
-    editableByAdmin: false,
-    version: 1,
-    lastUpdated: '2025-01-15',
-    fullScore: 200,
-    passScore: 120,
-    audioPlayCount: 2,
-    totalQuestions: 35,
-    totalDuration: 35,
-    timeBlocks: { prep: 5, listening: 10, buffer: 3, reading: 17, writing: 0 },
-    modules: [
-      {
-        id: 'listening', name: '听力', totalQuestions: 20,
-        sections: [
-          { id: 'L_p1', name: '第一部分', questionType: 'L06', isCompound: false,
-            groups: [{ questionCount: 5, hasExample: true, exampleCount: 2 }],
-            totalCount: 5, scoringCount: 3 },
-          { id: 'L_p2', name: '第二部分', questionType: 'L01', isCompound: false,
-            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
-            totalCount: 5, scoringCount: 4 },
-          { id: 'L_p3', name: '第三部分', questionType: 'L06', isCompound: false,
-            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
-            totalCount: 5, scoringCount: 4 },
-          { id: 'L_p4', name: '第四部分', questionType: 'L01', isCompound: false,
-            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
-            totalCount: 5, scoringCount: 4 },
-        ]
-      },
-      {
-        id: 'reading', name: '阅读', totalQuestions: 15,
-        sections: [
-          { id: 'R_p1', name: '第一部分', questionType: 'R08', isCompound: false,
-            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
-            totalCount: 5, scoringCount: 4 },
-          { id: 'R_p2', name: '第二部分', questionType: 'R01', isCompound: true,
-            groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
-            totalCount: 5, scoringCount: 4 },
-          { id: 'R_p3', name: '第三部分', questionType: 'R09', isCompound: true,
             groups: [{ questionCount: 5, hasExample: true, exampleCount: 1 }],
             totalCount: 5, scoringCount: 4 },
         ]
