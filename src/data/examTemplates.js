@@ -1,3 +1,4 @@
+/** 官方模板结构与时长相符于《HSK及快乐中文试卷模板.docx》 */
 export const OFFICIAL_TEMPLATES = [
 
   // ===== HSK 1级 =====
@@ -8,15 +9,14 @@ export const OFFICIAL_TEMPLATES = [
     level: '1',
     isOfficial: true,
     editableByAdmin: false,
-    editableByAdmin: false,
     version: 1,
     lastUpdated: '2024-01-15',
     fullScore: 200,
     passScore: 120,
     audioPlayCount: 2,
     totalQuestions: 40,
-    totalDuration: 35,
-    timeBlocks: { prep: 5, listening: 15, buffer: 3, reading: 17, writing: 0 },
+    totalDuration: 40,
+    timeBlocks: { prep: 5, listening: 12, buffer: 3, reading: 20, writing: 0 },
     modules: [
       {
         id: 'listening', name: '听力', totalQuestions: 20,
@@ -63,7 +63,7 @@ export const OFFICIAL_TEMPLATES = [
     ]
   },
 
-  // ===== HSK 2级 (HSK 3.0: 40 questions, no writing) =====
+  // ===== HSK 2级 =====
   {
     id: 'hsk2',
     name: 'HSK 2级标准卷',
@@ -76,40 +76,54 @@ export const OFFICIAL_TEMPLATES = [
     fullScore: 200,
     passScore: 120,
     audioPlayCount: 2,
-    totalQuestions: 40,
-    totalDuration: 35,
-    timeBlocks: { prep: 5, listening: 15, buffer: 3, reading: 17, writing: 0 },
+    totalQuestions: 60,
+    totalDuration: 60,
+    timeBlocks: { prep: 5, listening: 17, buffer: 3, reading: 25, writing: 10 },
     modules: [
       {
-        id: 'listening', name: '听力', totalQuestions: 20,
+        id: 'listening', name: '听力', totalQuestions: 25,
         sections: [
           { id: 'L_p1', name: '第一部分', questionType: 'L01', isCompound: false,
             groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
             totalCount: 5, scoringCount: 5 },
           { id: 'L_p2', name: '第二部分', questionType: 'L02', isCompound: true,
-            groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-            totalCount: 5, scoringCount: 5 },
+            groups: [
+              { questionCount: 5, hasExample: false, exampleCount: 0 },
+              { questionCount: 5, hasExample: false, exampleCount: 0 },
+            ],
+            totalCount: 10, scoringCount: 10 },
           { id: 'L_p3', name: '第三部分', questionType: 'L03', isCompound: false,
+            groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
+            totalCount: 10, scoringCount: 10 },
+        ]
+      },
+      {
+        id: 'reading', name: '阅读', totalQuestions: 25,
+        sections: [
+          { id: 'R_p1', name: '第一部分', questionType: 'R01', isCompound: true,
             groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
             totalCount: 5, scoringCount: 5 },
-          { id: 'L_p4', name: '第四部分', questionType: 'L04', isCompound: false,
+          { id: 'R_p2', name: '第二部分', questionType: 'R03', isCompound: true,
+            groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
+            totalCount: 5, scoringCount: 5 },
+          { id: 'R_p3', name: '第三部分', questionType: 'R02', isCompound: true,
+            groups: [
+              { questionCount: 5, hasExample: true, exampleCount: 1 },
+              { questionCount: 5, hasExample: false, exampleCount: 0 },
+            ],
+            totalCount: 10, scoringCount: 9 },
+          { id: 'R_p4', name: '第四部分', questionType: 'R07', isCompound: false,
             groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
             totalCount: 5, scoringCount: 5 },
         ]
       },
       {
-        id: 'reading', name: '阅读', totalQuestions: 20,
+        id: 'writing', name: '书写', totalQuestions: 10,
         sections: [
-          { id: 'R_p1', name: '第一部分', questionType: 'R01', isCompound: true,
+          { id: 'W_p1', name: '第一部分', questionType: 'W01', isCompound: true,
             groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
             totalCount: 5, scoringCount: 5 },
-          { id: 'R_p2', name: '第二部分', questionType: 'R02', isCompound: true,
-            groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-            totalCount: 5, scoringCount: 5 },
-          { id: 'R_p3', name: '第三部分', questionType: 'R03', isCompound: true,
-            groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-            totalCount: 5, scoringCount: 5 },
-          { id: 'R_p4', name: '第四部分', questionType: 'R07', isCompound: false,
+          { id: 'W_p2', name: '第二部分', questionType: 'W02', isCompound: true,
             groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
             totalCount: 5, scoringCount: 5 },
         ]
@@ -130,12 +144,12 @@ export const OFFICIAL_TEMPLATES = [
     fullScore: 300,
     passScore: 180,
     audioPlayCount: 2,
-    totalQuestions: 80,
-    totalDuration: 85,
-    timeBlocks: { prep: 5, listening: 35, buffer: 5, reading: 30, writing: 15 },
+    totalQuestions: 70,
+    totalDuration: 83,
+    timeBlocks: { prep: 5, listening: 23, buffer: 5, reading: 30, writing: 20 },
     modules: [
       {
-        id: 'listening', name: '听力', totalQuestions: 40,
+        id: 'listening', name: '听力', totalQuestions: 30,
         sections: [
           { id: 'L_p1', name: '第一部分', questionType: 'L02', isCompound: true,
             groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
@@ -143,17 +157,8 @@ export const OFFICIAL_TEMPLATES = [
           { id: 'L_p2', name: '第二部分', questionType: 'L03', isCompound: false,
             groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
             totalCount: 10, scoringCount: 10 },
-          { id: 'L_p3', name: '第三部分', questionType: 'L04', isCompound: false,
-            groups: [
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-            ],
-            totalCount: 10, scoringCount: 10 },
-          { id: 'L_p4', name: '第四部分', questionType: 'L05', isCompound: true,
-            groups: [
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-            ],
+          { id: 'L_p3', name: '第三部分', questionType: 'L03', isCompound: false,
+            groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
             totalCount: 10, scoringCount: 10 },
         ]
       },
@@ -204,21 +209,19 @@ export const OFFICIAL_TEMPLATES = [
     fullScore: 300,
     passScore: 180,
     audioPlayCount: 1,
-    totalQuestions: 100,
-    totalDuration: 100,
-    timeBlocks: { prep: 5, listening: 30, buffer: 5, reading: 40, writing: 25 },
+    totalQuestions: 70,
+    totalDuration: 85,
+    timeBlocks: { prep: 5, listening: 20, buffer: 5, reading: 30, writing: 25 },
     modules: [
       {
-        id: 'listening', name: '听力', totalQuestions: 45,
+        id: 'listening', name: '听力', totalQuestions: 32,
         sections: [
           { id: 'L_p1', name: '第一部分', questionType: 'L04', isCompound: false,
             groups: [{ questionCount: 14, hasExample: false, exampleCount: 0 }],
             totalCount: 14, scoringCount: 14 },
-          { id: 'L_p2', name: '第二部分', questionType: 'L04', isCompound: false,
-            groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-            totalCount: 5, scoringCount: 5 },
-          { id: 'L_p3', name: '第三部分', questionType: 'L05', isCompound: true,
+          { id: 'L_p2', name: '第二部分', questionType: 'L05', isCompound: true,
             groups: [
+              { questionCount: 5, hasExample: false, exampleCount: 0 },
               { questionCount: 2, hasExample: false, exampleCount: 0 },
               { questionCount: 2, hasExample: false, exampleCount: 0 },
               { questionCount: 2, hasExample: false, exampleCount: 0 },
@@ -226,19 +229,11 @@ export const OFFICIAL_TEMPLATES = [
               { questionCount: 2, hasExample: false, exampleCount: 0 },
               { questionCount: 3, hasExample: false, exampleCount: 0 },
             ],
-            totalCount: 13, scoringCount: 13 },
-          { id: 'L_p4', name: '第四部分', questionType: 'L05', isCompound: true,
-            groups: [
-              { questionCount: 3, hasExample: false, exampleCount: 0 },
-              { questionCount: 3, hasExample: false, exampleCount: 0 },
-              { questionCount: 3, hasExample: false, exampleCount: 0 },
-              { questionCount: 4, hasExample: false, exampleCount: 0 },
-            ],
-            totalCount: 13, scoringCount: 13 },
+            totalCount: 18, scoringCount: 18 },
         ]
       },
       {
-        id: 'reading', name: '阅读', totalQuestions: 40,
+        id: 'reading', name: '阅读', totalQuestions: 32,
         sections: [
           { id: 'R_p1', name: '第一部分', questionType: 'R03', isCompound: true,
             groups: [
@@ -246,35 +241,32 @@ export const OFFICIAL_TEMPLATES = [
               { questionCount: 5, hasExample: false, exampleCount: 0 },
             ],
             totalCount: 10, scoringCount: 10 },
-          { id: 'R_p2', name: '第二部分', questionType: 'R05', isCompound: true,
+          { id: 'R_p2', name: '第二部分', questionType: 'R07', isCompound: true,
             groups: [
               { questionCount: 8, hasExample: false, exampleCount: 0 },
-              { questionCount: 7, hasExample: false, exampleCount: 0 },
+              { questionCount: 2, hasExample: false, exampleCount: 0 },
+              { questionCount: 2, hasExample: false, exampleCount: 0 },
+              { questionCount: 3, hasExample: false, exampleCount: 0 },
             ],
             totalCount: 15, scoringCount: 15 },
-          { id: 'R_p3', name: '第三部分', questionType: 'R07', isCompound: true,
+          { id: 'R_p3', name: '第三部分', questionType: 'R05', isCompound: true,
             groups: [
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
+              { questionCount: 3, hasExample: false, exampleCount: 0 },
+              { questionCount: 4, hasExample: false, exampleCount: 0 },
             ],
-            totalCount: 15, scoringCount: 15 },
+            totalCount: 7, scoringCount: 7 },
         ]
       },
       {
-        id: 'writing', name: '书写', totalQuestions: 15,
+        id: 'writing', name: '书写', totalQuestions: 6,
         sections: [
           { id: 'W_p1', name: '第一部分', questionType: 'W03', isCompound: false,
-            groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
-            totalCount: 10, scoringCount: 10 },
+            groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
+            totalCount: 5, scoringCount: 5 },
           { id: 'W_p2', name: '第二部分', questionType: 'W04', isCompound: false,
             groups: [{ questionCount: 1, hasExample: false, exampleCount: 0 }],
             totalCount: 1, scoringCount: 1,
             writingConfig: { minWords: 80, type: 'short_essay' } },
-          { id: 'W_p3', name: '第三部分', questionType: 'W04', isCompound: false,
-            groups: [{ questionCount: 1, hasExample: false, exampleCount: 0 }],
-            totalCount: 1, scoringCount: 1,
-            writingConfig: { minWords: 100, type: 'pic_writing' } },
         ]
       }
     ]
@@ -293,12 +285,12 @@ export const OFFICIAL_TEMPLATES = [
     fullScore: 300,
     passScore: 180,
     audioPlayCount: 1,
-    totalQuestions: 100,
-    totalDuration: 120,
-    timeBlocks: { prep: 5, listening: 30, buffer: 5, reading: 45, writing: 40 },
+    totalQuestions: 72,
+    totalDuration: 110,
+    timeBlocks: { prep: 5, listening: 25, buffer: 5, reading: 35, writing: 40 },
     modules: [
       {
-        id: 'listening', name: '听力', totalQuestions: 45,
+        id: 'listening', name: '听力', totalQuestions: 35,
         sections: [
           { id: 'L_p1', name: '第一部分', questionType: 'L04', isCompound: false,
             groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
@@ -322,7 +314,7 @@ export const OFFICIAL_TEMPLATES = [
         ]
       },
       {
-        id: 'reading', name: '阅读', totalQuestions: 45,
+        id: 'reading', name: '阅读', totalQuestions: 35,
         sections: [
           { id: 'R_p1', name: '第一部分', questionType: 'R06', isCompound: true,
             groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
@@ -335,14 +327,12 @@ export const OFFICIAL_TEMPLATES = [
               { questionCount: 5, hasExample: false, exampleCount: 0 },
               { questionCount: 5, hasExample: false, exampleCount: 0 },
               { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
             ],
-            totalCount: 25, scoringCount: 25 },
+            totalCount: 15, scoringCount: 15 },
         ]
       },
       {
-        id: 'writing', name: '书写', totalQuestions: 10,
+        id: 'writing', name: '书写', totalQuestions: 2,
         sections: [
           { id: 'W_p1', name: '第一部分', questionType: 'W04', isCompound: false,
             groups: [{ questionCount: 1, hasExample: false, exampleCount: 0 }],
@@ -370,12 +360,12 @@ export const OFFICIAL_TEMPLATES = [
     fullScore: 300,
     passScore: 180,
     audioPlayCount: 1,
-    totalQuestions: 101,
-    totalDuration: 135,
-    timeBlocks: { prep: 5, listening: 35, buffer: 5, reading: 50, writing: 45 },
+    totalQuestions: 82,
+    totalDuration: 125,
+    timeBlocks: { prep: 5, listening: 30, buffer: 5, reading: 40, writing: 45 },
     modules: [
       {
-        id: 'listening', name: '听力', totalQuestions: 50,
+        id: 'listening', name: '听力', totalQuestions: 40,
         sections: [
           { id: 'L_p1', name: '第一部分', questionType: 'L04', isCompound: false,
             groups: [{ questionCount: 8, hasExample: false, exampleCount: 0 }],
@@ -394,14 +384,12 @@ export const OFFICIAL_TEMPLATES = [
               { questionCount: 4, hasExample: false, exampleCount: 0 },
               { questionCount: 4, hasExample: false, exampleCount: 0 },
               { questionCount: 4, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
             ],
-            totalCount: 22, scoringCount: 22 },
+            totalCount: 12, scoringCount: 12 },
         ]
       },
       {
-        id: 'reading', name: '阅读', totalQuestions: 50,
+        id: 'reading', name: '阅读', totalQuestions: 40,
         sections: [
           { id: 'R_p1', name: '第一部分', questionType: 'R06', isCompound: true,
             groups: [{ questionCount: 10, hasExample: false, exampleCount: 0 }],
@@ -415,10 +403,8 @@ export const OFFICIAL_TEMPLATES = [
               { questionCount: 5, hasExample: false, exampleCount: 0 },
               { questionCount: 5, hasExample: false, exampleCount: 0 },
               { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
-              { questionCount: 5, hasExample: false, exampleCount: 0 },
             ],
-            totalCount: 30, scoringCount: 30 },
+            totalCount: 20, scoringCount: 20 },
         ]
       },
       {
@@ -576,7 +562,7 @@ export const OFFICIAL_TEMPLATES = [
     passScore: 120,
     audioPlayCount: 2,
     totalQuestions: 40,
-    totalDuration: 35,
+    totalDuration: 40,
     timeBlocks: { prep: 5, listening: 15, buffer: 3, reading: 17, writing: 0 },
     modules: [
       {
@@ -633,7 +619,7 @@ export const OFFICIAL_TEMPLATES = [
     passScore: 120,
     audioPlayCount: 2,
     totalQuestions: 35,
-    totalDuration: 30,
+    totalDuration: 35,
     timeBlocks: { prep: 5, listening: 10, buffer: 3, reading: 17, writing: 0 },
     modules: [
       {
