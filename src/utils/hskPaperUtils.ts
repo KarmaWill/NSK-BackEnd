@@ -71,10 +71,16 @@ export function recalcTemplateTotals(template: HskPaperTemplate, typeDefs: HskQu
   });
 
   next.totalQuestions = totalQuestions;
-  next.totalScore = standard?.totalScore ?? totalScore;
-  next.totalDuration = standard?.durationMinutes ?? calcTimeBlockMinutes(next.timeBlocks);
+  const preserveOfficialKlzw = next.category === 'official' && !standard;
   if (standard) {
+    next.totalScore = standard.totalScore;
     next.passScore = standard.passScore;
+    next.totalDuration = standard.durationMinutes;
+  } else if (!preserveOfficialKlzw) {
+    next.totalScore = totalScore;
+    next.totalDuration = calcTimeBlockMinutes(next.timeBlocks);
+  } else {
+    next.totalDuration = next.totalDuration ?? calcTimeBlockMinutes(next.timeBlocks);
   }
   return next;
 }

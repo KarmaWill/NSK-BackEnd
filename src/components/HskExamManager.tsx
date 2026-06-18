@@ -495,12 +495,7 @@ function TypeCard({
         {sectionHasExample(section) && <span className="hsk-exam-type-tag is-example">含示例</span>}
       </div>
       <p className="hsk-exam-type-name">{typeDef?.name ?? section.questionType}</p>
-      <p className="hsk-exam-type-count">
-        {section.scoringCount} 题
-        {section.totalCount !== section.scoringCount && (
-          <span className="muted">（含{section.totalCount - section.scoringCount}示例）</span>
-        )}
-      </p>
+      <p className="hsk-exam-type-count">{section.totalCount} 题</p>
       <p className="hsk-exam-type-range">{range}</p>
     </div>
   );

@@ -36,6 +36,11 @@ export const TYPE_CARD_COLORS: Record<string, { bg: string; border: string; text
   W: { bg: 'is-w', border: 'is-w', text: 'is-w', badge: 'is-w' },
 };
 
+export function formatQuestionRange(first: number, last: number): string {
+  if (first === last) return `第${first}题`;
+  return `第${first}-${last}题`;
+}
+
 export function computeSectionNumberRanges(template: HskPaperTemplate): SectionRange[] {
   const ranges: SectionRange[] = [];
   let num = 0;
@@ -44,18 +49,18 @@ export function computeSectionNumberRanges(template: HskPaperTemplate): SectionR
       let firstNum: number | null = null;
       let lastNum: number | null = null;
       for (const group of sec.groups) {
-        for (let i = 0; i < group.questionCount; i++) {
-          const isExample = group.hasExample && i < group.exampleCount;
-          if (!isExample) {
-            num += 1;
-            if (firstNum === null) firstNum = num;
-            lastNum = num;
-          }
+        for (let i = 0; i < group.questionCount; i += 1) {
+          num += 1;
+          if (firstNum === null) firstNum = num;
+          lastNum = num;
         }
       }
       ranges.push({
         sectionId: sec.id,
-        range: firstNum !== null ? `第${firstNum}-${lastNum}题` : '（无计分题）',
+        range:
+          firstNum !== null && lastNum !== null
+            ? formatQuestionRange(firstNum, lastNum)
+            : '（无题）',
       });
     }
   }
