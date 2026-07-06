@@ -10,11 +10,16 @@ import {
   reorderByVolumeOrder,
 } from './librarySortable';
 import { LibraryInlineAddSelect } from '../components/LibraryInlineAddSelect';
+import { BookCoverConfig } from '../components/BookCoverConfig';
 import {
   ALL_BOOK_RESOURCE_FILTER_OPTIONS,
   BOOK_RESOURCE_TYPE_SELECT_OPTIONS,
   bookResourceBadgeClass,
+  bookResourceNeedsPageNum,
+  bookResourcePageNotApplicable,
+  formatBookResourcePageDisplay,
   getBookResourceTypeLabel,
+  isBookResourcePageValid,
   normalizeBookResourceType,
   type BookResourceType,
 } from '../config/bookResourceTypes';
@@ -97,6 +102,7 @@ type Book = {
   formats?: BookFormat[];
   premium: boolean;
   coverUrl?: string;
+  coverImageId?: string;
   description: string;
   unitCount: number;
   lessonCount: number;
@@ -306,6 +312,8 @@ type BookFileResource = {
   fileSize: string;
   uploadedAt: string;
   meta?: string;
+  pageNum?: number;
+  pageNumEnd?: number;
 };
 
 const BOOK_FORMAT_OPTIONS = ['JWR', 'JWL', 'JWRT'] as const;
@@ -450,8 +458,10 @@ const MOCK_BOOK_UNITS: BookUnitRow[] = [
 const INITIAL_BOOK_FILES: BookFileResource[] = [
   { id: 'file-1', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15 10:30' },
   { id: 'file-2', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20 14:15' },
+  { id: 'file-2b', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22 11:00' },
   { id: 'file-3', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
-  { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00', meta: '页码 12-18' },
+  { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00' },
+  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageNum: 12, pageNumEnd: 14 },
 ];
 
 function createDefaultBookResourceBundle(): BookResourceBundle {
@@ -486,13 +496,15 @@ const AVAILABLE_BOOK_FILES: AvailableBookFile[] = [
   { poolId: 'pool-1', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15' },
   { poolId: 'pool-2', type: 'GUIDANCE', fileName: '快乐中文第一册 修订版.jwl', fileSize: '8.2 MB', uploadedAt: '2024-02-10' },
   { poolId: 'pool-3', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20' },
+  { poolId: 'pool-3b', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22' },
+  { poolId: 'pool-3c', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第二册_知识卡.jwl', fileSize: '3.8 MB', uploadedAt: '2024-03-12' },
   { poolId: 'pool-4', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15' },
   { poolId: 'pool-5', type: 'POINT_READ_JWR', fileName: '快乐中文第一册_音频.jwr', fileSize: '18.4 MB', uploadedAt: '2024-03-01' },
   { poolId: 'pool-6', type: 'POINT_READ', fileName: '快乐中文第一册.jwrt', fileSize: '2.1 MB', uploadedAt: '2024-01-20' },
-  { poolId: 'pool-7', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01', meta: '页码 12-18 · 时长 5:20' },
-  { poolId: 'pool-8', type: 'VIDEO', fileName: 'U2文化介绍.mp4', fileSize: '96 MB', uploadedAt: '2024-03-05', meta: '页码 24-30 · 时长 4:10' },
-  { poolId: 'pool-9', type: 'MULTI_MEDIA', fileName: 'U1多媒体包.zip', fileSize: '45 MB', uploadedAt: '2024-02-28', meta: '含视频打点 · page_num 映射' },
-  { poolId: 'pool-10', type: 'MULTI_MEDIA', fileName: 'U2互动多媒体.zip', fileSize: '52 MB', uploadedAt: '2024-03-08', meta: '含页码映射 · 3 个视频节点' },
+  { poolId: 'pool-7', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01', meta: '时长 5:20' },
+  { poolId: 'pool-8', type: 'VIDEO', fileName: 'U2文化介绍.mp4', fileSize: '96 MB', uploadedAt: '2024-03-05', meta: '时长 4:10' },
+  { poolId: 'pool-9', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28', meta: '时长 8:30' },
+  { poolId: 'pool-10', type: 'MULTI_MEDIA', fileName: 'U2互动多媒体.mp4', fileSize: '52 MB', uploadedAt: '2024-03-08', meta: '时长 6:15' },
 ];
 
 function ResourceIdCell({ ids }: { ids: string[] }) {
@@ -502,6 +514,84 @@ function ResourceIdCell({ ids }: { ids: string[] }) {
       {ids.map((id) => (
         <span key={id} className="library-resource-id">{id}</span>
       ))}
+    </div>
+  );
+}
+
+function BookResourcePageCell({
+  file,
+  onChange,
+}: {
+  file: BookFileResource;
+  onChange: (id: string, patch: Pick<BookFileResource, 'pageNum' | 'pageNumEnd'>) => void;
+}) {
+  const [startDraft, setStartDraft] = useState(() =>
+    file.pageNum != null && file.pageNum > 0 ? String(file.pageNum) : '',
+  );
+  const [endDraft, setEndDraft] = useState(() =>
+    file.pageNumEnd != null && file.pageNumEnd > (file.pageNum ?? 0) ? String(file.pageNumEnd) : '',
+  );
+
+  useEffect(() => {
+    setStartDraft(file.pageNum != null && file.pageNum > 0 ? String(file.pageNum) : '');
+    setEndDraft(
+      file.pageNumEnd != null && file.pageNumEnd > (file.pageNum ?? 0) ? String(file.pageNumEnd) : '',
+    );
+  }, [file.id, file.pageNum, file.pageNumEnd]);
+
+  const commit = (nextStart: string, nextEnd: string) => {
+    const start = nextStart.trim() ? Number(nextStart) : NaN;
+    const end = nextEnd.trim() ? Number(nextEnd) : NaN;
+    const pageNum = Number.isInteger(start) && start > 0 ? start : undefined;
+    let pageNumEnd: number | undefined;
+    if (pageNum && Number.isInteger(end) && end >= pageNum) {
+      pageNumEnd = end;
+    }
+    onChange(file.id, { pageNum, pageNumEnd });
+  };
+
+  if (bookResourcePageNotApplicable(file.type)) {
+    return <span className="library-page-na">不适用</span>;
+  }
+
+  if (!bookResourceNeedsPageNum(file.type)) {
+    return <span className="library-cell-empty">—</span>;
+  }
+
+  const invalid = !isBookResourcePageValid(file.type, file.pageNum, file.pageNumEnd);
+  const display = formatBookResourcePageDisplay(file.pageNum, file.pageNumEnd);
+
+  return (
+    <div className={`library-page-num-dual${invalid ? ' is-invalid' : ''}`}>
+      <div className="library-page-num-fields">
+        <span className="library-page-prefix">P.</span>
+        <input
+          type="number"
+          min={1}
+          className="form-input library-page-num-field"
+          placeholder="12"
+          value={startDraft}
+          onChange={(e) => setStartDraft(e.target.value)}
+          onBlur={() => commit(startDraft, endDraft)}
+          aria-label={`${file.fileName} 起始页`}
+        />
+        <span className="library-page-sep">–</span>
+        <input
+          type="number"
+          min={1}
+          className="form-input library-page-num-field"
+          placeholder="选填"
+          value={endDraft}
+          onChange={(e) => setEndDraft(e.target.value)}
+          onBlur={() => commit(startDraft, endDraft)}
+          aria-label={`${file.fileName} 结束页`}
+        />
+      </div>
+      {display ? (
+        <span className="library-page-display">{display}</span>
+      ) : (
+        <span className="library-page-hint">请填写教材页码</span>
+      )}
     </div>
   );
 }
@@ -951,10 +1041,10 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
             </select>
           </div>
 
-          <div className="library-info-box" style={{ marginBottom: 16 }}>
+            <div className="library-info-box" style={{ marginBottom: 16 }}>
             <div className="library-info-box-icon">📋</div>
             <div className="library-info-box-text">
-              从资源管理处选择已上传的文件资源，支持多选。多媒体资源可含视频打点与页码映射（page_num）。
+              从资源管理处选择已上传的文件资源，支持多选。多媒体（.mp4）挂载后请在列表中填写对应教材页码；视频不适用页码映射。
             </div>
           </div>
 
@@ -2667,6 +2757,13 @@ function BookEditor({
     if (!editedBook.isbn.trim() || !editedBook.version.trim()) return;
     const parsedAuthors = parseAuthorsInput(authorsInput);
     if (parsedAuthors.length === 0) return;
+    const invalidMedia = bookFiles.find(
+      (file) => bookResourceNeedsPageNum(file.type) && !isBookResourcePageValid(file.type, file.pageNum, file.pageNumEnd),
+    );
+    if (invalidMedia) {
+      showEditorToast(`请为多媒体「${invalidMedia.fileName}」填写对应页码`);
+      return;
+    }
     const resolved = resolveTitleByLang(editedBook.title, editedBook.titleEn, editedBook.titleByLang);
     const resolvedTitleByLang = Object.fromEntries(
       Object.entries(resolved).map(([key, val]) => [key, sanitizeTitleName(val ?? '')]),
@@ -2725,6 +2822,15 @@ function BookEditor({
   const handleAddBookResources = (files: BookFileResource[]) => {
     setBookFiles((prev) => [...prev, ...files]);
     setAddBookResourceOpen(false);
+  };
+
+  const handleUpdateBookFilePage = (
+    fileId: string,
+    patch: Pick<BookFileResource, 'pageNum' | 'pageNumEnd'>,
+  ) => {
+    setBookFiles((prev) =>
+      prev.map((file) => (file.id === fileId ? { ...file, ...patch } : file)),
+    );
   };
 
   const showEditorToast = (msg: string) => {
@@ -2939,6 +3045,17 @@ function BookEditor({
                   }}
                   confirmHint="选定册次后在此维护各语言译名；编辑或自动翻译后请点击确认保存"
                   placeholder={`${LANG_OPTIONS.find((l) => l.key === volumeLangTab)?.label ?? volumeLangTab}册次译名`}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>封面配置</label>
+                <BookCoverConfig
+                  coverUrl={editedBook.coverUrl}
+                  coverImageId={editedBook.coverImageId}
+                  onChange={({ coverUrl, coverImageId }) =>
+                    setEditedBook((prev) => ({ ...prev, coverUrl, coverImageId }))
+                  }
                 />
               </div>
 
@@ -3289,6 +3406,7 @@ function BookEditor({
                   <tr>
                     <th>资源类型</th>
                     <th>文件名称</th>
+                    <th style={{ minWidth: 160 }}>对应页码</th>
                     <th>文件大小</th>
                     <th>上传时间</th>
                     <th>操作</th>
@@ -3297,7 +3415,7 @@ function BookEditor({
                 <tbody>
                   {filteredBookFiles.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="library-chapter-empty">暂无该类型的资源文件</td>
+                      <td colSpan={6} className="library-chapter-empty">暂无该类型的资源文件</td>
                     </tr>
                   ) : (
                     filteredBookFiles.map((file) => (
@@ -3308,6 +3426,9 @@ function BookEditor({
                           </span>
                         </td>
                         <td>{file.fileName}</td>
+                        <td>
+                          <BookResourcePageCell file={file} onChange={handleUpdateBookFilePage} />
+                        </td>
                         <td className="td-mono">{file.fileSize}</td>
                         <td className="td-mono">{file.uploadedAt}</td>
                         <td className="library-action-cell">
@@ -3326,6 +3447,13 @@ function BookEditor({
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="library-info-box" style={{ marginTop: 16 }}>
+              <div className="library-info-box-icon">💡</div>
+              <div className="library-info-box-text">
+                多媒体（.mp4）需填写对应教材页码：单页填起始页即可（展示为 P.12），跨页可填结束页（展示为 P.12–18）。视频显示「不适用」；其他类型为「—」。辅导-JWL 与知识卡-JWL 虽同为 .jwl 扩展名，请按资源类型区分挂载。
+              </div>
             </div>
           </div>
         </div>
