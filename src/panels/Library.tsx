@@ -23,9 +23,12 @@ import {
   bookResourceBadgeClass,
   bookResourceNeedsPageNum,
   bookResourcePageNotApplicable,
+  BOOK_RESOURCE_MAPPING_TYPE_OPTIONS,
+  formatBookResourceMappingTypeDisplay,
   formatBookResourcePageDisplay,
   getBookResourceTypeLabel,
   isBookResourceFrameNumValid,
+  isBookResourceMappingTypeValid,
   isBookResourcePageCodeFormatValid,
   isBookResourcePageValid,
   normalizeBookResourcePageCode,
@@ -325,6 +328,8 @@ type BookFileResource = {
   pageCode?: string;
   /** 同页多视频时的帧序号，默认 1 */
   frameNum?: number;
+  /** rms_study_resource_mapping.type：1 情景视频 / 2 交际训练 */
+  mappingType?: number;
   /** 导入表中的资源名称，用于与已挂载 .mp4 匹配 */
   resourceName?: string;
   lessonId?: string;
@@ -475,7 +480,7 @@ const INITIAL_BOOK_FILES: BookFileResource[] = [
   { id: 'file-2b', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22 11:00' },
   { id: 'file-3', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
   { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00' },
-  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageCode: 'P012V', frameNum: 1 },
+  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageCode: 'P012V', frameNum: 1, mappingType: 2 },
 ];
 
 function createDefaultBookResourceBundle(): BookResourceBundle {
@@ -552,21 +557,25 @@ function BookResourcePageDisplay({ file }: { file: BookFileResource }) {
 type BookResourcePageEditModalProps = {
   file: BookFileResource | null;
   onClose: () => void;
-  onSave: (fileId: string, patch: Pick<BookFileResource, 'pageCode' | 'frameNum'>) => void;
+  onSave: (fileId: string, patch: Pick<BookFileResource, 'pageCode' | 'frameNum' | 'mappingType'>) => void;
 };
 
 function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEditModalProps) {
   const [pageDraft, setPageDraft] = useState('');
   const [frameDraft, setFrameDraft] = useState('1');
+  const [mappingTypeDraft, setMappingTypeDraft] = useState('1');
   const [pageError, setPageError] = useState('');
   const [frameError, setFrameError] = useState('');
+  const [typeError, setTypeError] = useState('');
 
   useEffect(() => {
     if (!file) return;
     setPageDraft(file.pageCode ? normalizeBookResourcePageCode(file.pageCode) : '');
     setFrameDraft(String(file.frameNum ?? 1));
+    setMappingTypeDraft(String(file.mappingType ?? 1));
     setPageError('');
     setFrameError('');
+    setTypeError('');
   }, [file]);
 
   if (!file) return null;
@@ -574,6 +583,7 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
   const handleConfirm = () => {
     const normalizedPage = normalizeBookResourcePageCode(pageDraft);
     const frameNum = Number(frameDraft);
+    const mappingType = Number(mappingTypeDraft);
     let valid = true;
 
     if (!normalizedPage) {
@@ -593,8 +603,15 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
       setFrameError('');
     }
 
+    if (!isBookResourceMappingTypeValid(mappingType)) {
+      setTypeError('请选择有效的 Type');
+      valid = false;
+    } else {
+      setTypeError('');
+    }
+
     if (!valid) return;
-    onSave(file.id, { pageCode: normalizedPage, frameNum });
+    onSave(file.id, { pageCode: normalizedPage, frameNum, mappingType });
     onClose();
   };
 
@@ -619,6 +636,26 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
             <span className="library-page-edit-filename">{file.fileName}</span>
           </div>
           <div className="form-group" style={{ marginTop: 16 }}>
+            <label>Type</label>
+            <select
+              className={`form-input form-select${typeError ? ' is-invalid' : ''}`}
+              value={mappingTypeDraft}
+              onChange={(e) => {
+                setMappingTypeDraft(e.target.value);
+                setTypeError('');
+              }}
+            >
+              {BOOK_RESOURCE_MAPPING_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            {typeError ? (
+              <div className="form-hint form-hint-error">{typeError}</div>
+            ) : (
+              <div className="form-hint">按资源类别选择：情景视频 = 1，交际训练 = 2</div>
+            )}
+          </div>
+          <div className="form-group">
             <label>页面编号</label>
             <input
               type="text"
@@ -2840,7 +2877,7 @@ function BookEditor({
     const invalidMedia = bookFiles.find(
       (file) =>
         bookResourceNeedsPageNum(file.type) &&
-        !isBookResourcePageValid(file.type, file.pageCode, file.frameNum),
+        !isBookResourcePageValid(file.type, file.pageCode, file.frameNum, file.mappingType),
     );
     if (invalidMedia) {
       showEditorToast(`请为多媒体「${invalidMedia.fileName}」配置页面编号`);
@@ -2908,7 +2945,7 @@ function BookEditor({
 
   const handleUpdateBookFilePageMapping = (
     fileId: string,
-    patch: Pick<BookFileResource, 'pageCode' | 'frameNum'>,
+    patch: Pick<BookFileResource, 'pageCode' | 'frameNum' | 'mappingType'>,
   ) => {
     setBookFiles((prev) =>
       prev.map((file) => (file.id === fileId ? { ...file, ...patch } : file)),
@@ -3554,6 +3591,7 @@ function BookEditor({
                     <th>资源类型</th>
                     <th>文件名称</th>
                     <th style={{ minWidth: 120 }}>页面编号</th>
+                    <th style={{ width: 108 }}>Type</th>
                     <th style={{ width: 88 }}>frame</th>
                     <th>文件大小</th>
                     <th>上传时间</th>
@@ -3563,7 +3601,7 @@ function BookEditor({
                 <tbody>
                   {filteredBookFiles.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="library-chapter-empty">暂无该类型的资源文件</td>
+                      <td colSpan={8} className="library-chapter-empty">暂无该类型的资源文件</td>
                     </tr>
                   ) : (
                     filteredBookFiles.map((file) => (
@@ -3576,6 +3614,17 @@ function BookEditor({
                         <td>{file.fileName}</td>
                         <td>
                           <BookResourcePageDisplay file={file} />
+                        </td>
+                        <td className="td-mono">
+                          {bookResourceNeedsPageNum(file.type) ? (
+                            file.mappingType != null ? (
+                              formatBookResourceMappingTypeDisplay(file.mappingType)
+                            ) : (
+                              <span className="library-page-missing">未配置</span>
+                            )
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td className="td-mono">
                           {bookResourceNeedsPageNum(file.type) ? (file.frameNum ?? 1) : '—'}
@@ -3612,7 +3661,7 @@ function BookEditor({
             <div className="library-info-box" style={{ marginTop: 16 }}>
               <div className="library-info-box-icon">💡</div>
               <div className="library-info-box-text">
-                多媒体（.mp4）需配置页面编号（如 P002V）与 frame num（默认 1）。可在操作列「编辑」逐条配置，或使用「导入映射」批量导入 Excel。视频显示「不适用」；其他类型为「—」。
+                多媒体（.mp4）需配置 Type（1 情景视频 / 2 交际训练）、页面编号（如 P002V）与 frame num（默认 1）。可在操作列「编辑」逐条配置，或使用「导入映射」批量导入 Excel。
               </div>
             </div>
           </div>
@@ -3708,7 +3757,7 @@ function BookEditor({
             <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
               <li><b style={{ color: 'var(--ink)' }}>资源名称</b>：与已挂载 .mp4 文件名或资源名匹配</li>
               <li><b style={{ color: 'var(--ink)' }}>ISBN</b>：需与当前书籍一致</li>
-              <li><b style={{ color: 'var(--ink)' }}>Type</b>：多媒体固定填 <b>2</b></li>
+              <li><b style={{ color: 'var(--ink)' }}>Type</b>：按资源类别填写，情景视频填 <b>1</b>，交际训练填 <b>2</b></li>
               <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V</li>
               <li><b style={{ color: 'var(--ink)' }}>frame_num</b>：帧序号，一页一视频填 1</li>
             </ul>

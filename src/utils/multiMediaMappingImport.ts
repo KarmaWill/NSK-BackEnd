@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import {
   isBookResourceFrameNumValid,
+  isBookResourceMappingTypeValid,
   isBookResourcePageCodeFormatValid,
   normalizeBookResourcePageCode,
   normalizeBookResourceType,
@@ -44,6 +45,7 @@ type BookFileResourceLike = {
   lessonId?: string;
   pageCode?: string;
   frameNum?: number;
+  mappingType?: number;
 };
 
 const HEADER_ALIASES: Record<keyof Omit<ParsedMultiMediaMappingRow, 'rowIndex'>, string[]> = {
@@ -153,8 +155,11 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
     }
 
     const type = parseType(readCell(row, headerIndex.type));
-    if (type == null) {
-      return { ok: false, message: `第 ${i + 1} 行 Type 无效，应为整数（多媒体为 2）` };
+    if (type == null || !isBookResourceMappingTypeValid(type)) {
+      return {
+        ok: false,
+        message: `第 ${i + 1} 行 Type 无效，情景视频填 1，交际训练填 2`,
+      };
     }
 
     parsed.push({
@@ -208,11 +213,11 @@ export function applyMultiMediaMappings<T extends BookFileResourceLike>(
   const nextFiles = files.map((file) => ({ ...file }));
 
   for (const row of rows) {
-    if (row.type !== 2) {
+    if (!isBookResourceMappingTypeValid(row.type)) {
       skipped.push({
         rowIndex: row.rowIndex,
         resourceName: row.resourceName,
-        reason: `Type=${row.type} 非多媒体映射，已跳过`,
+        reason: `Type=${row.type} 不在支持范围内（1 情景视频 / 2 交际训练）`,
       });
       continue;
     }
@@ -244,6 +249,7 @@ export function applyMultiMediaMappings<T extends BookFileResourceLike>(
       ...nextFiles[index],
       resourceName: row.resourceName,
       lessonId: row.lessonId,
+      mappingType: row.type,
       pageCode: row.pageCode,
       frameNum: row.frameNum,
     };

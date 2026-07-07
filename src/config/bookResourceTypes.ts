@@ -42,6 +42,35 @@ const LEGACY_TYPE_MAP: Record<string, BookResourceType> = {
 /** 教材页面编号，如 P002V */
 export const BOOK_RESOURCE_PAGE_CODE_PATTERN = /^P\d{3}[A-Z]$/;
 
+/** rms_study_resource_mapping.type（导入表 Type 列） */
+export const BOOK_RESOURCE_MAPPING_TYPE_META: Record<number, { label: string; hint: string }> = {
+  1: { label: '情景视频', hint: '章节情景视频处' },
+  2: { label: '交际训练', hint: '交际训练处' },
+};
+
+export const BOOK_RESOURCE_MAPPING_TYPE_OPTIONS = Object.entries(BOOK_RESOURCE_MAPPING_TYPE_META).map(
+  ([value, meta]) => ({
+    value: Number(value),
+    label: `${value} · ${meta.label}`,
+    hint: meta.hint,
+  }),
+);
+
+export function isBookResourceMappingTypeValid(mappingType?: number): boolean {
+  return mappingType != null && Number.isInteger(mappingType) && mappingType in BOOK_RESOURCE_MAPPING_TYPE_META;
+}
+
+export function getBookResourceMappingTypeLabel(mappingType?: number): string {
+  if (mappingType == null) return '';
+  return BOOK_RESOURCE_MAPPING_TYPE_META[mappingType]?.label ?? `Type ${mappingType}`;
+}
+
+export function formatBookResourceMappingTypeDisplay(mappingType?: number): string {
+  if (mappingType == null) return '';
+  const meta = BOOK_RESOURCE_MAPPING_TYPE_META[mappingType];
+  return meta ? `${mappingType} · ${meta.label}` : String(mappingType);
+}
+
 export function normalizeBookResourceType(type: string): BookResourceType {
   if (type in BOOK_RESOURCE_TYPE_META) return type as BookResourceType;
   return LEGACY_TYPE_MAP[type] ?? 'GUIDANCE';
@@ -89,8 +118,10 @@ export function isBookResourcePageValid(
   type: BookResourceType | string,
   pageCode?: string,
   frameNum?: number,
+  mappingType?: number,
 ): boolean {
   if (!bookResourceNeedsPageNum(type)) return true;
+  if (!isBookResourceMappingTypeValid(mappingType)) return false;
   if (!pageCode?.trim() || !isBookResourcePageCodeFormatValid(pageCode)) return false;
   return isBookResourceFrameNumValid(frameNum ?? 1);
 }
