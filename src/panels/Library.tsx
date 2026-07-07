@@ -2,6 +2,12 @@ import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { parseCatalogWorkbook, validateCatalogImportFile, type ParsedCatalogUnit } from '../utils/catalogImport';
 import {
+  applyMultiMediaMappings,
+  parseMultiMediaMappingWorkbook,
+  validateMultiMediaMappingImportFile,
+  type ParsedMultiMediaMappingRow,
+} from '../utils/multiMediaMappingImport';
+import {
   BookSortableTableBody,
   SeriesSortableGrid,
   SortableBookRow,
@@ -19,6 +25,7 @@ import {
   bookResourcePageNotApplicable,
   formatBookResourcePageDisplay,
   getBookResourceTypeLabel,
+  isBookResourceFrameNumValid,
   isBookResourcePageCodeFormatValid,
   isBookResourcePageValid,
   normalizeBookResourcePageCode,
@@ -316,6 +323,11 @@ type BookFileResource = {
   meta?: string;
   /** 教材页面编号，如 P002V（rms_study_resource_mapping.page_num） */
   pageCode?: string;
+  /** 同页多视频时的帧序号，默认 1 */
+  frameNum?: number;
+  /** 导入表中的资源名称，用于与已挂载 .mp4 匹配 */
+  resourceName?: string;
+  lessonId?: string;
 };
 
 const BOOK_FORMAT_OPTIONS = ['JWR', 'JWL', 'JWRT'] as const;
@@ -463,7 +475,7 @@ const INITIAL_BOOK_FILES: BookFileResource[] = [
   { id: 'file-2b', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22 11:00' },
   { id: 'file-3', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
   { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00' },
-  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageCode: 'P012V' },
+  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageCode: 'P012V', frameNum: 1 },
 ];
 
 function createDefaultBookResourceBundle(): BookResourceBundle {
@@ -529,7 +541,7 @@ function BookResourcePageDisplay({ file }: { file: BookFileResource }) {
     return <span className="library-cell-empty">—</span>;
   }
 
-  const display = formatBookResourcePageDisplay(file.pageCode);
+  const display = formatBookResourcePageDisplay(file.pageCode, file.frameNum);
   if (display) {
     return <span className="library-page-code">{display}</span>;
   }
@@ -540,32 +552,49 @@ function BookResourcePageDisplay({ file }: { file: BookFileResource }) {
 type BookResourcePageEditModalProps = {
   file: BookFileResource | null;
   onClose: () => void;
-  onSave: (fileId: string, pageCode: string) => void;
+  onSave: (fileId: string, patch: Pick<BookFileResource, 'pageCode' | 'frameNum'>) => void;
 };
 
 function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEditModalProps) {
-  const [draft, setDraft] = useState('');
-  const [error, setError] = useState('');
+  const [pageDraft, setPageDraft] = useState('');
+  const [frameDraft, setFrameDraft] = useState('1');
+  const [pageError, setPageError] = useState('');
+  const [frameError, setFrameError] = useState('');
 
   useEffect(() => {
     if (!file) return;
-    setDraft(file.pageCode ? normalizeBookResourcePageCode(file.pageCode) : '');
-    setError('');
+    setPageDraft(file.pageCode ? normalizeBookResourcePageCode(file.pageCode) : '');
+    setFrameDraft(String(file.frameNum ?? 1));
+    setPageError('');
+    setFrameError('');
   }, [file]);
 
   if (!file) return null;
 
   const handleConfirm = () => {
-    const normalized = normalizeBookResourcePageCode(draft);
-    if (!normalized) {
-      setError('请填写页面编号');
-      return;
+    const normalizedPage = normalizeBookResourcePageCode(pageDraft);
+    const frameNum = Number(frameDraft);
+    let valid = true;
+
+    if (!normalizedPage) {
+      setPageError('请填写页面编号');
+      valid = false;
+    } else if (!isBookResourcePageCodeFormatValid(normalizedPage)) {
+      setPageError('格式应为 P + 三位数字 + 字母，如 P002V');
+      valid = false;
+    } else {
+      setPageError('');
     }
-    if (!isBookResourcePageCodeFormatValid(normalized)) {
-      setError('格式应为 P + 三位数字 + 字母，如 P002V');
-      return;
+
+    if (!isBookResourceFrameNumValid(frameNum)) {
+      setFrameError('frame num 应为大于等于 1 的整数');
+      valid = false;
+    } else {
+      setFrameError('');
     }
-    onSave(file.id, normalized);
+
+    if (!valid) return;
+    onSave(file.id, { pageCode: normalizedPage, frameNum });
     onClose();
   };
 
@@ -578,8 +607,8 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
       aria-label="配置页面编号"
     >
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
-        <div className="modal-header">
-          <div className="modal-title">配置页面编号</div>
+          <div className="modal-header">
+          <div className="modal-title">配置页面映射</div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
         </div>
         <div className="modal-body">
@@ -593,19 +622,38 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
             <label>页面编号</label>
             <input
               type="text"
-              className={`form-input${error ? ' is-invalid' : ''}`}
+              className={`form-input${pageError ? ' is-invalid' : ''}`}
               placeholder="P002V"
-              value={draft}
+              value={pageDraft}
               onChange={(e) => {
-                setDraft(e.target.value.toUpperCase());
-                setError('');
+                setPageDraft(e.target.value.toUpperCase());
+                setPageError('');
               }}
               autoFocus
             />
-            {error ? (
-              <div className="form-hint form-hint-error">{error}</div>
+            {pageError ? (
+              <div className="form-hint form-hint-error">{pageError}</div>
             ) : (
               <div className="form-hint">输入教材页面编号，格式如 P002V（P + 三位页码 + 版本字母）</div>
+            )}
+          </div>
+          <div className="form-group">
+            <label>frame num</label>
+            <input
+              type="number"
+              min={1}
+              className={`form-input library-frame-num-input${frameError ? ' is-invalid' : ''}`}
+              placeholder="1"
+              value={frameDraft}
+              onChange={(e) => {
+                setFrameDraft(e.target.value);
+                setFrameError('');
+              }}
+            />
+            {frameError ? (
+              <div className="form-hint form-hint-error">{frameError}</div>
+            ) : (
+              <div className="form-hint">同页多视频时使用；当前一页一视频，默认填 1</div>
             )}
           </div>
         </div>
@@ -2428,6 +2476,11 @@ function BookEditor({
   const [editorToast, setEditorToast] = useState<string | null>(null);
   const [fileToRemove, setFileToRemove] = useState<BookFileResource | null>(null);
   const [fileToEditPage, setFileToEditPage] = useState<BookFileResource | null>(null);
+  const [mediaMappingImportOpen, setMediaMappingImportOpen] = useState(false);
+  const [mediaMappingImportFileName, setMediaMappingImportFileName] = useState('');
+  const [mediaMappingImportLoading, setMediaMappingImportLoading] = useState(false);
+  const [mediaMappingImportParsed, setMediaMappingImportParsed] = useState<ParsedMultiMediaMappingRow[] | null>(null);
+  const mediaMappingImportInputRef = useRef<HTMLInputElement>(null);
   const catalogImportInputRef = useRef<HTMLInputElement>(null);
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
   const [volumeLangTab, setVolumeLangTab] = useState<LangKey>('CN');
@@ -2778,10 +2831,16 @@ function BookEditor({
   const handleSave = () => {
     if (!editedBook.publisher || editedBook.features.length === 0) return;
     if (!editedBook.isbn.trim() || !editedBook.version.trim()) return;
+    if (!editedBook.coverUrl?.trim()) {
+      showEditorToast('请选择书籍封面');
+      return;
+    }
     const parsedAuthors = parseAuthorsInput(authorsInput);
     if (parsedAuthors.length === 0) return;
     const invalidMedia = bookFiles.find(
-      (file) => bookResourceNeedsPageNum(file.type) && !isBookResourcePageValid(file.type, file.pageCode),
+      (file) =>
+        bookResourceNeedsPageNum(file.type) &&
+        !isBookResourcePageValid(file.type, file.pageCode, file.frameNum),
     );
     if (invalidMedia) {
       showEditorToast(`请为多媒体「${invalidMedia.fileName}」配置页面编号`);
@@ -2847,9 +2906,12 @@ function BookEditor({
     setAddBookResourceOpen(false);
   };
 
-  const handleUpdateBookFilePageCode = (fileId: string, pageCode: string) => {
+  const handleUpdateBookFilePageMapping = (
+    fileId: string,
+    patch: Pick<BookFileResource, 'pageCode' | 'frameNum'>,
+  ) => {
     setBookFiles((prev) =>
-      prev.map((file) => (file.id === fileId ? { ...file, pageCode } : file)),
+      prev.map((file) => (file.id === fileId ? { ...file, ...patch } : file)),
     );
   };
 
@@ -2915,6 +2977,64 @@ function BookEditor({
     );
   };
 
+  const openMediaMappingImportModal = () => {
+    setMediaMappingImportFileName('');
+    setMediaMappingImportParsed(null);
+    setMediaMappingImportLoading(false);
+    setMediaMappingImportOpen(true);
+  };
+
+  const closeMediaMappingImportModal = () => {
+    setMediaMappingImportOpen(false);
+    setMediaMappingImportFileName('');
+    setMediaMappingImportParsed(null);
+    setMediaMappingImportLoading(false);
+  };
+
+  const handleMediaMappingImportFile = async (file?: File) => {
+    if (!file || mediaMappingImportLoading) return;
+    const validation = validateMultiMediaMappingImportFile(file);
+    if (!validation.ok) {
+      showEditorToast(validation.message);
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showEditorToast('文件不能超过 10MB');
+      return;
+    }
+
+    setMediaMappingImportLoading(true);
+    setMediaMappingImportFileName(file.name);
+    setMediaMappingImportParsed(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      const parsed = parseMultiMediaMappingWorkbook(buffer);
+      if (!parsed.ok) {
+        showEditorToast(parsed.message);
+        setMediaMappingImportFileName('');
+        return;
+      }
+      setMediaMappingImportParsed(parsed.rows);
+    } catch {
+      showEditorToast('解析失败，请检查表格格式');
+      setMediaMappingImportFileName('');
+    } finally {
+      setMediaMappingImportLoading(false);
+    }
+  };
+
+  const confirmMediaMappingImport = () => {
+    if (!mediaMappingImportParsed?.length) return;
+    const result = applyMultiMediaMappings(mediaMappingImportParsed, bookFiles, {
+      bookIsbn: editedBook.isbn,
+      bookTitle: editedBook.title,
+    });
+    setBookFiles(result.files);
+    closeMediaMappingImportModal();
+    const skipHint = result.skipped.length > 0 ? `，跳过 ${result.skipped.length} 条` : '';
+    showEditorToast(`导入完成，已更新 ${result.updated} 条多媒体映射${skipHint}`);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
       {/* 顶部操作栏 */}
@@ -2956,6 +3076,7 @@ function BookEditor({
                   !(titleByLang.CN ?? editedBook.title).trim() ||
                   !editedBook.isbn.trim() ||
                   !editedBook.version.trim() ||
+                  !editedBook.coverUrl?.trim() ||
                   parseAuthorsInput(authorsInput).length === 0
                 }
               >
@@ -3069,10 +3190,11 @@ function BookEditor({
               </div>
 
               <div className="form-group">
-                <label>封面配置</label>
+                <label>封面配置<span className="required">*</span></label>
                 <BookCoverConfig
                   coverUrl={editedBook.coverUrl}
                   coverImageId={editedBook.coverImageId}
+                  required
                   onChange={({ coverUrl, coverImageId }) =>
                     setEditedBook((prev) => ({ ...prev, coverUrl, coverImageId }))
                   }
@@ -3401,9 +3523,14 @@ function BookEditor({
           <div className="config-section">
             <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>📝 整本书资源</span>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setAddBookResourceOpen(true)}>
-                ➕ 添加资源
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={openMediaMappingImportModal}>
+                  📥 导入映射
+                </button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setAddBookResourceOpen(true)}>
+                  ➕ 添加资源
+                </button>
+              </div>
             </div>
 
             <div className="library-file-filter" style={{ marginTop: '16px' }}>
@@ -3427,6 +3554,7 @@ function BookEditor({
                     <th>资源类型</th>
                     <th>文件名称</th>
                     <th style={{ minWidth: 120 }}>页面编号</th>
+                    <th style={{ width: 88 }}>frame</th>
                     <th>文件大小</th>
                     <th>上传时间</th>
                     <th>操作</th>
@@ -3435,7 +3563,7 @@ function BookEditor({
                 <tbody>
                   {filteredBookFiles.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="library-chapter-empty">暂无该类型的资源文件</td>
+                      <td colSpan={7} className="library-chapter-empty">暂无该类型的资源文件</td>
                     </tr>
                   ) : (
                     filteredBookFiles.map((file) => (
@@ -3448,6 +3576,9 @@ function BookEditor({
                         <td>{file.fileName}</td>
                         <td>
                           <BookResourcePageDisplay file={file} />
+                        </td>
+                        <td className="td-mono">
+                          {bookResourceNeedsPageNum(file.type) ? (file.frameNum ?? 1) : '—'}
                         </td>
                         <td className="td-mono">{file.fileSize}</td>
                         <td className="td-mono">{file.uploadedAt}</td>
@@ -3481,7 +3612,7 @@ function BookEditor({
             <div className="library-info-box" style={{ marginTop: 16 }}>
               <div className="library-info-box-icon">💡</div>
               <div className="library-info-box-text">
-                多媒体（.mp4）需配置教材页面编号（如 P002V），在操作列点击「编辑」进行配置。视频显示「不适用」；其他类型为「—」。辅导-JWL 与知识卡-JWL 虽同为 .jwl 扩展名，请按资源类型区分挂载。
+                多媒体（.mp4）需配置页面编号（如 P002V）与 frame num（默认 1）。可在操作列「编辑」逐条配置，或使用「导入映射」批量导入 Excel。视频显示「不适用」；其他类型为「—」。
               </div>
             </div>
           </div>
@@ -3499,8 +3630,116 @@ function BookEditor({
       <BookResourcePageEditModal
         file={fileToEditPage}
         onClose={() => setFileToEditPage(null)}
-        onSave={handleUpdateBookFilePageCode}
+        onSave={handleUpdateBookFilePageMapping}
       />
+
+      <div
+        className={`modal-overlay ${mediaMappingImportOpen ? 'open' : ''}`}
+        onClick={closeMediaMappingImportModal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="导入多媒体映射"
+      >
+        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
+          <div className="modal-header">
+            <div className="modal-title">导入多媒体映射</div>
+            <button type="button" className="modal-close" onClick={closeMediaMappingImportModal} aria-label="关闭">✕</button>
+          </div>
+          <div className="modal-body">
+            <input
+              ref={mediaMappingImportInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+              disabled={mediaMappingImportLoading}
+              onChange={(e) => {
+                void handleMediaMappingImportFile(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+            <div
+              className={`library-catalog-import-dropzone${mediaMappingImportLoading ? ' is-loading' : ''}${mediaMappingImportParsed ? ' is-ready' : ''}`}
+              onClick={() => !mediaMappingImportLoading && mediaMappingImportInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!mediaMappingImportLoading) e.currentTarget.classList.add('is-dragover');
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('is-dragover');
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('is-dragover');
+                if (!mediaMappingImportLoading) void handleMediaMappingImportFile(e.dataTransfer.files?.[0]);
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && !mediaMappingImportLoading && mediaMappingImportInputRef.current?.click()}
+            >
+              {mediaMappingImportLoading ? (
+                <div className="library-catalog-import-loading">
+                  <span className="library-catalog-import-spinner" aria-hidden />
+                  <div>正在解析表格…</div>
+                </div>
+              ) : mediaMappingImportParsed ? (
+                <>
+                  <div className="library-catalog-import-drop-icon" aria-hidden>✓</div>
+                  <div className="library-catalog-import-drop-title">
+                    解析完成 {mediaMappingImportParsed.length} 条映射
+                  </div>
+                  {mediaMappingImportFileName && (
+                    <div className="form-hint" style={{ marginTop: 6 }}>{mediaMappingImportFileName}</div>
+                  )}
+                  <div className="form-hint" style={{ marginTop: 8 }}>确认无误后，请点击下方「保存并导入」</div>
+                </>
+              ) : (
+                <>
+                  <div className="library-catalog-import-drop-icon" aria-hidden>↑</div>
+                  <div className="library-catalog-import-drop-title">点击上传或拖拽 Excel 文件至此</div>
+                  <div className="form-hint">
+                    支持 .xlsx / .xls · 最大 10MB · 按 ISBN 匹配当前书籍并更新已挂载多媒体
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, marginTop: 16 }}>表格格式</div>
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
+              <li><b style={{ color: 'var(--ink)' }}>资源名称</b>：与已挂载 .mp4 文件名或资源名匹配</li>
+              <li><b style={{ color: 'var(--ink)' }}>ISBN</b>：需与当前书籍一致</li>
+              <li><b style={{ color: 'var(--ink)' }}>Type</b>：多媒体固定填 <b>2</b></li>
+              <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V</li>
+              <li><b style={{ color: 'var(--ink)' }}>frame_num</b>：帧序号，一页一视频填 1</li>
+            </ul>
+
+            <div style={{ marginTop: 12 }}>
+              <a
+                href="/多媒体导入表.xlsx"
+                download="多媒体导入表.xlsx"
+                className="btn btn-ghost"
+                style={{ gap: 6, textDecoration: 'none' }}
+              >
+                <span>⇩</span>
+                下载导入模板
+              </a>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={closeMediaMappingImportModal}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={confirmMediaMappingImport}
+              disabled={!mediaMappingImportParsed?.length || mediaMappingImportLoading}
+            >
+              保存并导入
+            </button>
+          </div>
+        </div>
+      </div>
 
       <AddBookResourceModal
         open={addBookResourceOpen}

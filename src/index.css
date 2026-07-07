@@ -3758,6 +3758,10 @@ input[type="range"].swm-range {
   word-break: break-all;
 }
 
+.library-frame-num-input {
+  max-width: 120px;
+}
+
 .form-input.is-invalid {
   border-color: var(--rose, #e11d48);
   background: #fff5f5;

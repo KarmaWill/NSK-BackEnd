@@ -25,6 +25,7 @@ export const BOOK_COVER_IMAGE_LIBRARY: BookCoverImage[] = [
 type BookCoverConfigProps = {
   coverUrl?: string;
   coverImageId?: string;
+  required?: boolean;
   onChange: (next: { coverUrl?: string; coverImageId?: string }) => void;
 };
 
@@ -64,7 +65,7 @@ function CoverPreviewFrame({
   );
 }
 
-export function BookCoverConfig({ coverUrl, coverImageId, onChange }: BookCoverConfigProps) {
+export function BookCoverConfig({ coverUrl, coverImageId, required, onChange }: BookCoverConfigProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const clearCover = () => onChange({ coverUrl: undefined, coverImageId: undefined });
@@ -96,13 +97,14 @@ export function BookCoverConfig({ coverUrl, coverImageId, onChange }: BookCoverC
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setPickerOpen(true)}>
             从资源库选择
           </button>
-          {coverUrl && (
+          {coverUrl && !required && (
             <button type="button" className="btn btn-ghost btn-sm" onClick={clearCover}>
               清除封面
             </button>
           )}
         </div>
         <div className="form-hint">
+          {required ? '封面为必填项，请从资源库选择。' : ''}
           封面源图按 {BOOK_COVER_SIZE.large.width}:{BOOK_COVER_SIZE.large.height} 比例配置；客户端在平板主界面（
           {BOOK_COVER_SIZE.large.width}×{BOOK_COVER_SIZE.large.height}）、其他页（
           {BOOK_COVER_SIZE.small.width}×{BOOK_COVER_SIZE.small.height}）与词典笔（

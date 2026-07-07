@@ -81,16 +81,23 @@ export function isBookResourcePageCodeFormatValid(pageCode: string): boolean {
   return BOOK_RESOURCE_PAGE_CODE_PATTERN.test(normalizeBookResourcePageCode(pageCode));
 }
 
+export function isBookResourceFrameNumValid(frameNum?: number): boolean {
+  return frameNum != null && Number.isInteger(frameNum) && frameNum >= 1;
+}
+
 export function isBookResourcePageValid(
   type: BookResourceType | string,
   pageCode?: string,
+  frameNum?: number,
 ): boolean {
   if (!bookResourceNeedsPageNum(type)) return true;
-  if (!pageCode?.trim()) return false;
-  return isBookResourcePageCodeFormatValid(pageCode);
+  if (!pageCode?.trim() || !isBookResourcePageCodeFormatValid(pageCode)) return false;
+  return isBookResourceFrameNumValid(frameNum ?? 1);
 }
 
-export function formatBookResourcePageDisplay(pageCode?: string): string {
+export function formatBookResourcePageDisplay(pageCode?: string, frameNum?: number): string {
   const normalized = pageCode ? normalizeBookResourcePageCode(pageCode) : '';
-  return normalized;
+  if (!normalized) return '';
+  const frame = frameNum ?? 1;
+  return frame > 1 ? `${normalized} · #${frame}` : normalized;
 }
