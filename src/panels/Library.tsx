@@ -23,7 +23,6 @@ import {
   bookResourceBadgeClass,
   bookResourceNeedsPageNum,
   bookResourcePageNotApplicable,
-  formatBookResourceMappingTypeDisplay,
   formatBookResourcePageDisplay,
   getBookResourceTypeLabel,
   isBookResourceFrameNumValid,
@@ -3557,7 +3556,6 @@ function BookEditor({
                     <th>资源类型</th>
                     <th>文件名称</th>
                     <th style={{ minWidth: 120 }}>页面编号</th>
-                    <th style={{ width: 108 }}>Type</th>
                     <th style={{ width: 88 }}>frame</th>
                     <th>文件大小</th>
                     <th>上传时间</th>
@@ -3567,7 +3565,7 @@ function BookEditor({
                 <tbody>
                   {filteredBookFiles.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="library-chapter-empty">暂无该类型的资源文件</td>
+                      <td colSpan={7} className="library-chapter-empty">暂无该类型的资源文件</td>
                     </tr>
                   ) : (
                     filteredBookFiles.map((file) => (
@@ -3580,17 +3578,6 @@ function BookEditor({
                         <td>{file.fileName}</td>
                         <td>
                           <BookResourcePageDisplay file={file} />
-                        </td>
-                        <td className="td-mono">
-                          {bookResourceNeedsPageNum(file.type) ? (
-                            file.mappingType != null ? (
-                              formatBookResourceMappingTypeDisplay(file.mappingType)
-                            ) : (
-                              <span className="library-page-missing">未配置</span>
-                            )
-                          ) : (
-                            '—'
-                          )}
                         </td>
                         <td className="td-mono">
                           {bookResourceNeedsPageNum(file.type) ? (file.frameNum ?? 1) : '—'}
@@ -3627,7 +3614,7 @@ function BookEditor({
             <div className="library-info-box" style={{ marginTop: 16 }}>
               <div className="library-info-box-icon">💡</div>
               <div className="library-info-box-text">
-                多媒体（.mp4）需配置页面编号（如 P002V）与 frame num（默认 1）；Type 通过「导入映射」写入。可在操作列「编辑」逐条配置页码与 frame，或使用 Excel 批量导入。
+                多媒体（.mp4）需配置页面编号（如 P002V）与 frame num（默认 1）。可在操作列「编辑」逐条配置，或使用「导入映射」批量导入 Excel。
               </div>
             </div>
           </div>
