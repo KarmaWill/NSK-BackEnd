@@ -19,7 +19,9 @@ import {
   bookResourcePageNotApplicable,
   formatBookResourcePageDisplay,
   getBookResourceTypeLabel,
+  isBookResourcePageCodeFormatValid,
   isBookResourcePageValid,
+  normalizeBookResourcePageCode,
   normalizeBookResourceType,
   type BookResourceType,
 } from '../config/bookResourceTypes';
@@ -312,8 +314,8 @@ type BookFileResource = {
   fileSize: string;
   uploadedAt: string;
   meta?: string;
-  pageNum?: number;
-  pageNumEnd?: number;
+  /** 教材页面编号，如 P002V（rms_study_resource_mapping.page_num） */
+  pageCode?: string;
 };
 
 const BOOK_FORMAT_OPTIONS = ['JWR', 'JWL', 'JWRT'] as const;
@@ -461,7 +463,7 @@ const INITIAL_BOOK_FILES: BookFileResource[] = [
   { id: 'file-2b', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22 11:00' },
   { id: 'file-3', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
   { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00' },
-  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageNum: 12, pageNumEnd: 14 },
+  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageCode: 'P012V' },
 ];
 
 function createDefaultBookResourceBundle(): BookResourceBundle {
@@ -518,38 +520,7 @@ function ResourceIdCell({ ids }: { ids: string[] }) {
   );
 }
 
-function BookResourcePageCell({
-  file,
-  onChange,
-}: {
-  file: BookFileResource;
-  onChange: (id: string, patch: Pick<BookFileResource, 'pageNum' | 'pageNumEnd'>) => void;
-}) {
-  const [startDraft, setStartDraft] = useState(() =>
-    file.pageNum != null && file.pageNum > 0 ? String(file.pageNum) : '',
-  );
-  const [endDraft, setEndDraft] = useState(() =>
-    file.pageNumEnd != null && file.pageNumEnd > (file.pageNum ?? 0) ? String(file.pageNumEnd) : '',
-  );
-
-  useEffect(() => {
-    setStartDraft(file.pageNum != null && file.pageNum > 0 ? String(file.pageNum) : '');
-    setEndDraft(
-      file.pageNumEnd != null && file.pageNumEnd > (file.pageNum ?? 0) ? String(file.pageNumEnd) : '',
-    );
-  }, [file.id, file.pageNum, file.pageNumEnd]);
-
-  const commit = (nextStart: string, nextEnd: string) => {
-    const start = nextStart.trim() ? Number(nextStart) : NaN;
-    const end = nextEnd.trim() ? Number(nextEnd) : NaN;
-    const pageNum = Number.isInteger(start) && start > 0 ? start : undefined;
-    let pageNumEnd: number | undefined;
-    if (pageNum && Number.isInteger(end) && end >= pageNum) {
-      pageNumEnd = end;
-    }
-    onChange(file.id, { pageNum, pageNumEnd });
-  };
-
+function BookResourcePageDisplay({ file }: { file: BookFileResource }) {
   if (bookResourcePageNotApplicable(file.type)) {
     return <span className="library-page-na">不适用</span>;
   }
@@ -558,40 +529,91 @@ function BookResourcePageCell({
     return <span className="library-cell-empty">—</span>;
   }
 
-  const invalid = !isBookResourcePageValid(file.type, file.pageNum, file.pageNumEnd);
-  const display = formatBookResourcePageDisplay(file.pageNum, file.pageNumEnd);
+  const display = formatBookResourcePageDisplay(file.pageCode);
+  if (display) {
+    return <span className="library-page-code">{display}</span>;
+  }
+
+  return <span className="library-page-missing">未配置</span>;
+}
+
+type BookResourcePageEditModalProps = {
+  file: BookFileResource | null;
+  onClose: () => void;
+  onSave: (fileId: string, pageCode: string) => void;
+};
+
+function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEditModalProps) {
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!file) return;
+    setDraft(file.pageCode ? normalizeBookResourcePageCode(file.pageCode) : '');
+    setError('');
+  }, [file]);
+
+  if (!file) return null;
+
+  const handleConfirm = () => {
+    const normalized = normalizeBookResourcePageCode(draft);
+    if (!normalized) {
+      setError('请填写页面编号');
+      return;
+    }
+    if (!isBookResourcePageCodeFormatValid(normalized)) {
+      setError('格式应为 P + 三位数字 + 字母，如 P002V');
+      return;
+    }
+    onSave(file.id, normalized);
+    onClose();
+  };
 
   return (
-    <div className={`library-page-num-dual${invalid ? ' is-invalid' : ''}`}>
-      <div className="library-page-num-fields">
-        <span className="library-page-prefix">P.</span>
-        <input
-          type="number"
-          min={1}
-          className="form-input library-page-num-field"
-          placeholder="12"
-          value={startDraft}
-          onChange={(e) => setStartDraft(e.target.value)}
-          onBlur={() => commit(startDraft, endDraft)}
-          aria-label={`${file.fileName} 起始页`}
-        />
-        <span className="library-page-sep">–</span>
-        <input
-          type="number"
-          min={1}
-          className="form-input library-page-num-field"
-          placeholder="选填"
-          value={endDraft}
-          onChange={(e) => setEndDraft(e.target.value)}
-          onBlur={() => commit(startDraft, endDraft)}
-          aria-label={`${file.fileName} 结束页`}
-        />
+    <div
+      className="modal-overlay open library-modal-stack"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="配置页面编号"
+    >
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+        <div className="modal-header">
+          <div className="modal-title">配置页面编号</div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="library-page-edit-meta">
+            <span className={`library-format-badge ${bookResourceBadgeClass(file.type)}`}>
+              {getBookResourceTypeLabel(file.type)}
+            </span>
+            <span className="library-page-edit-filename">{file.fileName}</span>
+          </div>
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label>页面编号</label>
+            <input
+              type="text"
+              className={`form-input${error ? ' is-invalid' : ''}`}
+              placeholder="P002V"
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value.toUpperCase());
+                setError('');
+              }}
+              autoFocus
+            />
+            {error ? (
+              <div className="form-hint form-hint-error">{error}</div>
+            ) : (
+              <div className="form-hint">输入教材页面编号，格式如 P002V（P + 三位页码 + 版本字母）</div>
+            )}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
+          <button type="button" className="btn btn-primary" onClick={handleConfirm}>保存</button>
+        </div>
       </div>
-      {display ? (
-        <span className="library-page-display">{display}</span>
-      ) : (
-        <span className="library-page-hint">请填写教材页码</span>
-      )}
     </div>
   );
 }
@@ -1044,7 +1066,7 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
             <div className="library-info-box" style={{ marginBottom: 16 }}>
             <div className="library-info-box-icon">📋</div>
             <div className="library-info-box-text">
-              从资源管理处选择已上传的文件资源，支持多选。多媒体（.mp4）挂载后请在列表中填写对应教材页码；视频不适用页码映射。
+              从资源管理处选择已上传的文件资源，支持多选。多媒体（.mp4）挂载后请在列表中点击「编辑」配置页面编号；视频不适用页码映射。
             </div>
           </div>
 
@@ -2405,6 +2427,7 @@ function BookEditor({
   const [catalogImportParsed, setCatalogImportParsed] = useState<ParsedCatalogUnit[] | null>(null);
   const [editorToast, setEditorToast] = useState<string | null>(null);
   const [fileToRemove, setFileToRemove] = useState<BookFileResource | null>(null);
+  const [fileToEditPage, setFileToEditPage] = useState<BookFileResource | null>(null);
   const catalogImportInputRef = useRef<HTMLInputElement>(null);
   const [titleLangTab, setTitleLangTab] = useState<LangKey>('CN');
   const [volumeLangTab, setVolumeLangTab] = useState<LangKey>('CN');
@@ -2758,10 +2781,10 @@ function BookEditor({
     const parsedAuthors = parseAuthorsInput(authorsInput);
     if (parsedAuthors.length === 0) return;
     const invalidMedia = bookFiles.find(
-      (file) => bookResourceNeedsPageNum(file.type) && !isBookResourcePageValid(file.type, file.pageNum, file.pageNumEnd),
+      (file) => bookResourceNeedsPageNum(file.type) && !isBookResourcePageValid(file.type, file.pageCode),
     );
     if (invalidMedia) {
-      showEditorToast(`请为多媒体「${invalidMedia.fileName}」填写对应页码`);
+      showEditorToast(`请为多媒体「${invalidMedia.fileName}」配置页面编号`);
       return;
     }
     const resolved = resolveTitleByLang(editedBook.title, editedBook.titleEn, editedBook.titleByLang);
@@ -2824,12 +2847,9 @@ function BookEditor({
     setAddBookResourceOpen(false);
   };
 
-  const handleUpdateBookFilePage = (
-    fileId: string,
-    patch: Pick<BookFileResource, 'pageNum' | 'pageNumEnd'>,
-  ) => {
+  const handleUpdateBookFilePageCode = (fileId: string, pageCode: string) => {
     setBookFiles((prev) =>
-      prev.map((file) => (file.id === fileId ? { ...file, ...patch } : file)),
+      prev.map((file) => (file.id === fileId ? { ...file, pageCode } : file)),
     );
   };
 
@@ -3406,7 +3426,7 @@ function BookEditor({
                   <tr>
                     <th>资源类型</th>
                     <th>文件名称</th>
-                    <th style={{ minWidth: 160 }}>对应页码</th>
+                    <th style={{ minWidth: 120 }}>页面编号</th>
                     <th>文件大小</th>
                     <th>上传时间</th>
                     <th>操作</th>
@@ -3427,11 +3447,20 @@ function BookEditor({
                         </td>
                         <td>{file.fileName}</td>
                         <td>
-                          <BookResourcePageCell file={file} onChange={handleUpdateBookFilePage} />
+                          <BookResourcePageDisplay file={file} />
                         </td>
                         <td className="td-mono">{file.fileSize}</td>
                         <td className="td-mono">{file.uploadedAt}</td>
                         <td className="library-action-cell">
+                          {bookResourceNeedsPageNum(file.type) && (
+                            <button
+                              type="button"
+                              className="btn-link"
+                              onClick={() => setFileToEditPage(file)}
+                            >
+                              编辑
+                            </button>
+                          )}
                           <button type="button" className="btn-link">下载</button>
                           <button
                             type="button"
@@ -3452,7 +3481,7 @@ function BookEditor({
             <div className="library-info-box" style={{ marginTop: 16 }}>
               <div className="library-info-box-icon">💡</div>
               <div className="library-info-box-text">
-                多媒体（.mp4）需填写对应教材页码：单页填起始页即可（展示为 P.12），跨页可填结束页（展示为 P.12–18）。视频显示「不适用」；其他类型为「—」。辅导-JWL 与知识卡-JWL 虽同为 .jwl 扩展名，请按资源类型区分挂载。
+                多媒体（.mp4）需配置教材页面编号（如 P002V），在操作列点击「编辑」进行配置。视频显示「不适用」；其他类型为「—」。辅导-JWL 与知识卡-JWL 虽同为 .jwl 扩展名，请按资源类型区分挂载。
               </div>
             </div>
           </div>
@@ -3466,6 +3495,12 @@ function BookEditor({
           onSave={saveUnitResourceMount}
         />
       )}
+
+      <BookResourcePageEditModal
+        file={fileToEditPage}
+        onClose={() => setFileToEditPage(null)}
+        onSave={handleUpdateBookFilePageCode}
+      />
 
       <AddBookResourceModal
         open={addBookResourceOpen}

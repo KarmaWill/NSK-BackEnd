@@ -39,6 +39,9 @@ const LEGACY_TYPE_MAP: Record<string, BookResourceType> = {
   JWRT: 'POINT_READ',
 };
 
+/** 教材页面编号，如 P002V */
+export const BOOK_RESOURCE_PAGE_CODE_PATTERN = /^P\d{3}[A-Z]$/;
+
 export function normalizeBookResourceType(type: string): BookResourceType {
   if (type in BOOK_RESOURCE_TYPE_META) return type as BookResourceType;
   return LEGACY_TYPE_MAP[type] ?? 'GUIDANCE';
@@ -60,7 +63,7 @@ export const ALL_BOOK_RESOURCE_FILTER_OPTIONS: Array<{ value: 'all' | BookResour
   ),
 ];
 
-/** 多媒体（.mp4）需配置对应教材页码 */
+/** 多媒体（.mp4）需配置对应教材页面编号 */
 export function bookResourceNeedsPageNum(type: BookResourceType | string): boolean {
   return normalizeBookResourceType(type) === 'MULTI_MEDIA';
 }
@@ -70,40 +73,24 @@ export function bookResourcePageNotApplicable(type: BookResourceType | string): 
   return normalizeBookResourceType(type) === 'VIDEO';
 }
 
+export function normalizeBookResourcePageCode(raw: string): string {
+  return raw.trim().toUpperCase();
+}
+
+export function isBookResourcePageCodeFormatValid(pageCode: string): boolean {
+  return BOOK_RESOURCE_PAGE_CODE_PATTERN.test(normalizeBookResourcePageCode(pageCode));
+}
+
 export function isBookResourcePageValid(
   type: BookResourceType | string,
-  pageNum?: number,
-  pageNumEnd?: number,
+  pageCode?: string,
 ): boolean {
   if (!bookResourceNeedsPageNum(type)) return true;
-  if (pageNum == null || pageNum <= 0) return false;
-  if (pageNumEnd != null && pageNumEnd < pageNum) return false;
-  return true;
+  if (!pageCode?.trim()) return false;
+  return isBookResourcePageCodeFormatValid(pageCode);
 }
 
-export function formatBookResourcePageDisplay(pageNum?: number, pageNumEnd?: number): string {
-  if (pageNum == null || pageNum <= 0) return '';
-  if (pageNumEnd != null && pageNumEnd > pageNum) return `P.${pageNum}–${pageNumEnd}`;
-  return `P.${pageNum}`;
-}
-
-export function formatBookResourcePageRange(pageNum?: number, pageNumEnd?: number): string {
-  if (pageNum == null || pageNum <= 0) return '';
-  if (pageNumEnd != null && pageNumEnd > pageNum) return `${pageNum}-${pageNumEnd}`;
-  return String(pageNum);
-}
-
-export function parseBookResourcePageRange(raw: string): { pageNum?: number; pageNumEnd?: number } {
-  const trimmed = raw.trim();
-  if (!trimmed) return {};
-  const rangeMatch = trimmed.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
-  if (rangeMatch) {
-    const start = Number(rangeMatch[1]);
-    const end = Number(rangeMatch[2]);
-    if (start > 0 && end >= start) return { pageNum: start, pageNumEnd: end };
-    return {};
-  }
-  const single = Number(trimmed);
-  if (Number.isInteger(single) && single > 0) return { pageNum: single };
-  return {};
+export function formatBookResourcePageDisplay(pageCode?: string): string {
+  const normalized = pageCode ? normalizeBookResourcePageCode(pageCode) : '';
+  return normalized;
 }
