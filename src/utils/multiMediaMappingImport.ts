@@ -10,6 +10,9 @@ import {
 import { validateCatalogImportFile } from './catalogImport';
 import { sanitizeIsbn } from './libraryFieldValidation';
 
+/** 多媒体映射导入单次最大有效数据行数 */
+export const MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS = 500;
+
 export type ParsedMultiMediaMappingRow = {
   rowIndex: number;
   resourceName: string;
@@ -42,6 +45,7 @@ type BookFileResourceLike = {
   type: BookResourceType | string;
   fileName: string;
   resourceName?: string;
+  resourceId?: string;
   lessonId?: string;
   pageCode?: string;
   frameNum?: number;
@@ -178,6 +182,13 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
     return { ok: false, message: '未解析到有效数据行，请检查表格内容' };
   }
 
+  if (parsed.length > MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS) {
+    return {
+      ok: false,
+      message: `导入行数不能超过 ${MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS} 行，请拆分表格后分批导入`,
+    };
+  }
+
   return { ok: true, rows: parsed };
 }
 
@@ -196,6 +207,7 @@ function findMatchingMediaFile(
 ): BookFileResourceLike | undefined {
   const mediaFiles = files.filter((file) => normalizeBookResourceType(file.type) === 'MULTI_MEDIA');
   return (
+    mediaFiles.find((file) => file.resourceId && file.resourceId === row.lessonId) ??
     mediaFiles.find((file) => file.lessonId && file.lessonId === row.lessonId) ??
     mediaFiles.find((file) => matchesResourceName(file, row.resourceName))
   );
@@ -248,6 +260,7 @@ export function applyMultiMediaMappings<T extends BookFileResourceLike>(
     nextFiles[index] = {
       ...nextFiles[index],
       resourceName: row.resourceName,
+      resourceId: row.lessonId || nextFiles[index].resourceId,
       lessonId: row.lessonId,
       mappingType: row.type,
       pageCode: row.pageCode,

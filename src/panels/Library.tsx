@@ -3,6 +3,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { parseCatalogWorkbook, validateCatalogImportFile, type ParsedCatalogUnit } from '../utils/catalogImport';
 import {
   applyMultiMediaMappings,
+  MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS,
   parseMultiMediaMappingWorkbook,
   validateMultiMediaMappingImportFile,
   type ParsedMultiMediaMappingRow,
@@ -329,6 +330,8 @@ type BookFileResource = {
   mappingType?: number;
   /** 导入表中的资源名称，用于与已挂载 .mp4 匹配 */
   resourceName?: string;
+  /** 业务资源 ID（7 位数字，如 1612935；导入表 lessonId 列） */
+  resourceId?: string;
   lessonId?: string;
 };
 
@@ -471,13 +474,26 @@ const MOCK_BOOK_UNITS: BookUnitRow[] = [
   },
 ];
 
+const BOOK_FILE_RESOURCE_ID_BASE = 1612935;
+
 const INITIAL_BOOK_FILES: BookFileResource[] = [
-  { id: 'file-1', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15 10:30' },
-  { id: 'file-2', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20 14:15' },
-  { id: 'file-2b', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22 11:00' },
-  { id: 'file-3', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
-  { id: 'file-4', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00' },
-  { id: 'file-5', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28 14:00', pageCode: 'P012V', frameNum: 1, mappingType: 2 },
+  { id: 'file-1', resourceId: '1612935', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15 10:30' },
+  { id: 'file-2', resourceId: '1612936', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20 14:15' },
+  { id: 'file-2b', resourceId: '1612937', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22 11:00' },
+  { id: 'file-3', resourceId: '1612938', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15 10:35' },
+  { id: 'file-4', resourceId: '1612939', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01 09:00' },
+  {
+    id: 'file-5',
+    resourceId: '1612940',
+    type: 'MULTI_MEDIA',
+    fileName: 'U1单元多媒体.mp4',
+    fileSize: '45 MB',
+    uploadedAt: '2024-02-28 14:00',
+    pageCode: 'P012V',
+    frameNum: 1,
+    mappingType: 2,
+    lessonId: '1612940',
+  },
 ];
 
 function createDefaultBookResourceBundle(): BookResourceBundle {
@@ -501,6 +517,7 @@ function buildInitialBookResources(sourceBooks: Book[]): Record<string, BookReso
 
 type AvailableBookFile = {
   poolId: string;
+  resourceId?: string;
   type: BookResourceType;
   fileName: string;
   fileSize: string;
@@ -509,18 +526,18 @@ type AvailableBookFile = {
 };
 
 const AVAILABLE_BOOK_FILES: AvailableBookFile[] = [
-  { poolId: 'pool-1', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15' },
-  { poolId: 'pool-2', type: 'GUIDANCE', fileName: '快乐中文第一册 修订版.jwl', fileSize: '8.2 MB', uploadedAt: '2024-02-10' },
-  { poolId: 'pool-3', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20' },
-  { poolId: 'pool-3b', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22' },
-  { poolId: 'pool-3c', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第二册_知识卡.jwl', fileSize: '3.8 MB', uploadedAt: '2024-03-12' },
-  { poolId: 'pool-4', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15' },
-  { poolId: 'pool-5', type: 'POINT_READ_JWR', fileName: '快乐中文第一册_音频.jwr', fileSize: '18.4 MB', uploadedAt: '2024-03-01' },
-  { poolId: 'pool-6', type: 'POINT_READ', fileName: '快乐中文第一册.jwrt', fileSize: '2.1 MB', uploadedAt: '2024-01-20' },
-  { poolId: 'pool-7', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01', meta: '时长 5:20' },
-  { poolId: 'pool-8', type: 'VIDEO', fileName: 'U2文化介绍.mp4', fileSize: '96 MB', uploadedAt: '2024-03-05', meta: '时长 4:10' },
-  { poolId: 'pool-9', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28', meta: '时长 8:30' },
-  { poolId: 'pool-10', type: 'MULTI_MEDIA', fileName: 'U2互动多媒体.mp4', fileSize: '52 MB', uploadedAt: '2024-03-08', meta: '时长 6:15' },
+  { poolId: 'pool-1', resourceId: '1612941', type: 'GUIDANCE', fileName: '快乐中文第一册.jwl', fileSize: '10.5 MB', uploadedAt: '2024-01-15' },
+  { poolId: 'pool-2', resourceId: '1612942', type: 'GUIDANCE', fileName: '快乐中文第一册 修订版.jwl', fileSize: '8.2 MB', uploadedAt: '2024-02-10' },
+  { poolId: 'pool-3', resourceId: '1612943', type: 'GUIDANCE', fileName: '快乐中文第一册_补充.jwl', fileSize: '3.2 MB', uploadedAt: '2024-02-20' },
+  { poolId: 'pool-3b', resourceId: '1612944', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第一册_知识卡.jwl', fileSize: '4.1 MB', uploadedAt: '2024-02-22' },
+  { poolId: 'pool-3c', resourceId: '1612945', type: 'KNOWLEDGE_CARD', fileName: '快乐中文第二册_知识卡.jwl', fileSize: '3.8 MB', uploadedAt: '2024-03-12' },
+  { poolId: 'pool-4', resourceId: '1612946', type: 'POINT_READ_JWR', fileName: '快乐中文第一册.jwr', fileSize: '25.8 MB', uploadedAt: '2024-01-15' },
+  { poolId: 'pool-5', resourceId: '1612947', type: 'POINT_READ_JWR', fileName: '快乐中文第一册_音频.jwr', fileSize: '18.4 MB', uploadedAt: '2024-03-01' },
+  { poolId: 'pool-6', resourceId: '1612948', type: 'POINT_READ', fileName: '快乐中文第一册.jwrt', fileSize: '2.1 MB', uploadedAt: '2024-01-20' },
+  { poolId: 'pool-7', resourceId: '1612949', type: 'VIDEO', fileName: 'U1开场视频.mp4', fileSize: '128 MB', uploadedAt: '2024-03-01', meta: '时长 5:20' },
+  { poolId: 'pool-8', resourceId: '1612950', type: 'VIDEO', fileName: 'U2文化介绍.mp4', fileSize: '96 MB', uploadedAt: '2024-03-05', meta: '时长 4:10' },
+  { poolId: 'pool-9', resourceId: '1612951', type: 'MULTI_MEDIA', fileName: 'U1单元多媒体.mp4', fileSize: '45 MB', uploadedAt: '2024-02-28', meta: '时长 8:30' },
+  { poolId: 'pool-10', resourceId: '1612952', type: 'MULTI_MEDIA', fileName: 'U2互动多媒体.mp4', fileSize: '52 MB', uploadedAt: '2024-03-08', meta: '时长 6:15' },
 ];
 
 function ResourceIdCell({ ids }: { ids: string[] }) {
@@ -532,6 +549,25 @@ function ResourceIdCell({ ids }: { ids: string[] }) {
       ))}
     </div>
   );
+}
+
+function getBookFileResourceId(file: BookFileResource): string {
+  return file.resourceId?.trim() || file.lessonId?.trim() || '';
+}
+
+function ensureBookFileResourceIds(files: BookFileResource[]): BookFileResource[] {
+  let nextId = BOOK_FILE_RESOURCE_ID_BASE;
+  const used = new Set(files.map((file) => getBookFileResourceId(file)).filter(Boolean));
+  while (used.has(String(nextId))) nextId += 1;
+
+  return files.map((file) => {
+    if (getBookFileResourceId(file)) return file;
+    while (used.has(String(nextId))) nextId += 1;
+    const resourceId = String(nextId);
+    used.add(resourceId);
+    nextId += 1;
+    return { ...file, resourceId };
+  });
 }
 
 function BookResourcePageDisplay({ file }: { file: BookFileResource }) {
@@ -1078,6 +1114,7 @@ function AddBookResourceModal({ open, existingFiles, onClose, onConfirm }: AddBo
     onConfirm(
       selectedFiles.map((file) => ({
         id: `file-${Date.now()}-${file.poolId}`,
+        resourceId: file.resourceId,
         type: file.type,
         fileName: file.fileName,
         fileSize: file.fileSize,
@@ -2467,7 +2504,9 @@ function BookEditor({
   const [bookUnits, setBookUnits] = useState<BookUnitRow[]>(() =>
     cloneBookResourceBundle(resourceBundle).units,
   );
-  const [bookFiles, setBookFiles] = useState<BookFileResource[]>(() => [...resourceBundle.files]);
+  const [bookFiles, setBookFiles] = useState<BookFileResource[]>(() =>
+    ensureBookFileResourceIds([...resourceBundle.files]),
+  );
   const [fileTypeFilter, setFileTypeFilter] = useState<'all' | BookResourceType>('all');
   const [resourceMountUnit, setResourceMountUnit] = useState<BookUnitRow | null>(null);
   const [addBookResourceOpen, setAddBookResourceOpen] = useState(false);
@@ -3553,6 +3592,7 @@ function BookEditor({
               <table className="paper-table">
                 <thead>
                   <tr>
+                    <th style={{ minWidth: 108 }}>资源ID</th>
                     <th>资源类型</th>
                     <th>文件名称</th>
                     <th style={{ minWidth: 120 }}>页面编号</th>
@@ -3565,11 +3605,18 @@ function BookEditor({
                 <tbody>
                   {filteredBookFiles.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="library-chapter-empty">暂无该类型的资源文件</td>
+                      <td colSpan={8} className="library-chapter-empty">暂无该类型的资源文件</td>
                     </tr>
                   ) : (
                     filteredBookFiles.map((file) => (
                       <tr key={file.id}>
+                        <td className="td-mono">
+                          {getBookFileResourceId(file) ? (
+                            <span className="library-resource-id">{getBookFileResourceId(file)}</span>
+                          ) : (
+                            <span className="library-cell-empty">—</span>
+                          )}
+                        </td>
                         <td>
                           <span className={`library-format-badge ${bookResourceBadgeClass(file.type)}`}>
                             {getBookResourceTypeLabel(file.type)}
@@ -3700,7 +3747,7 @@ function BookEditor({
                   <div className="library-catalog-import-drop-icon" aria-hidden>↑</div>
                   <div className="library-catalog-import-drop-title">点击上传或拖拽 Excel 文件至此</div>
                   <div className="form-hint">
-                    支持 .xlsx / .xls · 最大 10MB · 按 ISBN 匹配当前书籍并更新已挂载多媒体
+                    支持 .xlsx / .xls · 最大 10MB · 单次最多 {MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS} 行 · 按 ISBN 匹配当前书籍并更新已挂载多媒体
                   </div>
                 </>
               )}
@@ -3710,9 +3757,11 @@ function BookEditor({
             <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
               <li><b style={{ color: 'var(--ink)' }}>资源名称</b>：与已挂载 .mp4 文件名或资源名匹配</li>
               <li><b style={{ color: 'var(--ink)' }}>ISBN</b>：需与当前书籍一致</li>
+              <li><b style={{ color: 'var(--ink)' }}>lessonId</b>：7 位资源 ID（如 1612935），写入列表「资源ID」列</li>
               <li><b style={{ color: 'var(--ink)' }}>Type</b>：按资源类别填写，情景视频填 <b>1</b>，交际训练填 <b>2</b></li>
               <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V</li>
               <li><b style={{ color: 'var(--ink)' }}>frame_num</b>：帧序号，一页一视频填 1</li>
+              <li>单次导入有效数据行不超过 <b>{MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS}</b> 行</li>
             </ul>
 
             <div style={{ marginTop: 12 }}>
