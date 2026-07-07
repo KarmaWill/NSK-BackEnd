@@ -330,8 +330,9 @@ type BookFileResource = {
   mappingType?: number;
   /** 导入表中的资源名称，用于与已挂载 .mp4 匹配 */
   resourceName?: string;
-  /** 业务资源 ID（7 位数字，如 1612935；导入表 lessonId 列） */
+  /** 业务资源 ID（7 位数字，如 1612935；导入表「资源ID」列） */
   resourceId?: string;
+  /** @deprecated 兼容旧数据，请使用 resourceId */
   lessonId?: string;
 };
 
@@ -492,7 +493,6 @@ const INITIAL_BOOK_FILES: BookFileResource[] = [
     pageCode: 'P012V',
     frameNum: 1,
     mappingType: 2,
-    lessonId: '1612940',
   },
 ];
 
@@ -3757,7 +3757,7 @@ function BookEditor({
             <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
               <li><b style={{ color: 'var(--ink)' }}>资源名称</b>：与已挂载 .mp4 文件名或资源名匹配</li>
               <li><b style={{ color: 'var(--ink)' }}>ISBN</b>：需与当前书籍一致</li>
-              <li><b style={{ color: 'var(--ink)' }}>lessonId</b>：7 位资源 ID（如 1612935），写入列表「资源ID」列</li>
+              <li><b style={{ color: 'var(--ink)' }}>资源ID</b>：7 位数字（如 1612935），写入列表「资源ID」列</li>
               <li><b style={{ color: 'var(--ink)' }}>Type</b>：按资源类别填写，情景视频填 <b>1</b>，交际训练填 <b>2</b></li>
               <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V</li>
               <li><b style={{ color: 'var(--ink)' }}>frame_num</b>：帧序号，一页一视频填 1</li>

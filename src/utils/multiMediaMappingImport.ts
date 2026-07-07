@@ -18,7 +18,7 @@ export type ParsedMultiMediaMappingRow = {
   resourceName: string;
   bookName: string;
   isbn: string;
-  lessonId: string;
+  resourceId: string;
   type: number;
   pageCode: string;
   frameNum: number;
@@ -56,10 +56,20 @@ const HEADER_ALIASES: Record<keyof Omit<ParsedMultiMediaMappingRow, 'rowIndex'>,
   resourceName: ['资源名称', 'resourceName', 'resource_name'],
   bookName: ['bookName', '书名', '书籍名称'],
   isbn: ['ISBN', 'isbn'],
-  lessonId: ['lessonId', 'lesson_id', '课时ID'],
+  resourceId: ['资源ID', 'resourceId', 'resource_id', 'lessonId', 'lesson_id', '课时ID'],
   type: ['Type', 'type', '资源类型'],
   pageCode: ['页码', 'pageCode', 'page_code', '页面编号'],
   frameNum: ['frame_num', 'frameNum', 'Frame', '帧序号'],
+};
+
+const HEADER_LABELS: Record<keyof typeof HEADER_ALIASES, string> = {
+  resourceName: '资源名称',
+  bookName: 'bookName',
+  isbn: 'ISBN',
+  resourceId: '资源ID',
+  type: 'Type',
+  pageCode: '页码',
+  frameNum: 'frame_num',
 };
 
 function cellText(value: unknown): string {
@@ -129,7 +139,7 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
     'resourceName',
     'bookName',
     'isbn',
-    'lessonId',
+    'resourceId',
     'type',
     'pageCode',
     'frameNum',
@@ -138,7 +148,7 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
   if (missing.length > 0) {
     return {
       ok: false,
-      message: `表头缺少必要列：${missing.join('、')}，请下载模板对照填写`,
+      message: `表头缺少必要列：${missing.map((key) => HEADER_LABELS[key]).join('、')}，请下载模板对照填写`,
     };
   }
 
@@ -171,7 +181,7 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
       resourceName,
       bookName: readCell(row, headerIndex.bookName),
       isbn: readCell(row, headerIndex.isbn),
-      lessonId: readCell(row, headerIndex.lessonId),
+      resourceId: readCell(row, headerIndex.resourceId),
       type,
       pageCode,
       frameNum,
@@ -207,8 +217,8 @@ function findMatchingMediaFile(
 ): BookFileResourceLike | undefined {
   const mediaFiles = files.filter((file) => normalizeBookResourceType(file.type) === 'MULTI_MEDIA');
   return (
-    mediaFiles.find((file) => file.resourceId && file.resourceId === row.lessonId) ??
-    mediaFiles.find((file) => file.lessonId && file.lessonId === row.lessonId) ??
+    mediaFiles.find((file) => file.resourceId && file.resourceId === row.resourceId) ??
+    mediaFiles.find((file) => file.lessonId && file.lessonId === row.resourceId) ??
     mediaFiles.find((file) => matchesResourceName(file, row.resourceName))
   );
 }
@@ -260,8 +270,7 @@ export function applyMultiMediaMappings<T extends BookFileResourceLike>(
     nextFiles[index] = {
       ...nextFiles[index],
       resourceName: row.resourceName,
-      resourceId: row.lessonId || nextFiles[index].resourceId,
-      lessonId: row.lessonId,
+      resourceId: row.resourceId || nextFiles[index].resourceId,
       mappingType: row.type,
       pageCode: row.pageCode,
       frameNum: row.frameNum,
