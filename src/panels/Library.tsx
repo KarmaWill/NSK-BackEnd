@@ -23,12 +23,10 @@ import {
   bookResourceBadgeClass,
   bookResourceNeedsPageNum,
   bookResourcePageNotApplicable,
-  BOOK_RESOURCE_MAPPING_TYPE_OPTIONS,
   formatBookResourceMappingTypeDisplay,
   formatBookResourcePageDisplay,
   getBookResourceTypeLabel,
   isBookResourceFrameNumValid,
-  isBookResourceMappingTypeValid,
   isBookResourcePageCodeFormatValid,
   isBookResourcePageValid,
   normalizeBookResourcePageCode,
@@ -557,25 +555,21 @@ function BookResourcePageDisplay({ file }: { file: BookFileResource }) {
 type BookResourcePageEditModalProps = {
   file: BookFileResource | null;
   onClose: () => void;
-  onSave: (fileId: string, patch: Pick<BookFileResource, 'pageCode' | 'frameNum' | 'mappingType'>) => void;
+  onSave: (fileId: string, patch: Pick<BookFileResource, 'pageCode' | 'frameNum'>) => void;
 };
 
 function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEditModalProps) {
   const [pageDraft, setPageDraft] = useState('');
   const [frameDraft, setFrameDraft] = useState('1');
-  const [mappingTypeDraft, setMappingTypeDraft] = useState('1');
   const [pageError, setPageError] = useState('');
   const [frameError, setFrameError] = useState('');
-  const [typeError, setTypeError] = useState('');
 
   useEffect(() => {
     if (!file) return;
     setPageDraft(file.pageCode ? normalizeBookResourcePageCode(file.pageCode) : '');
     setFrameDraft(String(file.frameNum ?? 1));
-    setMappingTypeDraft(String(file.mappingType ?? 1));
     setPageError('');
     setFrameError('');
-    setTypeError('');
   }, [file]);
 
   if (!file) return null;
@@ -583,7 +577,6 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
   const handleConfirm = () => {
     const normalizedPage = normalizeBookResourcePageCode(pageDraft);
     const frameNum = Number(frameDraft);
-    const mappingType = Number(mappingTypeDraft);
     let valid = true;
 
     if (!normalizedPage) {
@@ -603,15 +596,8 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
       setFrameError('');
     }
 
-    if (!isBookResourceMappingTypeValid(mappingType)) {
-      setTypeError('请选择有效的 Type');
-      valid = false;
-    } else {
-      setTypeError('');
-    }
-
     if (!valid) return;
-    onSave(file.id, { pageCode: normalizedPage, frameNum, mappingType });
+    onSave(file.id, { pageCode: normalizedPage, frameNum });
     onClose();
   };
 
@@ -636,26 +622,6 @@ function BookResourcePageEditModal({ file, onClose, onSave }: BookResourcePageEd
             <span className="library-page-edit-filename">{file.fileName}</span>
           </div>
           <div className="form-group" style={{ marginTop: 16 }}>
-            <label>Type</label>
-            <select
-              className={`form-input form-select${typeError ? ' is-invalid' : ''}`}
-              value={mappingTypeDraft}
-              onChange={(e) => {
-                setMappingTypeDraft(e.target.value);
-                setTypeError('');
-              }}
-            >
-              {BOOK_RESOURCE_MAPPING_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            {typeError ? (
-              <div className="form-hint form-hint-error">{typeError}</div>
-            ) : (
-              <div className="form-hint">按资源类别选择：情景视频 = 1，交际训练 = 2</div>
-            )}
-          </div>
-          <div className="form-group">
             <label>页面编号</label>
             <input
               type="text"
@@ -2877,7 +2843,7 @@ function BookEditor({
     const invalidMedia = bookFiles.find(
       (file) =>
         bookResourceNeedsPageNum(file.type) &&
-        !isBookResourcePageValid(file.type, file.pageCode, file.frameNum, file.mappingType),
+        !isBookResourcePageValid(file.type, file.pageCode, file.frameNum),
     );
     if (invalidMedia) {
       showEditorToast(`请为多媒体「${invalidMedia.fileName}」配置页面编号`);
@@ -2945,7 +2911,7 @@ function BookEditor({
 
   const handleUpdateBookFilePageMapping = (
     fileId: string,
-    patch: Pick<BookFileResource, 'pageCode' | 'frameNum' | 'mappingType'>,
+    patch: Pick<BookFileResource, 'pageCode' | 'frameNum'>,
   ) => {
     setBookFiles((prev) =>
       prev.map((file) => (file.id === fileId ? { ...file, ...patch } : file)),
@@ -3661,7 +3627,7 @@ function BookEditor({
             <div className="library-info-box" style={{ marginTop: 16 }}>
               <div className="library-info-box-icon">💡</div>
               <div className="library-info-box-text">
-                多媒体（.mp4）需配置 Type（1 情景视频 / 2 交际训练）、页面编号（如 P002V）与 frame num（默认 1）。可在操作列「编辑」逐条配置，或使用「导入映射」批量导入 Excel。
+                多媒体（.mp4）需配置页面编号（如 P002V）与 frame num（默认 1）；Type 通过「导入映射」写入。可在操作列「编辑」逐条配置页码与 frame，或使用 Excel 批量导入。
               </div>
             </div>
           </div>

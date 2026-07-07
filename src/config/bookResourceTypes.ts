@@ -118,10 +118,8 @@ export function isBookResourcePageValid(
   type: BookResourceType | string,
   pageCode?: string,
   frameNum?: number,
-  mappingType?: number,
 ): boolean {
   if (!bookResourceNeedsPageNum(type)) return true;
-  if (!isBookResourceMappingTypeValid(mappingType)) return false;
   if (!pageCode?.trim() || !isBookResourcePageCodeFormatValid(pageCode)) return false;
   return isBookResourceFrameNumValid(frameNum ?? 1);
 }
