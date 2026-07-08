@@ -8,7 +8,10 @@ import {
   validateMultiMediaMappingImportFile,
   type ParsedMultiMediaMappingRow,
 } from '../utils/multiMediaMappingImport';
-import { downloadMultiMediaMappingWorkbook } from '../utils/multiMediaMappingExport';
+import {
+  countMultiMediaMappingFiles,
+  downloadMultiMediaMappingWorkbook,
+} from '../utils/multiMediaMappingExport';
 import {
   BookSortableTableBody,
   SeriesSortableGrid,
@@ -3049,8 +3052,15 @@ function BookEditor({
     setMediaMappingImportFileName(file.name);
     setMediaMappingImportParsed(null);
     try {
+      const expectedMediaCount = countMultiMediaMappingFiles(bookFiles);
+      if (expectedMediaCount === 0) {
+        showEditorToast('当前书籍尚无多媒体资源，请先添加后再导入');
+        setMediaMappingImportFileName('');
+        return;
+      }
+
       const buffer = await file.arrayBuffer();
-      const parsed = parseMultiMediaMappingWorkbook(buffer);
+      const parsed = parseMultiMediaMappingWorkbook(buffer, { expectedMediaCount });
       if (!parsed.ok) {
         showEditorToast(parsed.message);
         setMediaMappingImportFileName('');
@@ -3086,7 +3096,7 @@ function BookEditor({
       showEditorToast('请先添加多媒体（.mp4）资源');
       return;
     }
-    showEditorToast(`已导出 ${mediaCount} 条多媒体映射，请填写「页码」与「按钮编号」后导入`);
+    showEditorToast(`已导出 ${mediaCount} 条多媒体映射，请填写「页码」与「Frame_Num」后整表导入`);
   };
 
   return (
@@ -3677,7 +3687,7 @@ function BookEditor({
             <div className="library-info-box" style={{ marginTop: 16 }}>
               <div className="library-info-box-icon">💡</div>
               <div className="library-info-box-text">
-                推荐流程：① 添加多媒体（.mp4）→ ② 导出映射表，在 Excel 中填写「页码」（如 P002V）与「按钮编号」（Frame，默认 1）→ ③ 导入映射更新。也可在操作列「编辑」逐条配置。
+                推荐流程：① 添加多媒体资源 → ② 导出映射表，在 Excel 中填写「页码」（如 P002V）与「Frame_Num」（frame_num，一页一视频填 1）→ ③ 导入整表更新（条数须与导出一致）。也可在操作列「编辑」逐条配置。
               </div>
             </div>
           </div>
@@ -3763,7 +3773,7 @@ function BookEditor({
                   <div className="library-catalog-import-drop-icon" aria-hidden>↑</div>
                   <div className="library-catalog-import-drop-title">点击上传或拖拽 Excel 文件至此</div>
                   <div className="form-hint">
-                    支持 .xlsx / .xls · 最大 10MB · 单次最多 {MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS} 行 · 请使用「② 导出映射表」填写后再导入
+                    支持 .xlsx / .xls · 最大 10MB · 单次最多 {MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS} 行 · 须导入「② 导出映射表」填完后的完整表格，资源条数不可增删
                   </div>
                 </>
               )}
@@ -3771,10 +3781,11 @@ function BookEditor({
 
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, marginTop: 16 }}>表格格式（与导出映射表一致）</div>
             <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
+              <li><b style={{ color: 'var(--ink)' }}>资源条数</b>：须与「② 导出映射表」完全一致，不可增删行</li>
               <li><b style={{ color: 'var(--ink)' }}>序号 / 教材名称 / ISBN / ID / 资源名称</b>：导出时自动填充，请勿改动 ID</li>
-              <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V（导入必填）</li>
-              <li><b style={{ color: 'var(--ink)' }}>按钮编号</b>：Frame 序号，一页一视频填 1，留空视为 1</li>
-              <li><b style={{ color: 'var(--ink)' }}>资源类型</b>：导出默认为 video，一般无需修改</li>
+              <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V（必填）</li>
+              <li><b style={{ color: 'var(--ink)' }}>Frame_Num</b>：frame_num，Frame 序号（必填；一页一视频填 1）</li>
+              <li><b style={{ color: 'var(--ink)' }}>资源类型</b>：与导出表保持一致，请勿修改</li>
               <li>单次导入有效数据行不超过 <b>{MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS}</b> 行</li>
             </ul>
 

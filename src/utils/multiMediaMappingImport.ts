@@ -62,7 +62,7 @@ const LEGACY_HEADER_ALIASES: Record<
   resourceId: ['资源ID', 'resourceId', 'resource_id', 'lessonId', 'lesson_id', '课时ID', 'ID'],
   type: ['Type', 'type', '资源类型'],
   pageCode: ['页码', 'pageCode', 'page_code', '页面编号'],
-  frameNum: ['frame_num', 'frameNum', 'Frame', '帧序号', '按钮编号'],
+  frameNum: ['Frame_Num', 'frame_num', 'frameNum', 'Frame', '帧序号', '按钮编号'],
 };
 
 const LEGACY_HEADER_LABELS: Record<keyof typeof LEGACY_HEADER_ALIASES, string> = {
@@ -80,7 +80,7 @@ const EXPORT_HEADER_ALIASES = {
   bookName: ['教材名称', 'bookName', '书名'],
   isbn: ['ISBN', 'isbn'],
   pageCode: ['页码', 'pageCode', '页面编号'],
-  frameNum: ['按钮编号', 'frame_num', 'frameNum', 'Frame', '帧序号'],
+  frameNum: ['Frame_Num', '按钮编号', 'frame_num', 'frameNum', 'Frame', '帧序号'],
   resourceType: ['资源类型', 'type', 'Type'],
   resourceId: ['ID', '资源ID', 'resourceId', 'resource_id'],
   resourceName: ['资源名称', 'resourceName', 'resource_name'],
@@ -121,8 +121,8 @@ function readCell(row: unknown[], col: number | undefined): string {
   return cellText(row[col]);
 }
 
-function parseFrameNum(raw: string, allowEmptyDefault = true): number | null {
-  if (!raw) return allowEmptyDefault ? 1 : null;
+function parseFrameNum(raw: string): number | null {
+  if (!raw) return null;
   const num = Number(raw);
   if (!Number.isInteger(num) || num < 1) return null;
   return num;
@@ -142,7 +142,26 @@ function isExportMappingFormat(headerRow: unknown[]): boolean {
   return index.resourceId != null && index.resourceName != null && index.pageCode != null;
 }
 
-function parseExportFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingResult {
+export type ParseMultiMediaMappingOptions = {
+  expectedMediaCount?: number;
+};
+
+function validateParsedRowCount(
+  parsedLength: number,
+  expectedMediaCount?: number,
+): ParseMultiMediaMappingResult | null {
+  if (expectedMediaCount == null) return null;
+  if (parsedLength === expectedMediaCount) return null;
+  return {
+    ok: false,
+    message: `导入资源数（${parsedLength} 条）与当前书籍多媒体资源数（${expectedMediaCount} 条）不一致，请使用「② 导出映射表」生成的完整表格，勿增删行`,
+  };
+}
+
+function parseExportFormatWorkbook(
+  rows: unknown[][],
+  options?: ParseMultiMediaMappingOptions,
+): ParseMultiMediaMappingResult {
   const headerIndex = buildHeaderIndex(rows[0] ?? [], EXPORT_HEADER_ALIASES);
   const required: Array<keyof typeof EXPORT_HEADER_ALIASES> = [
     'bookName',
@@ -168,7 +187,9 @@ function parseExportFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingRes
     if (!resourceName && !resourceId) continue;
 
     const pageRaw = readCell(row, headerIndex.pageCode);
-    if (!pageRaw) continue;
+    if (!pageRaw) {
+      return { ok: false, message: `第 ${i + 1} 行页码不能为空` };
+    }
 
     const pageCode = normalizeBookResourcePageCode(pageRaw);
     if (!isBookResourcePageCodeFormatValid(pageCode)) {
@@ -177,7 +198,10 @@ function parseExportFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingRes
 
     const frameNum = parseFrameNum(readCell(row, headerIndex.frameNum));
     if (frameNum == null || !isBookResourceFrameNumValid(frameNum)) {
-      return { ok: false, message: `第 ${i + 1} 行按钮编号无效，应为大于等于 1 的整数` };
+      return {
+        ok: false,
+        message: `第 ${i + 1} 行 Frame_Num 不能为空，且应为大于等于 1 的整数`,
+      };
     }
 
     const type = parseMappingType(readCell(row, headerIndex.resourceType));
@@ -195,7 +219,7 @@ function parseExportFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingRes
   }
 
   if (parsed.length === 0) {
-    return { ok: false, message: '未解析到可导入的数据，请先在表格中填写「页码」列' };
+    return { ok: false, message: '未解析到可导入的数据，请检查表格内容' };
   }
 
   if (parsed.length > MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS) {
@@ -205,10 +229,16 @@ function parseExportFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingRes
     };
   }
 
+  const countError = validateParsedRowCount(parsed.length, options?.expectedMediaCount);
+  if (countError) return countError;
+
   return { ok: true, rows: parsed };
 }
 
-function parseLegacyFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingResult {
+function parseLegacyFormatWorkbook(
+  rows: unknown[][],
+  options?: ParseMultiMediaMappingOptions,
+): ParseMultiMediaMappingResult {
   const headerIndex = buildHeaderIndex(rows[0] ?? [], LEGACY_HEADER_ALIASES);
   const requiredHeaders: Array<keyof typeof LEGACY_HEADER_ALIASES> = [
     'resourceName',
@@ -240,7 +270,10 @@ function parseLegacyFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingRes
 
     const frameNum = parseFrameNum(readCell(row, headerIndex.frameNum));
     if (frameNum == null || !isBookResourceFrameNumValid(frameNum)) {
-      return { ok: false, message: `第 ${i + 1} 行 frame_num 无效，应为大于等于 1 的整数` };
+      return {
+        ok: false,
+        message: `第 ${i + 1} 行 frame_num 不能为空，且应为大于等于 1 的整数`,
+      };
     }
 
     const typeRaw = readCell(row, headerIndex.type);
@@ -275,10 +308,16 @@ function parseLegacyFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingRes
     };
   }
 
+  const countError = validateParsedRowCount(parsed.length, options?.expectedMediaCount);
+  if (countError) return countError;
+
   return { ok: true, rows: parsed };
 }
 
-export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiMediaMappingResult {
+export function parseMultiMediaMappingWorkbook(
+  buffer: ArrayBuffer,
+  options?: ParseMultiMediaMappingOptions,
+): ParseMultiMediaMappingResult {
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return { ok: false, message: '表格为空，请检查文件内容' };
@@ -293,10 +332,10 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
   }
 
   if (isExportMappingFormat(rows[0] ?? [])) {
-    return parseExportFormatWorkbook(rows);
+    return parseExportFormatWorkbook(rows, options);
   }
 
-  return parseLegacyFormatWorkbook(rows);
+  return parseLegacyFormatWorkbook(rows, options);
 }
 
 function matchesResourceName(file: BookFileResourceLike, resourceName: string): boolean {

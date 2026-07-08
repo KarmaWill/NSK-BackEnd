@@ -6,7 +6,7 @@ export const MULTI_MEDIA_MAPPING_EXPORT_HEADERS = [
   '教材名称',
   'ISBN',
   '页码',
-  '按钮编号',
+  'Frame_Num',
   '资源类型',
   'ID',
   '资源名称',
@@ -34,6 +34,10 @@ function resolveResourceName(file: ExportableBookFile): string {
   return file.resourceName?.trim() || stripFileExtension(file.fileName);
 }
 
+export function countMultiMediaMappingFiles(files: ExportableBookFile[]): number {
+  return files.filter((file) => normalizeBookResourceType(file.type) === 'MULTI_MEDIA').length;
+}
+
 export function buildMultiMediaMappingExportRows(
   files: ExportableBookFile[],
   options: { bookTitle: string; isbn: string },
@@ -42,13 +46,12 @@ export function buildMultiMediaMappingExportRows(
   const rows: unknown[][] = [[...MULTI_MEDIA_MAPPING_EXPORT_HEADERS]];
 
   mediaFiles.forEach((file, index) => {
-    const frameNum = file.frameNum ?? 1;
     rows.push([
       index + 1,
       options.bookTitle,
       options.isbn,
       file.pageCode?.trim() ?? '',
-      frameNum > 1 ? frameNum : '',
+      file.frameNum ?? 1,
       'video',
       resolveResourceId(file) || '',
       resolveResourceName(file),
