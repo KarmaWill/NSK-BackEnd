@@ -8,6 +8,7 @@ import {
   validateMultiMediaMappingImportFile,
   type ParsedMultiMediaMappingRow,
 } from '../utils/multiMediaMappingImport';
+import { downloadMultiMediaMappingWorkbook } from '../utils/multiMediaMappingExport';
 import {
   BookSortableTableBody,
   SeriesSortableGrid,
@@ -3073,7 +3074,19 @@ function BookEditor({
     setBookFiles(result.files);
     closeMediaMappingImportModal();
     const skipHint = result.skipped.length > 0 ? `，跳过 ${result.skipped.length} 条` : '';
-    showEditorToast(`导入完成，已更新 ${result.updated} 条多媒体映射${skipHint}`);
+    showEditorToast(`导入完成，已更新 ${result.updated} 条页面编号与 Frame${skipHint}`);
+  };
+
+  const handleExportMediaMapping = () => {
+    const mediaCount = downloadMultiMediaMappingWorkbook(bookFiles, {
+      bookTitle: (titleByLang.CN ?? editedBook.title).trim() || editedBook.title,
+      isbn: editedBook.isbn,
+    });
+    if (mediaCount === 0) {
+      showEditorToast('请先添加多媒体（.mp4）资源');
+      return;
+    }
+    showEditorToast(`已导出 ${mediaCount} 条多媒体映射，请填写「页码」与「按钮编号」后导入`);
   };
 
   return (
@@ -3562,14 +3575,17 @@ function BookEditor({
 
         <div className={`config-tab-panel ${activeTab === 'resources' ? 'active' : ''}`} role="tabpanel" hidden={activeTab !== 'resources'}>
           <div className="config-section">
-            <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="section-title library-resource-section-title">
               <span>📝 整本书资源</span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={openMediaMappingImportModal}>
-                  📥 导入映射
-                </button>
+              <div className="library-resource-workflow">
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => setAddBookResourceOpen(true)}>
-                  ➕ 添加资源
+                  ① 添加资源
+                </button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={handleExportMediaMapping}>
+                  ② 导出映射表
+                </button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={openMediaMappingImportModal}>
+                  ③ 导入映射
                 </button>
               </div>
             </div>
@@ -3661,7 +3677,7 @@ function BookEditor({
             <div className="library-info-box" style={{ marginTop: 16 }}>
               <div className="library-info-box-icon">💡</div>
               <div className="library-info-box-text">
-                多媒体（.mp4）需配置页面编号（如 P002V）与 frame num（默认 1）。可在操作列「编辑」逐条配置，或使用「导入映射」批量导入 Excel。
+                推荐流程：① 添加多媒体（.mp4）→ ② 导出映射表，在 Excel 中填写「页码」（如 P002V）与「按钮编号」（Frame，默认 1）→ ③ 导入映射更新。也可在操作列「编辑」逐条配置。
               </div>
             </div>
           </div>
@@ -3691,7 +3707,7 @@ function BookEditor({
       >
         <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
           <div className="modal-header">
-            <div className="modal-title">导入多媒体映射</div>
+            <div className="modal-title">③ 导入映射表</div>
             <button type="button" className="modal-close" onClick={closeMediaMappingImportModal} aria-label="关闭">✕</button>
           </div>
           <div className="modal-body">
@@ -3747,33 +3763,23 @@ function BookEditor({
                   <div className="library-catalog-import-drop-icon" aria-hidden>↑</div>
                   <div className="library-catalog-import-drop-title">点击上传或拖拽 Excel 文件至此</div>
                   <div className="form-hint">
-                    支持 .xlsx / .xls · 最大 10MB · 单次最多 {MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS} 行 · 按 ISBN 匹配当前书籍并更新已挂载多媒体
+                    支持 .xlsx / .xls · 最大 10MB · 单次最多 {MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS} 行 · 请使用「② 导出映射表」填写后再导入
                   </div>
                 </>
               )}
             </div>
 
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, marginTop: 16 }}>表格格式</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, marginTop: 16 }}>表格格式（与导出映射表一致）</div>
             <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-light)', lineHeight: 1.9 }}>
-              <li><b style={{ color: 'var(--ink)' }}>资源名称</b>：与已挂载 .mp4 文件名或资源名匹配</li>
-              <li><b style={{ color: 'var(--ink)' }}>ISBN</b>：需与当前书籍一致</li>
-              <li><b style={{ color: 'var(--ink)' }}>资源ID</b>：7 位数字（如 1612935），写入列表「资源ID」列</li>
-              <li><b style={{ color: 'var(--ink)' }}>Type</b>：按资源类别填写，情景视频填 <b>1</b>，交际训练填 <b>2</b></li>
-              <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V</li>
-              <li><b style={{ color: 'var(--ink)' }}>frame_num</b>：帧序号，一页一视频填 1</li>
+              <li><b style={{ color: 'var(--ink)' }}>序号 / 教材名称 / ISBN / ID / 资源名称</b>：导出时自动填充，请勿改动 ID</li>
+              <li><b style={{ color: 'var(--ink)' }}>页码</b>：页面编号，如 P002V（导入必填）</li>
+              <li><b style={{ color: 'var(--ink)' }}>按钮编号</b>：Frame 序号，一页一视频填 1，留空视为 1</li>
+              <li><b style={{ color: 'var(--ink)' }}>资源类型</b>：导出默认为 video，一般无需修改</li>
               <li>单次导入有效数据行不超过 <b>{MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS}</b> 行</li>
             </ul>
 
-            <div style={{ marginTop: 12 }}>
-              <a
-                href="/多媒体导入表.xlsx"
-                download="多媒体导入表.xlsx"
-                className="btn btn-ghost"
-                style={{ gap: 6, textDecoration: 'none' }}
-              >
-                <span>⇩</span>
-                下载导入模板
-              </a>
+            <div className="form-hint" style={{ marginTop: 12 }}>
+              尚未导出？请关闭此窗口，先点击「② 导出映射表」生成 Excel。
             </div>
           </div>
           <div className="modal-footer">

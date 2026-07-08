@@ -3762,6 +3762,21 @@ input[type="range"].swm-range {
   max-width: 120px;
 }
 
+.library-resource-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.library-resource-workflow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .form-input.is-invalid {
   border-color: var(--rose, #e11d48);
   background: #fff5f5;

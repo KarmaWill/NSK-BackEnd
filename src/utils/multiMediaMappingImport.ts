@@ -52,17 +52,20 @@ type BookFileResourceLike = {
   mappingType?: number;
 };
 
-const HEADER_ALIASES: Record<keyof Omit<ParsedMultiMediaMappingRow, 'rowIndex'>, string[]> = {
+const LEGACY_HEADER_ALIASES: Record<
+  'resourceName' | 'bookName' | 'isbn' | 'resourceId' | 'type' | 'pageCode' | 'frameNum',
+  string[]
+> = {
   resourceName: ['资源名称', 'resourceName', 'resource_name'],
-  bookName: ['bookName', '书名', '书籍名称'],
+  bookName: ['bookName', '书名', '书籍名称', '教材名称'],
   isbn: ['ISBN', 'isbn'],
-  resourceId: ['资源ID', 'resourceId', 'resource_id', 'lessonId', 'lesson_id', '课时ID'],
+  resourceId: ['资源ID', 'resourceId', 'resource_id', 'lessonId', 'lesson_id', '课时ID', 'ID'],
   type: ['Type', 'type', '资源类型'],
   pageCode: ['页码', 'pageCode', 'page_code', '页面编号'],
-  frameNum: ['frame_num', 'frameNum', 'Frame', '帧序号'],
+  frameNum: ['frame_num', 'frameNum', 'Frame', '帧序号', '按钮编号'],
 };
 
-const HEADER_LABELS: Record<keyof typeof HEADER_ALIASES, string> = {
+const LEGACY_HEADER_LABELS: Record<keyof typeof LEGACY_HEADER_ALIASES, string> = {
   resourceName: '资源名称',
   bookName: 'bookName',
   isbn: 'ISBN',
@@ -71,6 +74,17 @@ const HEADER_LABELS: Record<keyof typeof HEADER_ALIASES, string> = {
   pageCode: '页码',
   frameNum: 'frame_num',
 };
+
+const EXPORT_HEADER_ALIASES = {
+  seq: ['序号'],
+  bookName: ['教材名称', 'bookName', '书名'],
+  isbn: ['ISBN', 'isbn'],
+  pageCode: ['页码', 'pageCode', '页面编号'],
+  frameNum: ['按钮编号', 'frame_num', 'frameNum', 'Frame', '帧序号'],
+  resourceType: ['资源类型', 'type', 'Type'],
+  resourceId: ['ID', '资源ID', 'resourceId', 'resource_id'],
+  resourceName: ['资源名称', 'resourceName', 'resource_name'],
+} as const;
 
 function cellText(value: unknown): string {
   if (value == null) return '';
@@ -85,18 +99,19 @@ function stripFileExtension(name: string): string {
   return name.replace(/\.[^.]+$/, '');
 }
 
-function buildHeaderIndex(headerRow: unknown[]): Partial<Record<keyof typeof HEADER_ALIASES, number>> {
-  const index: Partial<Record<keyof typeof HEADER_ALIASES, number>> = {};
+function buildHeaderIndex<T extends string>(
+  headerRow: unknown[],
+  aliases: Record<T, readonly string[]>,
+): Partial<Record<T, number>> {
+  const index: Partial<Record<T, number>> = {};
   headerRow.forEach((cell, col) => {
     const text = cellText(cell);
     if (!text) return;
-    (Object.entries(HEADER_ALIASES) as Array<[keyof typeof HEADER_ALIASES, string[]]>).forEach(
-      ([key, aliases]) => {
-        if (aliases.some((alias) => alias.toLowerCase() === text.toLowerCase())) {
-          index[key] = col;
-        }
-      },
-    );
+    (Object.entries(aliases) as Array<[T, readonly string[]]>).forEach(([key, names]) => {
+      if (names.some((alias) => alias.toLowerCase() === text.toLowerCase())) {
+        index[key] = col;
+      }
+    });
   });
   return index;
 }
@@ -106,36 +121,96 @@ function readCell(row: unknown[], col: number | undefined): string {
   return cellText(row[col]);
 }
 
-function parseFrameNum(raw: string): number | null {
-  if (!raw) return 1;
+function parseFrameNum(raw: string, allowEmptyDefault = true): number | null {
+  if (!raw) return allowEmptyDefault ? 1 : null;
   const num = Number(raw);
   if (!Number.isInteger(num) || num < 1) return null;
   return num;
 }
 
-function parseType(raw: string): number | null {
-  if (!raw) return null;
+function parseMappingType(raw: string): number {
+  const lower = raw.trim().toLowerCase();
+  if (lower === 'video' || lower === '情景视频') return 1;
+  if (lower === '交际训练' || lower === 'commun') return 2;
   const num = Number(raw);
-  if (!Number.isInteger(num)) return null;
-  return num;
+  if (Number.isInteger(num) && isBookResourceMappingTypeValid(num)) return num;
+  return 2;
 }
 
-export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiMediaMappingResult {
-  const workbook = XLSX.read(buffer, { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return { ok: false, message: '表格为空，请检查文件内容' };
+function isExportMappingFormat(headerRow: unknown[]): boolean {
+  const index = buildHeaderIndex(headerRow, EXPORT_HEADER_ALIASES);
+  return index.resourceId != null && index.resourceName != null && index.pageCode != null;
+}
 
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
-    header: 1,
-    defval: '',
-  }) as unknown[][];
-
-  if (rows.length < 2) {
-    return { ok: false, message: '表格至少需要表头行与一行数据' };
+function parseExportFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingResult {
+  const headerIndex = buildHeaderIndex(rows[0] ?? [], EXPORT_HEADER_ALIASES);
+  const required: Array<keyof typeof EXPORT_HEADER_ALIASES> = [
+    'bookName',
+    'isbn',
+    'resourceId',
+    'resourceName',
+    'pageCode',
+    'frameNum',
+  ];
+  const missing = required.filter((key) => headerIndex[key] == null);
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      message: `表头缺少必要列：${missing.join('、')}，请使用「导出映射表」生成的 Excel`,
+    };
   }
 
-  const headerIndex = buildHeaderIndex(rows[0] ?? []);
-  const requiredHeaders: Array<keyof typeof HEADER_ALIASES> = [
+  const parsed: ParsedMultiMediaMappingRow[] = [];
+  for (let i = 1; i < rows.length; i += 1) {
+    const row = rows[i] ?? [];
+    const resourceName = readCell(row, headerIndex.resourceName);
+    const resourceId = readCell(row, headerIndex.resourceId);
+    if (!resourceName && !resourceId) continue;
+
+    const pageRaw = readCell(row, headerIndex.pageCode);
+    if (!pageRaw) continue;
+
+    const pageCode = normalizeBookResourcePageCode(pageRaw);
+    if (!isBookResourcePageCodeFormatValid(pageCode)) {
+      return { ok: false, message: `第 ${i + 1} 行页码格式无效，应为 P002V 等形式` };
+    }
+
+    const frameNum = parseFrameNum(readCell(row, headerIndex.frameNum));
+    if (frameNum == null || !isBookResourceFrameNumValid(frameNum)) {
+      return { ok: false, message: `第 ${i + 1} 行按钮编号无效，应为大于等于 1 的整数` };
+    }
+
+    const type = parseMappingType(readCell(row, headerIndex.resourceType));
+
+    parsed.push({
+      rowIndex: i + 1,
+      resourceName,
+      bookName: readCell(row, headerIndex.bookName),
+      isbn: readCell(row, headerIndex.isbn),
+      resourceId,
+      type,
+      pageCode,
+      frameNum,
+    });
+  }
+
+  if (parsed.length === 0) {
+    return { ok: false, message: '未解析到可导入的数据，请先在表格中填写「页码」列' };
+  }
+
+  if (parsed.length > MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS) {
+    return {
+      ok: false,
+      message: `导入行数不能超过 ${MULTI_MEDIA_MAPPING_IMPORT_MAX_ROWS} 行，请拆分表格后分批导入`,
+    };
+  }
+
+  return { ok: true, rows: parsed };
+}
+
+function parseLegacyFormatWorkbook(rows: unknown[][]): ParseMultiMediaMappingResult {
+  const headerIndex = buildHeaderIndex(rows[0] ?? [], LEGACY_HEADER_ALIASES);
+  const requiredHeaders: Array<keyof typeof LEGACY_HEADER_ALIASES> = [
     'resourceName',
     'bookName',
     'isbn',
@@ -148,7 +223,7 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
   if (missing.length > 0) {
     return {
       ok: false,
-      message: `表头缺少必要列：${missing.map((key) => HEADER_LABELS[key]).join('、')}，请下载模板对照填写`,
+      message: `表头缺少必要列：${missing.map((key) => LEGACY_HEADER_LABELS[key]).join('、')}，请导出映射表后填写`,
     };
   }
 
@@ -168,8 +243,9 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
       return { ok: false, message: `第 ${i + 1} 行 frame_num 无效，应为大于等于 1 的整数` };
     }
 
-    const type = parseType(readCell(row, headerIndex.type));
-    if (type == null || !isBookResourceMappingTypeValid(type)) {
+    const typeRaw = readCell(row, headerIndex.type);
+    const type = parseMappingType(typeRaw);
+    if (!isBookResourceMappingTypeValid(type)) {
       return {
         ok: false,
         message: `第 ${i + 1} 行 Type 无效，情景视频填 1，交际训练填 2`,
@@ -202,6 +278,27 @@ export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiM
   return { ok: true, rows: parsed };
 }
 
+export function parseMultiMediaMappingWorkbook(buffer: ArrayBuffer): ParseMultiMediaMappingResult {
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return { ok: false, message: '表格为空，请检查文件内容' };
+
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
+    header: 1,
+    defval: '',
+  }) as unknown[][];
+
+  if (rows.length < 2) {
+    return { ok: false, message: '表格至少需要表头行与一行数据' };
+  }
+
+  if (isExportMappingFormat(rows[0] ?? [])) {
+    return parseExportFormatWorkbook(rows);
+  }
+
+  return parseLegacyFormatWorkbook(rows);
+}
+
 function matchesResourceName(file: BookFileResourceLike, resourceName: string): boolean {
   const normalized = resourceName.trim();
   if (!normalized) return false;
@@ -216,9 +313,10 @@ function findMatchingMediaFile(
   row: ParsedMultiMediaMappingRow,
 ): BookFileResourceLike | undefined {
   const mediaFiles = files.filter((file) => normalizeBookResourceType(file.type) === 'MULTI_MEDIA');
+  const normalizedId = row.resourceId.trim();
   return (
-    mediaFiles.find((file) => file.resourceId && file.resourceId === row.resourceId) ??
-    mediaFiles.find((file) => file.lessonId && file.lessonId === row.resourceId) ??
+    mediaFiles.find((file) => file.resourceId && file.resourceId === normalizedId) ??
+    mediaFiles.find((file) => file.lessonId && file.lessonId === normalizedId) ??
     mediaFiles.find((file) => matchesResourceName(file, row.resourceName))
   );
 }
@@ -269,7 +367,7 @@ export function applyMultiMediaMappings<T extends BookFileResourceLike>(
 
     nextFiles[index] = {
       ...nextFiles[index],
-      resourceName: row.resourceName,
+      resourceName: row.resourceName || nextFiles[index].resourceName,
       resourceId: row.resourceId || nextFiles[index].resourceId,
       mappingType: row.type,
       pageCode: row.pageCode,
