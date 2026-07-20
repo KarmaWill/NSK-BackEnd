@@ -128,7 +128,7 @@ const HSK_WEB_BLOCKS: NavBlock[] = [
   {
     type: 'section',
     label: '内容配置',
-    children: [item('audio-reading-mgmt', { label: '有声阅读' }), VIDEO_CENTER_GROUP],
+    children: [item('audio-reading-mgmt', { label: '有声阅读管理' }), VIDEO_CENTER_GROUP],
   },
   { type: 'section', label: '考试与测评', children: [WEB_EXAM_BANK_GROUP, WEB_ASSESS_HUB_GROUP] },
   {

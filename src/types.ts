@@ -52,7 +52,7 @@ export const NAV_LABELS: Record<PanelId, string> = {
   catalog: '目录管理',
   resources: '学习资源',
   'audio-reading': '有声阅读',
-  'audio-reading-mgmt': '有声阅读',
+  'audio-reading-mgmt': '有声阅读管理',
   questions: '题库管理',
   'ai-roles': 'AI 角色配置',
   'ai-capabilities': '课程AI配置',

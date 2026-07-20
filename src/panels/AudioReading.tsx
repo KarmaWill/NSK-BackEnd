@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PinyinCountInput, PinyinInlineField } from '../components/PinyinCountInput';
+import {
+  AUDIO_READING_IMPORT_MAX_ROWS,
+  AUDIO_READING_LIMITS,
+  downloadAudioReadingImportTemplate,
+  parseAudioReadingWorkbook,
+  stripAudioExtension,
+  validateAudioReadingImportFile,
+  type ParsedAudioReadingImportRow,
+} from '../utils/audioReadingImport';
+import { loadCourseLibs } from '../stores/courseLibs';
 
 type LangKey = 'EN' | 'ES' | 'FR' | 'PT' | 'CN' | 'JA' | 'KO' | 'TH' | 'VI' | 'ID' | 'MS' | 'KM';
 type AudioRef = { id: string; name: string; duration: string; size: string };
@@ -12,8 +22,10 @@ type ReadingSegment = {
 type ReadingRow = {
   id: string;
   seq: number;
-  level: string;
+  bookName: string;
+  bookIsbn?: string;
   unitName: string;
+  courseLibId?: string;
   nameByLang: Partial<Record<LangKey, string>>;
   namePinyin: string;
   segments: ReadingSegment[];
@@ -22,15 +34,27 @@ type ReadingRow = {
   updatedAt: string;
 };
 
-const STORAGE_KEY = 'nsk-audio-reading-lines-v3';
-const LEVELS = [{ id: '1', label: 'Level 1' }];
+export type AudioReadingVariant = 'course' | 'mgmt';
+
+const MGMT_STORAGE_KEY = 'nsk-audio-reading-mgmt-v1';
+const LEGACY_STORAGE_KEYS = ['nsk-audio-reading-lines-v4', 'nsk-audio-reading-lines-v3'];
+const BOOKS = [{ id: 'hc1', label: '快乐中文 第一册', isbn: '978-7-107-37765-5' }];
 const UNITS = [
-  { id: 'U1', levelId: '1', label: 'Unit 1' },
-  { id: 'U2', levelId: '1', label: 'Unit 2' },
-  { id: 'U3', levelId: '1', label: 'Unit 3' },
-  { id: 'U4', levelId: '1', label: 'Unit 4' },
-  { id: 'U5', levelId: '1', label: 'Unit 5' },
-  { id: 'U6', levelId: '1', label: 'Unit 6' },
+  { id: 'U1', bookId: 'hc1', label: '第一单元 我和你' },
+  { id: 'U2', bookId: 'hc1', label: '第二单元 我的一天' },
+  { id: 'U3', bookId: 'hc1', label: '第三单元 我的一家人' },
+  { id: 'U4', bookId: 'hc1', label: '第四单元 我的宠物' },
+  { id: 'U5', bookId: 'hc1', label: '第五单元 我的学校' },
+  { id: 'U6', bookId: 'hc1', label: '第六单元 我的社区' },
+];
+
+const COURSE_UNITS = [
+  { id: 'N10100', label: 'N10100 · 日常主食' },
+  { id: 'N10200', label: 'N10200 · 日常饮品' },
+  { id: 'N10300', label: 'N10300 · 这是什么' },
+  { id: 'N10400', label: 'N10400 · 自我介绍' },
+  { id: 'N10500', label: 'N10500 · 我的宠物' },
+  { id: 'N10600', label: 'N10600 · 家庭成员' },
 ];
 
 const AUDIO_LIBRARY: AudioRef[] = [
@@ -57,12 +81,13 @@ const LANG_LABELS: { key: LangKey; label: string }[] = [
   { key: 'KM', label: 'KM 高棉语' },
 ];
 
-const seedRows: ReadingRow[] = [
+const mgmtSeedRows: ReadingRow[] = [
   {
-    id: 'AR-0001',
+    id: 'M0100001',
     seq: 1,
-    level: 'Level 1',
-    unitName: 'Unit 1',
+    bookName: '快乐中文 第一册',
+    bookIsbn: '978-7-107-37765-5',
+    unitName: '第一单元 我和你',
     nameByLang: { CN: '日常主食', EN: 'Main Foods' },
     segments: [
       {
@@ -90,10 +115,11 @@ const seedRows: ReadingRow[] = [
     updatedAt: '2026-03-04 16:10',
   },
   {
-    id: 'AR-0002',
+    id: 'M0100002',
     seq: 2,
-    level: 'Level 1',
-    unitName: 'Unit 2',
+    bookName: '快乐中文 第一册',
+    bookIsbn: '978-7-107-37765-5',
+    unitName: '第二单元 我的一天',
     nameByLang: { CN: '日常饮品', EN: 'Daily Drinks' },
     segments: [
       {
@@ -122,6 +148,70 @@ const seedRows: ReadingRow[] = [
   },
 ];
 
+const courseSeedRows: ReadingRow[] = [
+  {
+    id: 'M0100001',
+    seq: 1,
+    bookName: '',
+    unitName: 'N10100 · 日常主食',
+    nameByLang: { CN: '日常主食', EN: 'Main Foods' },
+    segments: [
+      {
+        id: 'S1',
+        textByLang: {
+          CN: '我爱吃米饭，我爱吃饺子，我也爱吃包子。',
+          EN: 'I love eating rice, I love eating dumplings, and I also love eating baozi.',
+        },
+        audioId: 'Y100001',
+        pinyin: 'wo ai chi mi fan, wo ai chi jiao zi, wo ye ai chi bao zi.',
+      },
+      {
+        id: 'S2',
+        textByLang: {
+          CN: '我的肚子说："太好了！"',
+          EN: 'My tummy says: "Great!"',
+        },
+        audioId: 'Y100002',
+        pinyin: 'wo de du zi shuo: tai hao le!',
+      },
+    ],
+    namePinyin: 'ri chang zhu shi',
+    enabled: true,
+    createdAt: '2026-03-01 10:20',
+    updatedAt: '2026-03-04 16:10',
+  },
+  {
+    id: 'M0100002',
+    seq: 2,
+    bookName: '',
+    unitName: 'N10200 · 日常饮品',
+    nameByLang: { CN: '日常饮品', EN: 'Daily Drinks' },
+    segments: [
+      {
+        id: 'S1',
+        textByLang: {
+          CN: '早上我喝牛奶，中午我喝水，晚上我喝茶。',
+          EN: 'In the morning I drink milk, at noon I drink water, in the evening I drink tea.',
+        },
+        audioId: 'Y100003',
+        pinyin: 'zao shang wo he niu nai, zhong wu wo he shui, wan shang wo he cha.',
+      },
+    ],
+    namePinyin: 'ri chang yin pin',
+    enabled: true,
+    createdAt: '2026-03-02 12:11',
+    updatedAt: '2026-03-05 09:35',
+  },
+];
+
+function courseStorageKey(courseLibId: string) {
+  return `nsk-audio-reading-course-v1:${courseLibId || 'default'}`;
+}
+
+function resolveStorageKey(variant: AudioReadingVariant, courseLibId: string) {
+  return variant === 'course' ? courseStorageKey(courseLibId) : MGMT_STORAGE_KEY;
+}
+
 function normalizeSegment(seg: any, idx: number): ReadingSegment {
   const textByLang =
     seg?.textByLang && typeof seg.textByLang === 'object'
@@ -135,7 +225,7 @@ function normalizeSegment(seg: any, idx: number): ReadingSegment {
   };
 }
 
-function normalizeRow(row: any, idx: number): ReadingRow {
+function normalizeRow(row: any, idx: number, variant: AudioReadingVariant): ReadingRow {
   const segmentsRaw = Array.isArray(row?.segments) ? row.segments : [];
   const segments = (segmentsRaw.length ? segmentsRaw : [{ id: 'S1', textByLang: {}, audioId: '', pinyin: '' }]).map(normalizeSegment);
   const nameByLang =
@@ -145,11 +235,29 @@ function normalizeRow(row: any, idx: number): ReadingRow {
           CN: typeof row?.nameCn === 'string' ? row.nameCn : '',
           EN: typeof row?.nameEn === 'string' ? row.nameEn : '',
         };
+  const defaultId =
+    variant === 'course'
+      ? `M01${String(idx + 1).padStart(5, '0')}`
+      : `M01${String(idx + 1).padStart(5, '0')}`;
   return {
-    id: typeof row?.id === 'string' && row.id ? row.id : `AR-${String(idx + 1).padStart(4, '0')}`,
+    id: typeof row?.id === 'string' && row.id ? row.id : defaultId,
     seq: Number(row?.seq ?? idx + 1),
-    level: typeof row?.level === 'string' ? row.level : 'Level 1',
-    unitName: typeof row?.unitName === 'string' ? row.unitName : 'Unit 1',
+    bookName:
+      typeof row?.bookName === 'string'
+        ? row.bookName
+        : typeof row?.level === 'string'
+          ? row.level
+          : variant === 'mgmt'
+            ? BOOKS[0].label
+            : '',
+    bookIsbn: typeof row?.bookIsbn === 'string' ? row.bookIsbn : variant === 'mgmt' ? BOOKS[0].isbn : undefined,
+    unitName:
+      typeof row?.unitName === 'string'
+        ? row.unitName
+        : variant === 'course'
+          ? COURSE_UNITS[0].label
+          : UNITS[0].label,
+    courseLibId: typeof row?.courseLibId === 'string' ? row.courseLibId : undefined,
     nameByLang,
     namePinyin: typeof row?.namePinyin === 'string' ? row.namePinyin : '',
     segments,
@@ -159,26 +267,110 @@ function normalizeRow(row: any, idx: number): ReadingRow {
   };
 }
 
-function loadRows() {
-  if (typeof window === 'undefined') return seedRows;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedRows;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed) || !parsed.length) return seedRows;
-    return parsed.map(normalizeRow);
-  } catch {
-    return seedRows;
+function loadRows(variant: AudioReadingVariant, courseLibId: string): ReadingRow[] {
+  const seed = variant === 'course' ? courseSeedRows : mgmtSeedRows;
+  const storageKey = resolveStorageKey(variant, courseLibId);
+  if (typeof window === 'undefined') return seed;
+
+  const readKey = (key: string) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed) || !parsed.length) return null;
+      return parsed.map((row, idx) => normalizeRow(row, idx, variant));
+    } catch {
+      return null;
+    }
+  };
+
+  const current = readKey(storageKey);
+  if (current) return current;
+
+  if (variant === 'mgmt') {
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      const migrated = readKey(legacyKey);
+      if (migrated) {
+        localStorage.setItem(MGMT_STORAGE_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+    }
   }
+
+  return seed;
 }
 
-export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: string } = {}) {
-  const [rows, setRows] = useState<ReadingRow[]>(() => loadRows());
+function applyAudioReadingImport(parsed: ParsedAudioReadingImportRow[], existing: ReadingRow[]): ReadingRow[] {
+  const grouped = new Map<string, ParsedAudioReadingImportRow[]>();
+  parsed.forEach((row) => {
+    const list = grouped.get(row.resourceId) ?? [];
+    list.push(row);
+    grouped.set(row.resourceId, list);
+  });
+
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const byId = new Map(existing.map((row) => [row.id, row]));
+
+  grouped.forEach((items, resourceId) => {
+    const first = items[0];
+    const prev = byId.get(resourceId);
+    const segments = items.map((item, idx) => ({
+      id: `S${idx + 1}`,
+      textByLang: { CN: item.text.slice(0, AUDIO_READING_LIMITS.sentence) },
+      audioId: stripAudioExtension(item.audioName),
+      pinyin: item.pinyin.slice(0, AUDIO_READING_LIMITS.sentencePinyin),
+    }));
+
+    byId.set(resourceId, {
+      id: resourceId.slice(0, AUDIO_READING_LIMITS.nameId),
+      seq: prev?.seq ?? byId.size + 1,
+      bookName: first.bookName,
+      bookIsbn: first.bookIsbn || undefined,
+      unitName: first.unitName,
+      nameByLang: prev?.nameByLang ?? {},
+      namePinyin: prev?.namePinyin ?? '',
+      segments,
+      enabled: prev?.enabled ?? true,
+      createdAt: prev?.createdAt ?? now,
+      updatedAt: now,
+    });
+  });
+
+  return [...byId.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function clampText(value: string, max: number) {
+  return value.length <= max ? value : value.slice(0, max);
+}
+
+export function AudioReading({
+  variant = 'mgmt',
+  activeCourseLibId = '',
+  pageTitle,
+}: {
+  variant?: AudioReadingVariant;
+  activeCourseLibId?: string;
+  pageTitle?: string;
+} = {}) {
+  const isCourse = variant === 'course';
+  const isMgmt = variant === 'mgmt';
+  const courseLibName = useMemo(() => {
+    if (!isCourse || !activeCourseLibId) return 'AI Class';
+    return loadCourseLibs().find((lib) => lib.id === activeCourseLibId)?.name ?? 'AI Class';
+  }, [isCourse, activeCourseLibId]);
+  const resolvedTitle = pageTitle ?? (isCourse ? `${courseLibName} · 有声阅读` : '有声阅读管理');
+  const storageKey = resolveStorageKey(variant, activeCourseLibId);
+  const [rows, setRows] = useState<ReadingRow[]>(() => loadRows(variant, activeCourseLibId));
   const [refreshing, setRefreshing] = useState(false);
   const [toastText, setToastText] = useState('');
-  const [levelId, setLevelId] = useState('');
+  const [bookId, setBookId] = useState('');
   const [unitId, setUnitId] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFileName, setImportFileName] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importParsed, setImportParsed] = useState<ParsedAudioReadingImportRow[] | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [audioPickerOpen, setAudioPickerOpen] = useState(false);
   const [audioKeyword, setAudioKeyword] = useState('');
@@ -186,6 +378,14 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
   const [nameLangTab, setNameLangTab] = useState<LangKey>('CN');
   const [segmentLangTab, setSegmentLangTab] = useState<LangKey>('CN');
   const [showBilingual, setShowBilingual] = useState(false);
+
+  useEffect(() => {
+    setRows(loadRows(variant, activeCourseLibId));
+    setEditingId(null);
+    setBookId('');
+    setUnitId('');
+    setKeyword('');
+  }, [variant, activeCourseLibId]);
 
   const autoTranslateByLang = (seed: string): Partial<Record<LangKey, string>> => {
     const base = seed.trim();
@@ -220,7 +420,12 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
         };
   };
 
-  const unitOptions = useMemo(() => (levelId ? UNITS.filter((u) => u.levelId === levelId) : []), [levelId]);
+  const unitOptions = useMemo(
+    () => (isMgmt && bookId ? UNITS.filter((u) => u.bookId === bookId) : []),
+    [isMgmt, bookId],
+  );
+  const courseUnitOptions = COURSE_UNITS;
+  const selectedBookLabel = useMemo(() => BOOKS.find((b) => b.id === bookId)?.label ?? '', [bookId]);
   const editing = useMemo(() => rows.find((r) => r.id === editingId) ?? null, [rows, editingId]);
   useEffect(() => { setShowBilingual(false); }, [editingId]);
   const audioOptions = useMemo(
@@ -230,11 +435,15 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      const byUnit = unitId ? r.unitName === unitId.replace('U', 'Unit ') : true;
+      const byBook = isMgmt && selectedBookLabel ? r.bookName === selectedBookLabel : true;
+      const selectedUnit = isMgmt
+        ? unitOptions.find((u) => u.id === unitId)
+        : courseUnitOptions.find((u) => u.id === unitId);
+      const byUnit = selectedUnit ? r.unitName === selectedUnit.label : true;
       const byKeyword = keyword
         ? [
             r.id,
-            r.level,
+            r.bookName,
             r.unitName,
             ...Object.values(r.nameByLang),
             ...r.segments.map((s) => `${Object.values(s.textByLang).join(' ')} ${s.audioId}`),
@@ -243,13 +452,13 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
             .toLowerCase()
             .includes(keyword.toLowerCase())
         : true;
-      return byUnit && byKeyword;
+      return byBook && byUnit && byKeyword;
     });
-  }, [rows, unitId, keyword]);
+  }, [rows, isMgmt, selectedBookLabel, unitId, unitOptions, keyword]);
 
   const saveRows = (next: ReadingRow[]) => {
     setRows(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(storageKey, JSON.stringify(next));
   };
 
   const patchEditing = (patch: Partial<ReadingRow>) => {
@@ -279,14 +488,20 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
   };
 
   const addLine = () => {
-    const nextId = `AR-${String(rows.length + 1).padStart(4, '0')}`;
+    const nextId = isCourse
+      ? `M01${String(rows.length + 1).padStart(5, '0')}`
+      : `M01${String(rows.length + 1).padStart(5, '0')}`;
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    const unit = unitId ? unitId.replace('U', 'Unit ') : 'Unit 1';
+    const selectedUnit = isMgmt
+      ? unitOptions.find((u) => u.id === unitId)
+      : courseUnitOptions.find((u) => u.id === unitId);
     const nextRow: ReadingRow = {
       id: nextId,
       seq: rows.length + 1,
-      level: 'Level 1',
-      unitName: unit,
+      bookName: isMgmt ? selectedBookLabel || BOOKS[0].label : '',
+      bookIsbn: isMgmt ? BOOKS.find((b) => b.id === bookId)?.isbn ?? BOOKS[0].isbn : undefined,
+      unitName: selectedUnit?.label ?? (isCourse ? COURSE_UNITS[0].label : UNITS[0].label),
+      courseLibId: isCourse ? activeCourseLibId : undefined,
       nameByLang: {},
       namePinyin: '',
       segments: [{ id: 'S1', textByLang: {}, audioId: '', pinyin: '' }],
@@ -311,51 +526,116 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
     window.setTimeout(() => {
       setRows((prev) => [...prev]);
       setRefreshing(false);
-      setToastText('有声阅读配置刷新完成');
+      setToastText(isCourse ? 'AI Class 有声阅读已刷新' : '有声阅读管理已刷新');
       window.setTimeout(() => setToastText(''), 1500);
     }, 600);
+  };
+
+  const closeImportModal = () => {
+    setImportModalOpen(false);
+    setImportFileName('');
+    setImportParsed(null);
+    setImportLoading(false);
+  };
+
+  const handleImportFile = async (file?: File) => {
+    if (!file || importLoading) return;
+    const validation = validateAudioReadingImportFile(file);
+    if (!validation.ok) {
+      setToastText(validation.message);
+      window.setTimeout(() => setToastText(''), 2200);
+      return;
+    }
+
+    setImportLoading(true);
+    setImportFileName(file.name);
+    setImportParsed(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      const parsed = parseAudioReadingWorkbook(buffer);
+      if (!parsed.ok) {
+        setImportFileName('');
+        setToastText(parsed.message);
+        window.setTimeout(() => setToastText(''), 2200);
+        return;
+      }
+      setImportParsed(parsed.rows);
+    } catch {
+      setImportFileName('');
+      setToastText('文件解析失败，请检查表格格式');
+      window.setTimeout(() => setToastText(''), 2200);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const confirmImport = () => {
+    if (!importParsed?.length) return;
+    const next = applyAudioReadingImport(importParsed, rows);
+    saveRows(next);
+    closeImportModal();
+    setToastText(`导入完成，已更新 ${importParsed.length} 条句子映射`);
+    window.setTimeout(() => setToastText(''), 1800);
   };
 
   return (
     <>
       <div className="page-header">
         <div>
-          <div className="page-title">{pageTitle}</div>
-          <div className="page-subtitle">按 CSV 维度配置：级别/单元/名称中英/文章中英拼音 + 资源库音频挂载 + 多语言</div>
+          <div className="page-title">{resolvedTitle}</div>
+          {isCourse && (
+            <div className="page-subtitle">只给 AI Class 课程用，和「有声阅读管理」不是同一套数据。</div>
+          )}
+          {isMgmt && (
+            <div className="page-subtitle">按书本 / 单元 / 资源ID 配置，供书籍教材等其它模块挂载。</div>
+          )}
         </div>
         <div className="page-actions">
           <button type="button" className="btn btn-secondary" onClick={handleRefresh} disabled={refreshing}>
             <span className={`spin-icon ${refreshing ? 'spinning' : ''}`}>↻</span>
             刷新
           </button>
-          <button type="button" className="btn btn-secondary">导入</button>
+          {isMgmt && (
+            <button type="button" className="btn btn-secondary" onClick={() => setImportModalOpen(true)}>导入</button>
+          )}
           <button type="button" className="btn btn-primary" onClick={addLine}>+ 新增文章</button>
         </div>
       </div>
 
       <div className="filter-bar">
-        <select className="filter-select" value={levelId} onChange={(e) => { setLevelId(e.target.value); setUnitId(''); }}>
-          <option value="">全部级别</option>
-          {LEVELS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
-        <select className="filter-select" value={unitId} onChange={(e) => setUnitId(e.target.value)} disabled={!levelId}>
+        {isMgmt && (
+          <select className="filter-select" value={bookId} onChange={(e) => { setBookId(e.target.value); setUnitId(''); }}>
+            <option value="">全部书本</option>
+            {BOOKS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+          </select>
+        )}
+        <select
+          className="filter-select"
+          value={unitId}
+          onChange={(e) => setUnitId(e.target.value)}
+          disabled={isMgmt && !bookId}
+        >
           <option value="">全部单元</option>
-          {unitOptions.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+          {(isCourse ? courseUnitOptions : unitOptions).map((u) => (
+            <option key={u.id} value={u.id}>{u.label}</option>
+          ))}
         </select>
         <input className="filter-select" placeholder="搜索：名称/文章/音频ID" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
       </div>
 
       <div className="table-wrap">
         <div className="table-top">
-          <span className="table-count">共 {filtered.length} 条有声阅读句子配置</span>
+          <span className="table-count">
+            共 {filtered.length} 条{isCourse ? ' AI Class' : ''}有声阅读
+          </span>
         </div>
         <table>
           <thead>
             <tr>
               <th>序号</th>
               <th>NAMEID</th>
-              <th>级别</th>
-              <th>单元名称</th>
+              {isMgmt && <th>书本名称</th>}
+              <th>{isCourse ? '目录/单元' : '单元名称'}</th>
               <th>名称(中文)</th>
               <th>句子音频映射（包含句子数量）</th>
               <th>状态</th>
@@ -369,7 +649,7 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
               <tr key={r.id}>
                 <td className="td-mono">{String(r.seq || i + 1).padStart(3, '0')}</td>
                 <td className="td-mono">{r.id}</td>
-                <td>{r.level}</td>
+                {isMgmt && <td>{r.bookName}</td>}
                 <td>{r.unitName}</td>
                 <td>{r.nameByLang.CN ?? '—'}</td>
                 <td className="td-mono">{r.segments.filter((s) => s.audioId).length}/{r.segments.length}</td>
@@ -386,34 +666,37 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
         </table>
       </div>
 
-      <div className={`modal-overlay ${editing ? 'open' : ''}`} onClick={() => setEditingId(null)} role="dialog" aria-modal="true" aria-label="配置有声阅读">
+      <div className={`modal-overlay ${editing ? 'open' : ''}`} onClick={() => setEditingId(null)} role="dialog" aria-modal="true" aria-label={isCourse ? '配置课程有声阅读' : '配置有声阅读管理'}>
         <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
           <div className="modal-header">
-            <div className="modal-title">编辑有声阅读文章</div>
+            <div className="modal-title">{isCourse ? '编辑 AI Class 有声阅读' : '编辑有声阅读（管理）'}</div>
             <button type="button" className="modal-close" onClick={() => setEditingId(null)} aria-label="关闭">✕</button>
           </div>
           {editing && (
             <div className="modal-body" style={{ display: 'flex', padding: 0 }}>
               <div style={{ flex: 1, padding: 24, borderRight: '1px solid var(--stone-dark)', maxHeight: '75vh', overflowY: 'auto' }}>
-                <div className="section-title">内容所属（CSV 维度）</div>
+                <div className="section-title">{isCourse ? '内容所属（课程目录）' : '内容所属（书本维度）'}</div>
                 <div className="form-row">
+                  {isMgmt && (
+                    <div className="form-group">
+                      <label className="form-label">书本名称</label>
+                      <input
+                        className="form-input"
+                        value={editing.bookName}
+                        onChange={(e) => patchEditing({ bookName: clampText(e.target.value, 30) })}
+                        maxLength={30}
+                      />
+                    </div>
+                  )}
                   <div className="form-group">
-                    <label className="form-label">序号</label>
-                    <input className="form-input td-mono" value={String(editing.seq)} onChange={(e) => patchEditing({ seq: Number(e.target.value || 0), updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' ') })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">级别</label>
-                    <input className="form-input" value={editing.level} onChange={(e) => patchEditing({ level: e.target.value })} />
+                    <label className="form-label">{isCourse ? '目录/单元' : '单元名称'}</label>
+                    <input className="form-input" value={editing.unitName} onChange={(e) => patchEditing({ unitName: e.target.value })} />
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">单元名称</label>
-                    <input className="form-input" value={editing.unitName} onChange={(e) => patchEditing({ unitName: e.target.value })} />
-                  </div>
-                  <div className="form-group">
                     <label className="form-label">NameId</label>
-                    <input className="form-input td-mono" value={editing.id} readOnly />
+                    <input className="form-input td-mono" value={editing.id} readOnly maxLength={AUDIO_READING_LIMITS.nameId} />
                   </div>
                 </div>
                 <div className="section-title">名称（多语言）</div>
@@ -447,19 +730,27 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
                   <input
                     className="form-input"
                     value={editing.nameByLang[nameLangTab] ?? ''}
-                    onChange={(e) => patchEditing({ nameByLang: { ...editing.nameByLang, [nameLangTab]: e.target.value } })}
+                    onChange={(e) => {
+                      const max = nameLangTab === 'CN' ? AUDIO_READING_LIMITS.name : 200;
+                      patchEditing({ nameByLang: { ...editing.nameByLang, [nameLangTab]: clampText(e.target.value, max) } });
+                    }}
+                    maxLength={nameLangTab === 'CN' ? AUDIO_READING_LIMITS.name : 200}
                     placeholder={`请输入 ${nameLangTab} 名称`}
                   />
+                  {nameLangTab === 'CN' && (
+                    <div className="form-hint">{(editing.nameByLang.CN ?? '').length}/{AUDIO_READING_LIMITS.name}</div>
+                  )}
                 </div>
                 {nameLangTab === 'CN' && (
                   <div className="form-group">
                     <label className="form-label">中文拼音</label>
                     <PinyinInlineField
                       value={editing.namePinyin}
-                      onChange={(v) => patchEditing({ namePinyin: v })}
+                      onChange={(v) => patchEditing({ namePinyin: clampText(v, AUDIO_READING_LIMITS.namePinyin) })}
                       className="form-input"
                       placeholder="仅中文配置拼音"
                     />
+                    <div className="form-hint">{editing.namePinyin.length}/{AUDIO_READING_LIMITS.namePinyin}</div>
                   </div>
                 )}
 
@@ -500,18 +791,28 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
                         className="form-input"
                         rows={2}
                         value={seg.textByLang[segmentLangTab] ?? ''}
-                        onChange={(e) => patchEditingSegmentLangText(idx, segmentLangTab, e.target.value)}
+                        onChange={(e) => {
+                          const max = segmentLangTab === 'CN' ? AUDIO_READING_LIMITS.sentence : 500;
+                          patchEditingSegmentLangText(idx, segmentLangTab, clampText(e.target.value, max));
+                        }}
+                        maxLength={segmentLangTab === 'CN' ? AUDIO_READING_LIMITS.sentence : 500}
                         placeholder={`该句${segmentLangTab}内容`}
                         style={{ marginBottom: 8 }}
                       />
+                      {segmentLangTab === 'CN' && (
+                        <div className="form-hint" style={{ marginTop: -4, marginBottom: 8 }}>
+                          {(seg.textByLang.CN ?? '').length}/{AUDIO_READING_LIMITS.sentence}
+                        </div>
+                      )}
                       {segmentLangTab === 'CN' ? (
                         <div style={{ display: 'grid', gap: 8 }}>
                           <PinyinCountInput
                             value={seg.pinyin}
-                            onChange={(v) => patchEditingSegment(idx, { pinyin: v })}
+                            onChange={(v) => patchEditingSegment(idx, { pinyin: clampText(v, AUDIO_READING_LIMITS.sentencePinyin) })}
                             placeholder="该句中文拼音（词级或字级均可）"
                             className="form-input"
                           />
+                          <div className="form-hint">{seg.pinyin.length}/{AUDIO_READING_LIMITS.sentencePinyin}</div>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <input
                               className="form-input td-mono"
@@ -586,7 +887,7 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
           )}
           <div className="modal-footer">
             <button type="button" className="btn btn-ghost" onClick={() => setEditingId(null)}>关闭</button>
-            <button type="button" className="btn btn-primary" onClick={() => { setToastText('有声阅读配置已保存'); window.setTimeout(() => setToastText(''), 1400); setEditingId(null); }}>保存配置</button>
+            <button type="button" className="btn btn-primary" onClick={() => { setToastText(isCourse ? 'AI Class 有声阅读已保存' : '有声阅读管理已保存'); window.setTimeout(() => setToastText(''), 1400); setEditingId(null); }}>保存配置</button>
           </div>
         </div>
       </div>
@@ -627,6 +928,88 @@ export function AudioReading({ pageTitle = '有声阅读' }: { pageTitle?: strin
           </div>
         </div>
       </div>
+
+      {isMgmt && (
+      <div className={`modal-overlay ${importModalOpen ? 'open' : ''}`} onClick={closeImportModal} role="dialog" aria-modal="true" aria-label="导入有声阅读">
+        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
+          <div className="modal-header">
+            <div className="modal-title">导入有声阅读</div>
+            <button type="button" className="modal-close" onClick={closeImportModal} aria-label="关闭">✕</button>
+          </div>
+          <div className="modal-body">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+              disabled={importLoading}
+              onChange={(e) => {
+                void handleImportFile(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+            <div
+              className={`library-catalog-import-dropzone${importLoading ? ' is-loading' : ''}${importParsed ? ' is-ready' : ''}`}
+              onClick={() => !importLoading && importInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!importLoading) e.currentTarget.classList.add('is-dragover');
+              }}
+              onDragLeave={(e) => e.currentTarget.classList.remove('is-dragover')}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('is-dragover');
+                if (!importLoading) void handleImportFile(e.dataTransfer.files?.[0]);
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && !importLoading && importInputRef.current?.click()}
+            >
+              {importLoading ? (
+                <div>正在解析表格…</div>
+              ) : importParsed ? (
+                <>
+                  <div style={{ fontWeight: 600 }}>解析完成 {importParsed.length} 条句子</div>
+                  {importFileName && <div className="form-hint" style={{ marginTop: 6 }}>{importFileName}</div>}
+                  <div className="form-hint" style={{ marginTop: 8 }}>确认无误后，请点击下方「确认导入」</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 600 }}>点击或拖拽上传 Excel</div>
+                  <div className="form-hint" style={{ marginTop: 8 }}>
+                    表头：书本名称、书本ISBN、单元名称、资源ID、资源类型、音频名称、原文、拼音
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16, fontSize: 14, lineHeight: 1.7 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>导入规范</div>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                <li>仅导入资源类型为「句子」的行；同一资源ID 的多行会合并为一条文章配置</li>
+                <li>NameID（资源ID）≤ {AUDIO_READING_LIMITS.nameId} · 名称 ≤ {AUDIO_READING_LIMITS.name} · 名称拼音 ≤ {AUDIO_READING_LIMITS.namePinyin}</li>
+                <li>句子原文 ≤ {AUDIO_READING_LIMITS.sentence} · 句子拼音 ≤ {AUDIO_READING_LIMITS.sentencePinyin}</li>
+                <li>单次最多 {AUDIO_READING_IMPORT_MAX_ROWS} 行有效数据</li>
+              </ul>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ marginTop: 12 }}
+                onClick={() => downloadAudioReadingImportTemplate()}
+              >
+                下载导入模板
+              </button>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-ghost" onClick={closeImportModal}>取消</button>
+            <button type="button" className="btn btn-primary" disabled={!importParsed?.length || importLoading} onClick={confirmImport}>
+              确认导入
+            </button>
+          </div>
+        </div>
+      </div>
+      )}
 
       {toastText && <div className="toast show success">{toastText}</div>}
     </>
