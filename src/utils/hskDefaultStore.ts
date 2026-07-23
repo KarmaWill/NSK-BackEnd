@@ -15,7 +15,6 @@ import { DEFAULT_HSK_QUESTION_TAG_CATALOG } from '../types/hskExams';
 import { compileExamDelivery } from './hskCompileDelivery';
 import {
   buildSlotsFromTemplate,
-  calcPaperScore,
   countScoringSlots,
   createEmptyTemplate,
   recalcTemplateTotals,
@@ -41,6 +40,7 @@ function seedTemplate(): HskPaperTemplate {
     parentCategory: 'HSK',
     passScore: standard.passScore,
     totalScore: standard.totalScore,
+    scoringMode: 'equal_ratio',
     timeBlocks: { prep: 5, listening: 17, buffer: 3, reading: 15, writing: 0 },
     status: 'published',
   });
@@ -156,7 +156,8 @@ function seedPaper(template: HskPaperTemplate): HskComposedPaper {
     description: '基于 HSK1 基础测试卷模板生成的正式考试试卷',
     level: 'HSK1',
     slots,
-    totalScore: calcPaperScore(slots),
+    totalScore: template.totalScore,
+    scoringMode: template.scoringMode,
     totalQuestions: countScoringSlots(slots),
     duration: template.totalDuration,
     status: 'draft',

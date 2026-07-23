@@ -29,8 +29,9 @@ function rowToSingleRuntime(
   row: HskQuestionRow,
   slot: HskPaperSlot,
   registry: ReturnType<typeof getRegistryEntry>,
+  equalRatio: boolean,
 ): HskRuntimeQuestion {
-  const score = slot.scorePerQuestion || row.score;
+  const score = equalRatio ? 0 : (slot.scorePerQuestion ?? row.score);
   return {
     id: slot.questionNumber ?? slot.globalIndex + 1,
     questionNumber: slot.questionNumber,
@@ -50,6 +51,7 @@ function compileCompoundGroup(
   slots: HskPaperSlot[],
   rows: HskQuestionRow[],
   registry: ReturnType<typeof getRegistryEntry>,
+  equalRatio: boolean,
 ): HskRuntimeQuestion | null {
   if (!slots.length) return null;
   const firstSlot = slots[0];
@@ -67,7 +69,9 @@ function compileCompoundGroup(
       id: sub?.id ?? qNum,
       questionNumber: slot.questionNumber,
       isExample: slot.isExample || Boolean(sub?.isExample),
-      score: slot.isExample || sub?.isExample ? 0 : (sub?.score ?? slot.scorePerQuestion),
+      score: slot.isExample || sub?.isExample || equalRatio
+        ? 0
+        : (slot.scorePerQuestion ?? sub?.score ?? 0),
       question: sub?.question,
       options: sub?.options,
     };
@@ -128,11 +132,12 @@ export function compilePaperQuestions(
   questions: HskQuestionRow[],
 ): HskRuntimeQuestion[] {
   const runtime: HskRuntimeQuestion[] = [];
+  const equalRatio = paper.scoringMode === 'equal_ratio';
 
   for (const group of groupSlots(paper.slots)) {
     const registry = getRegistryEntry(group.questionType, group.isCompound);
     if (group.isCompound && registry?.isCompoundGroup) {
-      const compound = compileCompoundGroup(group.slots, questions, registry);
+      const compound = compileCompoundGroup(group.slots, questions, registry, equalRatio);
       if (compound) runtime.push(compound);
       continue;
     }
@@ -141,7 +146,7 @@ export function compilePaperQuestions(
       const row = questions.find((q) => q.question_uid === slot.questionId);
       if (!row) continue;
       const reg = getRegistryEntry(slot.questionType, false);
-      runtime.push(rowToSingleRuntime(row, slot, reg));
+      runtime.push(rowToSingleRuntime(row, slot, reg, equalRatio));
     }
   }
 
@@ -186,7 +191,8 @@ export function compileExamDelivery(
     title: exam.name || standard?.title || `HSK ${levelNum} 模拟卷`,
     durationMinutes: exam.duration || template.totalDuration,
     totalScore: exam.totalScore || template.totalScore,
-    passScore: exam.passScore || template.passScore,
+    passScore: exam.passScore ?? template.passScore,
+    scoringMode: paper.scoringMode,
     showPinyin: exam.showPinyin ?? true,
     maxPlayCount: 2,
     noticeRules: exam.noticeRules?.length

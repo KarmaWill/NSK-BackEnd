@@ -89,12 +89,16 @@ function buildOutline(slots: HskPaperSlot[]): OutlineModule[] {
   return order.filter((id) => modules.has(id)).map((id) => modules.get(id)!);
 }
 
-function slotStats(slots: HskPaperSlot[]) {
-  const scoring = slots.filter((s) => !s.isExample);
+function slotStats(paper: HskComposedPaper) {
+  const scoring = paper.slots.filter((s) => !s.isExample);
   const filled = scoring.filter((s) => s.questionId).length;
   const total = scoring.length;
-  const totalScore = scoring.reduce((sum, s) => sum + (s.questionId ? s.scorePerQuestion : 0), 0);
-  const maxScore = scoring.reduce((sum, s) => sum + s.scorePerQuestion, 0);
+  const totalScore = paper.scoringMode === 'equal_ratio'
+    ? paper.totalScore
+    : scoring.reduce((sum, s) => sum + (s.questionId ? s.scorePerQuestion : 0), 0);
+  const maxScore = paper.scoringMode === 'equal_ratio'
+    ? paper.totalScore
+    : scoring.reduce((sum, s) => sum + s.scorePerQuestion, 0);
   return { filled, total, totalScore, maxScore };
 }
 
@@ -118,7 +122,7 @@ export function HskPaperComposer({
 }: Props) {
   const isPublished = paper.status === 'published';
   const isBusy = busyAction !== null;
-  const stats = useMemo(() => slotStats(paper.slots), [paper.slots]);
+  const stats = useMemo(() => slotStats(paper), [paper]);
   const outline = useMemo(() => buildOutline(paper.slots), [paper.slots]);
 
   const [collapsedModules, setCollapsedModules] = useState<Record<string, boolean>>({});
@@ -211,7 +215,7 @@ export function HskPaperComposer({
     onChange({
       ...paper,
       slots: assignQuestionNumbers(slots),
-      totalScore: calcPaperScore(slots),
+      totalScore: paper.scoringMode === 'equal_ratio' ? paper.totalScore : calcPaperScore(slots),
     });
     setViewMode('preview');
   };
@@ -229,7 +233,7 @@ export function HskPaperComposer({
     onChange({
       ...paper,
       slots: assignQuestionNumbers(slots),
-      totalScore: calcPaperScore(slots),
+      totalScore: paper.scoringMode === 'equal_ratio' ? paper.totalScore : calcPaperScore(slots),
     });
     setViewMode('select');
   };
@@ -527,7 +531,7 @@ export function HskPaperComposer({
                 </div>
                 <div>
                   <dt>分值</dt>
-                  <dd>{activeSlot.scorePerQuestion} 分</dd>
+                  <dd>{paper.scoringMode === 'equal_ratio' ? '等权计分' : `${activeSlot.scorePerQuestion} 分`}</dd>
                 </div>
                 <div>
                   <dt>状态</dt>

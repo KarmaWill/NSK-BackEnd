@@ -281,7 +281,11 @@ export function publishTemplate(store: HskExamStoreSnapshot, templateId: string)
 }
 
 export function savePaper(store: HskExamStoreSnapshot, paper: HskComposedPaper) {
-  const next = { ...paper, updatedAt: stamp(), totalScore: calcPaperScore(paper.slots) };
+  const next = {
+    ...paper,
+    updatedAt: stamp(),
+    totalScore: paper.scoringMode === 'equal_ratio' ? paper.totalScore : calcPaperScore(paper.slots),
+  };
   const papers = store.papers.some((p) => p.id === next.id)
     ? store.papers.map((p) => (p.id === next.id ? next : p))
     : [...store.papers, next];
@@ -332,7 +336,8 @@ export function createPaperFromTemplate(store: HskExamStoreSnapshot, templateId:
     description: `基于 ${template.name} 模板生成的正式考试试卷`,
     level: template.level,
     slots,
-    totalScore: calcPaperScore(slots),
+    totalScore: template.totalScore,
+    scoringMode: template.scoringMode,
     totalQuestions: countScoringSlots(slots),
     duration: template.totalDuration,
     status: 'draft',

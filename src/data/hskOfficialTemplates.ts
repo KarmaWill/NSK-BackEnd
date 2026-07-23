@@ -43,6 +43,8 @@ function mapRawTemplate(raw: RawOfficialTemplate): HskPaperTemplate {
     id: `official-${raw.id}`,
     name: raw.name,
     category: 'official',
+    scoringMode: 'equal_ratio',
+    passScoreAuto: false,
     level,
     parentCategory: isKlzw ? 'KLZW' : 'HSK',
     categoryId: isKlzw && raw.book ? `book-${raw.book}` : null,

@@ -7,6 +7,7 @@ function paper(id: string, status: HskComposedPaper['status']): HskComposedPaper
   return {
     id,
     templateId: 'official-hsk1',
+    scoringMode: 'equal_ratio',
     name: id,
     level: 'HSK1',
     slots: [],

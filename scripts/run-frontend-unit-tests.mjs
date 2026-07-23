@@ -28,6 +28,7 @@ const tests = [
   join(outDir, 'src', 'panels', 'hskQuestionBankFilters.test.js'),
   join(outDir, 'src', 'utils', 'hskPaperDeleteDecision.test.js'),
   join(outDir, 'src', 'utils', 'hskPaperListState.test.js'),
+  join(outDir, 'src', 'utils', 'hskTemplateListState.test.js'),
   join(outDir, 'src', 'utils', 'hskCompileDelivery.test.js'),
   join(outDir, 'src', 'utils', 'hskPaperUtils.test.js'),
   join(outDir, 'src', 'utils', 'hskPhaseOneScope.test.js'),

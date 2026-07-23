@@ -4,6 +4,7 @@ import type {
   HskPaperSlot,
   HskPaperTemplate,
   HskQuestionTypeDef,
+  HskSectionGroup,
   HskTemplateModule,
   HskTimeBlocks,
 } from '../types/hskExams';
@@ -18,10 +19,30 @@ export function normalizeTemplateQuestionCountInput(value: string): number {
   return Math.max(0, Math.floor(parsed));
 }
 
-export function getScorePerQuestion(template: HskPaperTemplate, typeDefs: HskQuestionTypeDef[]): number {
+export function redistributeSectionQuestionCount(
+  groups: HskSectionGroup[],
+  questionCount: number,
+  baselineGroups: HskSectionGroup[] = groups,
+): HskSectionGroup[] {
+  if (groups.length === 0) return groups;
+  const capacities = baselineGroups.length === groups.length ? baselineGroups : groups;
+  let remaining = Math.max(0, Math.floor(questionCount));
+  return groups.map((group, index) => {
+    const next = { ...group };
+    if (index === groups.length - 1) {
+      next.questionCount = remaining;
+      remaining = 0;
+      return next;
+    }
+    next.questionCount = Math.min(Math.max(0, capacities[index].questionCount), remaining);
+    remaining -= next.questionCount;
+    return next;
+  });
+}
+
+export function getScorePerQuestion(template: HskPaperTemplate, _typeDefs: HskQuestionTypeDef[]): number {
   if (template.customScorePerQuestion != null) return template.customScorePerQuestion;
-  const firstType = typeDefs[0];
-  return firstType?.defaultScore ?? 2;
+  return 1;
 }
 
 export function getSectionScorePerQuestion(
@@ -42,6 +63,9 @@ export function applyTemplatePatch(
   typeDefs: HskQuestionTypeDef[],
 ): HskPaperTemplate {
   const merged = { ...template, ...patch };
+  if (patch.passScore !== undefined && patch.passScore !== template.passScore) {
+    merged.passScoreAuto = false;
+  }
   const next = recalcTemplateTotals(merged, typeDefs);
   if (merged.category === 'official') return next;
   if (patch.passScore !== undefined) next.passScore = patch.passScore;
@@ -61,6 +85,7 @@ export function applyTemplatePatch(
 
 export function recalcTemplateTotals(template: HskPaperTemplate, typeDefs: HskQuestionTypeDef[]): HskPaperTemplate {
   const next = structuredClone(template);
+  const equalRatio = next.scoringMode === 'equal_ratio';
   let totalQuestions = 0;
   let totalScore = 0;
   next.modules.forEach((mod) => {
@@ -71,16 +96,19 @@ export function recalcTemplateTotals(template: HskPaperTemplate, typeDefs: HskQu
         (sum, g) => sum + Math.max(0, g.questionCount) + (g.hasExample ? Math.max(0, g.exampleCount) : 0),
         0,
       );
-      sec.scorePerQuestion = getSectionScorePerQuestion(sec, next, typeDefs);
+      sec.scorePerQuestion = equalRatio ? 0 : getSectionScorePerQuestion(sec, next, typeDefs);
       modCount += sec.scoringCount;
-      totalScore += sec.scoringCount * sec.scorePerQuestion;
+      if (!equalRatio) totalScore += sec.scoringCount * sec.scorePerQuestion;
     });
     mod.totalQuestions = modCount;
     totalQuestions += modCount;
   });
 
   next.totalQuestions = totalQuestions;
-  next.totalScore = totalScore;
+  if (!equalRatio) {
+    next.totalScore = totalScore;
+    if (next.passScoreAuto !== false) next.passScore = Math.round(totalScore * 0.6);
+  }
   next.totalDuration = next.totalDuration ?? calcTimeBlockMinutes(next.timeBlocks);
   next.audioRules = {
     autoPlayOnEnter: next.audioRules?.autoPlayOnEnter ?? true,
@@ -99,7 +127,9 @@ export function buildSlotsFromTemplate(
   let globalIndex = 0;
   template.modules.forEach((mod) => {
     mod.sections.forEach((sec) => {
-      const scorePer = getSectionScorePerQuestion(sec, template, typeDefs);
+      const scorePer = template.scoringMode === 'equal_ratio'
+        ? 0
+        : getSectionScorePerQuestion(sec, template, typeDefs);
       sec.groups.forEach((group, groupIndex) => {
         const exampleCount = group.hasExample ? Math.max(0, group.exampleCount) : 0;
         const slotCount = Math.max(0, group.questionCount) + exampleCount;
@@ -163,7 +193,7 @@ export function validatePaperPublish(paper: HskComposedPaper): string | null {
   const filled = countFilledSlots(paper.slots);
   if (filled < scoring) return `还有 ${scoring - filled} 道题未从题库选题，无法发布`;
   const score = calcPaperScore(paper.slots);
-  if (score !== paper.totalScore) {
+  if (paper.scoringMode === 'per_item' && score !== paper.totalScore) {
     return `卷面总分 ${paper.totalScore} 与选题分值 ${score} 不一致，请调整题型题量或修改模板基础属性中的卷面总分。`;
   }
   return null;
@@ -181,6 +211,9 @@ export function createEmptyTemplate(partial?: Partial<HskPaperTemplate>): HskPap
     totalDuration: 8,
     totalScore: 0,
     passScore: 0,
+    scoringMode: 'per_item',
+    passScoreAuto: true,
+    customScorePerQuestion: 1,
     timeBlocks: { prep: 5, listening: 0, buffer: 3, reading: 0, writing: 0 },
     audioRules: { autoPlayOnEnter: true, allowPause: false, maxPlayCount: 2 },
     modules: [

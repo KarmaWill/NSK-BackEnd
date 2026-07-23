@@ -142,11 +142,13 @@ function normalizeTemplateFromApi(raw: ApiTemplate): HskPaperTemplate {
     };
   });
   const templateKind = raw.templateKind ?? (raw.category === 'official' ? 'official' : 'custom');
+  const scoringMode = raw.scoringMode ?? (templateKind === 'official' ? 'equal_ratio' : 'per_item');
   return {
     ...raw,
     category: templateKind === 'official' ? 'official' : 'custom',
     parentCategory: 'HSK',
     sourceTemplateId: raw.sourceTemplateUid ?? raw.sourceTemplateId ?? null,
+    scoringMode,
     timeBlocks: {
       prep: raw.timeBlocks?.prep ?? raw.preparationMinutes ?? 0,
       listening: raw.timeBlocks?.listening ?? raw.listeningMinutes ?? 0,
@@ -185,6 +187,7 @@ function templateRequestBody(template: Partial<HskPaperTemplate> & { id: string 
   }));
   return {
     ...template,
+    scoringMode: template.scoringMode ?? (template.category === 'official' ? 'equal_ratio' : 'per_item'),
     sourceTemplateUid: template.sourceTemplateId ?? null,
     preparationMinutes: template.timeBlocks?.prep,
     listeningMinutes: template.timeBlocks?.listening,

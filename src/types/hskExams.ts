@@ -138,12 +138,15 @@ export type ExamDeliveryPackage = {
   durationMinutes: number;
   totalScore: number;
   passScore: number;
+  scoringMode: HskScoringMode;
   showPinyin: boolean;
   maxPlayCount: number;
   noticeRules: string[];
   sectionSummary: Array<{ module: string; count: number; minutes?: number }>;
   questions: HskRuntimeQuestion[];
 };
+
+export type HskScoringMode = 'equal_ratio' | 'per_item';
 
 export type HskQuestionTag = {
   id: string;
@@ -205,6 +208,8 @@ export type HskPaperTemplate = {
   totalDuration: number;
   totalScore: number;
   passScore: number;
+  scoringMode: HskScoringMode;
+  passScoreAuto?: boolean;
   timeBlocks: HskTimeBlocks;
   modules: HskTemplateModule[];
   status: HskPublishStatus;
@@ -244,6 +249,7 @@ export type HskComposedPaper = {
   level: HskLevelCode | string;
   slots: HskPaperSlot[];
   totalScore: number;
+  scoringMode: HskScoringMode;
   totalQuestions: number;
   passScore?: number;
   duration: number;
