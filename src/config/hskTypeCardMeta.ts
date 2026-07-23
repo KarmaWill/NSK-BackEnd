@@ -189,8 +189,15 @@ const FIELD_LABELS: Record<TypeCardField, { icon: string; label: string }> = {
   subQuestions: { icon: '📋', label: '子题' },
 };
 
-export function getTypeCardMeta(typeId: HskQuestionTypeCode): HskTypeCardMeta {
-  return HSK_TYPE_CARD_META[typeId];
+export function getTypeCardMeta(typeId: string): HskTypeCardMeta {
+  return HSK_TYPE_CARD_META[typeId as HskQuestionTypeCode] ?? {
+    icon: '◇',
+    modeLabel: '自定义题型',
+    modeTone: 'default',
+    interaction: 'custom',
+    optionSummary: '—',
+    fields: [],
+  };
 }
 
 export function getTypeCardFieldLabel(field: TypeCardField) {

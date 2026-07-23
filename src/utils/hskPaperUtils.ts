@@ -1,6 +1,4 @@
-import { validateLevelStandardScore } from './hskCompileDelivery';
-import { getLevelStandard } from '../config/hskLevelStandards';
-import { getQuestionTypeDef, levelToNumber } from '../config/hskQuestionTypes';
+import { getQuestionTypeDef } from '../config/hskQuestionTypes';
 import type {
   HskComposedPaper,
   HskPaperSlot,
@@ -14,13 +12,28 @@ export function calcTimeBlockMinutes(blocks: HskTimeBlocks): number {
   return (blocks.prep || 0) + (blocks.listening || 0) + (blocks.buffer || 0) + (blocks.reading || 0) + (blocks.writing || 0);
 }
 
+export function normalizeTemplateQuestionCountInput(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
+}
+
 export function getScorePerQuestion(template: HskPaperTemplate, typeDefs: HskQuestionTypeDef[]): number {
   if (template.customScorePerQuestion != null) return template.customScorePerQuestion;
-  const level = levelToNumber(String(template.level));
-  const standard = level ? getLevelStandard(level) : null;
-  if (standard) return standard.scorePerQuestion;
   const firstType = typeDefs[0];
   return firstType?.defaultScore ?? 2;
+}
+
+export function getSectionScorePerQuestion(
+  section: HskPaperTemplate['modules'][number]['sections'][number],
+  template: HskPaperTemplate,
+  typeDefs: HskQuestionTypeDef[],
+): number {
+  if (section.scorePerQuestion != null && section.scorePerQuestion >= 0) {
+    return section.scorePerQuestion;
+  }
+  return typeDefs.find((type) => type.id === section.questionType)?.defaultScore
+    ?? getScorePerQuestion(template, typeDefs);
 }
 
 export function applyTemplatePatch(
@@ -31,7 +44,6 @@ export function applyTemplatePatch(
   const merged = { ...template, ...patch };
   const next = recalcTemplateTotals(merged, typeDefs);
   if (merged.category === 'official') return next;
-  if (patch.totalScore !== undefined) next.totalScore = patch.totalScore;
   if (patch.passScore !== undefined) next.passScore = patch.passScore;
   if (patch.totalDuration !== undefined) next.totalDuration = patch.totalDuration;
   if (patch.timeBlocks) next.timeBlocks = { ...next.timeBlocks, ...patch.timeBlocks };
@@ -39,9 +51,9 @@ export function applyTemplatePatch(
     const baseAudio = {
       autoPlayOnEnter: template.audioRules?.autoPlayOnEnter ?? true,
       allowPause: template.audioRules?.allowPause ?? false,
-      maxPlayCount: template.audioRules?.maxPlayCount ?? 1,
+      maxPlayCount: 2,
     };
-    next.audioRules = { ...baseAudio, ...patch.audioRules };
+    next.audioRules = { ...baseAudio, ...patch.audioRules, maxPlayCount: 2 };
   }
   if (patch.customScorePerQuestion !== undefined) next.customScorePerQuestion = patch.customScorePerQuestion;
   return next;
@@ -51,37 +63,30 @@ export function recalcTemplateTotals(template: HskPaperTemplate, typeDefs: HskQu
   const next = structuredClone(template);
   let totalQuestions = 0;
   let totalScore = 0;
-  const scorePer = getScorePerQuestion(next, typeDefs);
-  const level = levelToNumber(String(next.level));
-  const standard = level ? getLevelStandard(level) : null;
-
   next.modules.forEach((mod) => {
     let modCount = 0;
     mod.sections.forEach((sec) => {
-      sec.totalCount = sec.groups.reduce((sum, g) => sum + g.questionCount, 0);
-      sec.scoringCount = sec.groups.reduce((sum, g) => {
-        const examples = g.hasExample ? g.exampleCount : 0;
-        return sum + Math.max(0, g.questionCount - examples);
-      }, 0);
-      modCount += sec.totalCount;
-      totalScore += sec.scoringCount * scorePer;
+      sec.scoringCount = sec.groups.reduce((sum, g) => sum + Math.max(0, g.questionCount), 0);
+      sec.totalCount = sec.groups.reduce(
+        (sum, g) => sum + Math.max(0, g.questionCount) + (g.hasExample ? Math.max(0, g.exampleCount) : 0),
+        0,
+      );
+      sec.scorePerQuestion = getSectionScorePerQuestion(sec, next, typeDefs);
+      modCount += sec.scoringCount;
+      totalScore += sec.scoringCount * sec.scorePerQuestion;
     });
     mod.totalQuestions = modCount;
     totalQuestions += modCount;
   });
 
   next.totalQuestions = totalQuestions;
-  const preserveOfficialKlzw = next.category === 'official' && !standard;
-  if (standard) {
-    next.totalScore = standard.totalScore;
-    next.passScore = standard.passScore;
-    next.totalDuration = standard.durationMinutes;
-  } else if (!preserveOfficialKlzw) {
-    next.totalScore = totalScore;
-    next.totalDuration = calcTimeBlockMinutes(next.timeBlocks);
-  } else {
-    next.totalDuration = next.totalDuration ?? calcTimeBlockMinutes(next.timeBlocks);
-  }
+  next.totalScore = totalScore;
+  next.totalDuration = next.totalDuration ?? calcTimeBlockMinutes(next.timeBlocks);
+  next.audioRules = {
+    autoPlayOnEnter: next.audioRules?.autoPlayOnEnter ?? true,
+    allowPause: next.audioRules?.allowPause ?? false,
+    maxPlayCount: 2,
+  };
   return next;
 }
 
@@ -92,13 +97,14 @@ export function buildSlotsFromTemplate(
 ): HskPaperSlot[] {
   const slots: HskPaperSlot[] = [];
   let globalIndex = 0;
-  const scorePer = getScorePerQuestion(template, typeDefs);
-
   template.modules.forEach((mod) => {
     mod.sections.forEach((sec) => {
+      const scorePer = getSectionScorePerQuestion(sec, template, typeDefs);
       sec.groups.forEach((group, groupIndex) => {
-        for (let slotIndex = 0; slotIndex < group.questionCount; slotIndex += 1) {
-          const isExample = group.hasExample && slotIndex < group.exampleCount;
+        const exampleCount = group.hasExample ? Math.max(0, group.exampleCount) : 0;
+        const slotCount = Math.max(0, group.questionCount) + exampleCount;
+        for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+          const isExample = slotIndex < exampleCount;
           slots.push({
             moduleId: mod.id,
             moduleName: mod.name,
@@ -160,11 +166,6 @@ export function validatePaperPublish(paper: HskComposedPaper): string | null {
   if (score !== paper.totalScore) {
     return `卷面总分 ${paper.totalScore} 与选题分值 ${score} 不一致，请调整题型题量或修改模板基础属性中的卷面总分。`;
   }
-  const level = levelToNumber(String(paper.level));
-  if (level) {
-    const err = validateLevelStandardScore(level, paper.totalScore, scoring);
-    if (err) return err;
-  }
   return null;
 }
 
@@ -181,7 +182,7 @@ export function createEmptyTemplate(partial?: Partial<HskPaperTemplate>): HskPap
     totalScore: 0,
     passScore: 0,
     timeBlocks: { prep: 5, listening: 0, buffer: 3, reading: 0, writing: 0 },
-    audioRules: { autoPlayOnEnter: true, allowPause: false, maxPlayCount: 1 },
+    audioRules: { autoPlayOnEnter: true, allowPause: false, maxPlayCount: 2 },
     modules: [
       { id: 'listening', name: '听力', totalQuestions: 0, sections: [] },
       { id: 'reading', name: '阅读', totalQuestions: 0, sections: [] },

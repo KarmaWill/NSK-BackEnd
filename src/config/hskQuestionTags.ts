@@ -52,8 +52,6 @@ const TAG_ID_BY_LABEL: Record<(typeof HSK_DEFAULT_TAG_LABELS)[number], string> =
   含示例: 'tag-with-example',
 };
 
-const LEGACY_SEED_LABELS = new Set(['2选1', '3选1', '4选1']);
-
 /** 题目编辑页标签分组（对齐图书「功能模块标签」picker 交互） */
 export type HskTagCategoryDef = {
   category: string;
@@ -188,19 +186,12 @@ export function createDefaultQuestionTags(): HskQuestionTag[] {
   }));
 }
 
-/** 加载 store 时补齐默认标签；若仅有旧版 2选1/3选1/4选1 则整体替换 */
+/** 保留服务端返回的标签事实，并按 id 去重。 */
 export function ensureQuestionTags(tags: HskQuestionTag[]): HskQuestionTag[] {
-  const defaults = createDefaultQuestionTags();
-  if (!tags.length) return defaults;
-
-  const onlyLegacy =
-    tags.length <= 3 && tags.every((tag) => LEGACY_SEED_LABELS.has(tag.label));
-  if (onlyLegacy) return defaults;
-
-  const labels = new Set(tags.map((tag) => tag.label));
-  const merged = [...tags];
-  for (const tag of defaults) {
-    if (!labels.has(tag.label)) merged.push(tag);
-  }
-  return merged;
+  const ids = new Set<string>();
+  return tags.filter((tag) => {
+    if (ids.has(tag.id)) return false;
+    ids.add(tag.id);
+    return true;
+  });
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { HskQuestionEditPreview } from './HskQuestionEditPreview';
 import type {
   HskComposedPaper,
@@ -9,6 +9,7 @@ import type {
   HskSectionModule,
 } from '../types/hskExams';
 import { assignQuestionNumbers, calcPaperScore } from '../utils/hskPaperUtils';
+import { isQuestionCandidate } from '../utils/hskPhaseOneScope';
 
 const MODULE_ICONS: Record<HskSectionModule, string> = {
   listening: '🎧',
@@ -41,6 +42,7 @@ type Props = {
   questions: HskQuestionRow[];
   typeDefs: HskQuestionTypeDef[];
   compileError?: string | null;
+  busyAction?: 'save' | 'publish' | null;
   onBack: () => void;
   onChange: (paper: HskComposedPaper) => void;
   onSaveDraft: () => void;
@@ -108,12 +110,14 @@ export function HskPaperComposer({
   questions,
   typeDefs,
   compileError,
+  busyAction = null,
   onBack,
   onChange,
   onSaveDraft,
   onPublish,
 }: Props) {
   const isPublished = paper.status === 'published';
+  const isBusy = busyAction !== null;
   const stats = useMemo(() => slotStats(paper.slots), [paper.slots]);
   const outline = useMemo(() => buildOutline(paper.slots), [paper.slots]);
 
@@ -122,6 +126,12 @@ export function HskPaperComposer({
   const [activeSlotIndex, setActiveSlotIndex] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('outline');
   const [slotSearch, setSlotSearch] = useState('');
+  const composerBodyRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const composerBody = composerBodyRef.current as (HTMLDivElement & { inert: boolean }) | null;
+    if (composerBody) composerBody.inert = isBusy;
+  }, [isBusy]);
 
   const activeSlot = activeSlotIndex != null ? paper.slots[activeSlotIndex] ?? null : null;
   const activeQuestion = activeSlot?.questionId
@@ -137,10 +147,24 @@ export function HskPaperComposer({
   );
 
   const candidateQuestions = useMemo(() => {
-    if (!activeSlot || activeSlot.isExample) return [];
+    if (!activeSlot) return [];
+    const groupSlots = paper.slots.filter((slot) =>
+      slot.sectionId === activeSlot.sectionId && slot.groupIndex === activeSlot.groupIndex);
     const q = slotSearch.trim().toLowerCase();
     return questions.filter((row) => {
-      if (row.type_id !== activeSlot.questionType) return false;
+      if (!isQuestionCandidate({
+        question: row,
+        level: String(paper.level),
+        questionType: activeSlot.questionType,
+        isExample: activeSlot.isExample,
+        isCompound: activeSlot.isCompound,
+        expectedScoringCount: activeSlot.isCompound
+          ? groupSlots.filter((slot) => !slot.isExample).length
+          : undefined,
+        expectedExampleCount: activeSlot.isCompound
+          ? groupSlots.filter((slot) => slot.isExample).length
+          : undefined,
+      })) return false;
       if (usedQuestionIds.includes(row.question_uid) && row.question_uid !== activeSlot.questionId) {
         return false;
       }
@@ -150,10 +174,9 @@ export function HskPaperComposer({
         row.stem.toLowerCase().includes(q)
       );
     });
-  }, [activeSlot, questions, slotSearch, usedQuestionIds]);
+  }, [activeSlot, paper.level, questions, slotSearch, usedQuestionIds]);
 
   const selectSlot = (slot: HskPaperSlot) => {
-    if (isPublished) return;
     setActiveSlotIndex(slot.globalIndex);
     if (slot.questionId) {
       setViewMode('preview');
@@ -165,9 +188,26 @@ export function HskPaperComposer({
   };
 
   const assignQuestion = (globalIndex: number, question: HskQuestionRow) => {
-    const slots = paper.slots.map((s) =>
-      s.globalIndex === globalIndex ? { ...s, questionId: question.question_uid } : s,
-    );
+    const target = paper.slots.find((slot) => slot.globalIndex === globalIndex);
+    const compoundSlots = target?.isCompound
+      ? paper.slots
+          .filter((slot) => slot.sectionId === target.sectionId && slot.groupIndex === target.groupIndex)
+          .sort((a, b) => a.globalIndex - b.globalIndex)
+      : [];
+    const sourceSubIds = (question.payload?.subQuestions ?? []).map((subQuestion) =>
+      subQuestion.id == null ? null : String(subQuestion.id));
+    const slots = paper.slots.map((slot) => {
+      const sameCompoundGroup = target?.isCompound
+        && slot.sectionId === target.sectionId
+        && slot.groupIndex === target.groupIndex;
+      if (slot.globalIndex !== globalIndex && !sameCompoundGroup) return slot;
+      const compoundIndex = compoundSlots.findIndex((candidate) => candidate.globalIndex === slot.globalIndex);
+      return {
+        ...slot,
+        questionId: question.question_uid,
+        sourceSubId: target?.isCompound ? (sourceSubIds[compoundIndex] ?? null) : null,
+      };
+    });
     onChange({
       ...paper,
       slots: assignQuestionNumbers(slots),
@@ -177,9 +217,15 @@ export function HskPaperComposer({
   };
 
   const clearSlot = (globalIndex: number) => {
-    const slots = paper.slots.map((s) =>
-      s.globalIndex === globalIndex ? { ...s, questionId: null } : s,
-    );
+    const target = paper.slots.find((slot) => slot.globalIndex === globalIndex);
+    const slots = paper.slots.map((slot) => {
+      const sameCompoundGroup = target?.isCompound
+        && slot.sectionId === target.sectionId
+        && slot.groupIndex === target.groupIndex;
+      return slot.globalIndex === globalIndex || sameCompoundGroup
+        ? { ...slot, questionId: null, sourceSubId: null }
+        : slot;
+    });
     onChange({
       ...paper,
       slots: assignQuestionNumbers(slots),
@@ -192,10 +238,13 @@ export function HskPaperComposer({
     viewMode === 'select' ? '选题面板' : viewMode === 'preview' ? '题目预览' : '试卷实时预览';
 
   return (
-    <div className="hsk-paper-composer">
+    <div
+      className={`hsk-paper-composer${isBusy ? ' is-busy' : ''}`}
+      aria-busy={isBusy}
+    >
       <header className="hsk-paper-composer-topbar">
         <div className="hsk-paper-composer-topbar-left">
-          <button type="button" className="hsk-paper-composer-back" onClick={onBack}>
+          <button type="button" className="hsk-paper-composer-back" disabled={isBusy} onClick={onBack}>
             ← 返回
           </button>
           <code className="hsk-paper-composer-code">{paper.id}</code>
@@ -213,18 +262,18 @@ export function HskPaperComposer({
           <button
             type="button"
             className="hsk-paper-composer-btn-secondary"
-            disabled={isPublished}
+            disabled={isPublished || isBusy}
             onClick={onSaveDraft}
           >
-            保存草稿
+            {busyAction === 'save' ? '保存中...' : '保存草稿'}
           </button>
           <button
             type="button"
             className={`hsk-paper-composer-btn-primary${isPublished ? ' is-disabled' : ''}`}
-            disabled={isPublished}
+            disabled={isPublished || isBusy}
             onClick={onPublish}
           >
-            {isPublished ? '已发布' : '发布'}
+            {isPublished ? '已发布' : busyAction === 'publish' ? '发布中...' : '发布'}
           </button>
         </div>
       </header>
@@ -233,7 +282,7 @@ export function HskPaperComposer({
         <div className="hsk-paper-composer-banner-error">{compileError}</div>
       )}
 
-      <div className="hsk-paper-composer-body">
+      <div ref={composerBodyRef} className="hsk-paper-composer-body">
         {/* 左：大纲 */}
         <aside className="hsk-paper-composer-outline">
           <h3 className="hsk-paper-composer-panel-title">试卷大纲</h3>

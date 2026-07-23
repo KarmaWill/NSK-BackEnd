@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HskQuestionRow, HskSubQuestionPayload } from '../types/hskExams';
 import { resolveL05SubQuestions } from '../utils/hskChoiceSubQuestions';
 import { resolveL02SubQuestions } from '../utils/hskL02SubQuestions';
@@ -79,11 +79,29 @@ export function isImagePending(question: HskQuestionRow): boolean {
 
 export function PreviewAudioBar({
   pending,
+  audioUrl,
   audioTranscript,
 }: {
   pending: boolean;
+  audioUrl?: string;
   audioTranscript?: string;
 }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playCount, setPlayCount] = useState(0);
+  const [playError, setPlayError] = useState('');
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    setIsPlaying(false);
+    setPlayCount(0);
+    setPlayError('');
+  }, [audioUrl]);
+
   if (pending) {
     return (
       <div className="hsk-preview-audio is-pending">
@@ -99,13 +117,65 @@ export function PreviewAudioBar({
     );
   }
 
+  const unavailable = !audioUrl;
+  const exhausted = playCount >= 2;
+  const disabled = unavailable || exhausted || isPlaying;
+  const statusText = playError
+    ? playError
+    : unavailable
+      ? '音频地址不可用'
+      : isPlaying
+        ? `正在播放（第 ${playCount}/2 次）`
+        : exhausted
+          ? '已播放两次'
+          : `点击播放音频（已播放 ${playCount}/2 次）`;
+
+  const handlePlay = async () => {
+    const audio = audioRef.current;
+    if (!audio || disabled) return;
+    setPlayError('');
+    audio.currentTime = 0;
+    try {
+      await audio.play();
+      setPlayCount((count) => count + 1);
+      setIsPlaying(true);
+    } catch (error) {
+      const errorName = error instanceof DOMException ? error.name : '';
+      setPlayError(
+        errorName === 'NotAllowedError'
+          ? '浏览器阻止了音频播放，请再次点击'
+          : errorName === 'NotSupportedError'
+            ? '当前浏览器不支持该音频格式'
+            : '音频播放失败，请检查资源状态',
+      );
+      setIsPlaying(false);
+    }
+  };
+
   return (
     <div className="hsk-preview-audio is-ready">
-      <button type="button" className="hsk-preview-audio-play" aria-hidden>
+      <audio
+        ref={audioRef}
+        src={audioUrl}
+        preload="metadata"
+        onEnded={() => setIsPlaying(false)}
+        onPause={() => setIsPlaying(false)}
+        onError={() => {
+          setPlayError('音频加载失败，请检查资源地址');
+          setIsPlaying(false);
+        }}
+      />
+      <button
+        type="button"
+        className={`hsk-preview-audio-play${disabled ? ' is-disabled' : ''}`}
+        onClick={() => void handlePlay()}
+        disabled={disabled}
+        aria-label={isPlaying ? '音频正在播放' : '播放音频'}
+      >
         ▶
       </button>
       <div className="hsk-preview-audio-meta">
-        <div className="hsk-preview-audio-time">点击播放音频（每题播放两次）</div>
+        <div className="hsk-preview-audio-time">{statusText}</div>
         {audioTranscript && <div className="hsk-preview-audio-sub">{audioTranscript}</div>}
       </div>
     </div>
@@ -227,7 +297,11 @@ export function PreviewJudgmentImage({
     <>
       <PreviewQuestionStem question={question} textOverride={hint} />
       {needsAudio && (
-        <PreviewAudioBar pending={!!audioPending} audioTranscript={audioTranscript || sentence} />
+        <PreviewAudioBar
+          pending={!!audioPending}
+          audioUrl={question.payload?.audioUrl ?? question.audioUrl}
+          audioTranscript={audioTranscript || sentence}
+        />
       )}
       <PreviewImageBox pending={imagePending} imageUrl={imageUrl} alt={sentence ? sentence : undefined} size="lg" />
       {(sentence || sentencePinyin) && (
@@ -470,7 +544,11 @@ export function PreviewL01ImageChoice({
   return (
     <>
       <PreviewQuestionStem question={question} />
-      <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
+      <PreviewAudioBar
+        pending={audioPending}
+        audioUrl={question.payload?.audioUrl ?? question.audioUrl}
+        audioTranscript={audioTranscript}
+      />
       <div className="hsk-preview-image-option-grid">
         {options.map((opt) => {
           const selected = selectedKey === opt.key;
@@ -693,7 +771,11 @@ export function PreviewL02Match({
   return (
     <>
       <PreviewQuestionStem question={question} />
-      <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
+      <PreviewAudioBar
+        pending={audioPending}
+        audioUrl={question.payload?.audioUrl ?? question.audioUrl}
+        audioTranscript={audioTranscript}
+      />
       <div className="hsk-preview-l02-range">
         {hasExample && scoringCount > 0
           ? `例如 · 第 1-${scoringCount} 题`
@@ -2519,7 +2601,11 @@ export function PreviewL05MultiSub({
   return (
     <>
       <PreviewQuestionStem question={question} />
-      <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
+      <PreviewAudioBar
+        pending={audioPending}
+        audioUrl={question.payload?.audioUrl ?? question.audioUrl}
+        audioTranscript={audioTranscript}
+      />
       <div className="hsk-preview-l05-list">
         {subQuestions.map((sub, idx) => (
           <PreviewL05SubQuestionRow

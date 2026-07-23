@@ -1,4 +1,4 @@
-import { HSK_TYPE_CARD_META, getTypeCardFieldLabel } from '../config/hskTypeCardMeta';
+import { getTypeCardFieldLabel, getTypeCardMeta } from '../config/hskTypeCardMeta';
 import type { HskQuestionTypeDef } from '../types/hskExams';
 
 export type QuestionTypeWithCounts = HskQuestionTypeDef & {
@@ -8,13 +8,10 @@ export type QuestionTypeWithCounts = HskQuestionTypeDef & {
 
 type Props = {
   qtype: QuestionTypeWithCounts;
-  onEdit: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
 };
 
-export function HskQuestionTypeCard({ qtype, onEdit, onDuplicate, onDelete }: Props) {
-  const meta = HSK_TYPE_CARD_META[qtype.id];
+export function HskQuestionTypeCard({ qtype }: Props) {
+  const meta = getTypeCardMeta(qtype.id);
 
   return (
     <article className="hsk-type-mgmt-card">
@@ -54,21 +51,7 @@ export function HskQuestionTypeCard({ qtype, onEdit, onDuplicate, onDelete }: Pr
       </div>
 
       <div className="hsk-type-mgmt-actions">
-        <button type="button" className="hsk-type-mgmt-action" onClick={onEdit}>
-          编辑
-        </button>
-        <button type="button" className="hsk-type-mgmt-action" onClick={onDuplicate}>
-          复制并新建
-        </button>
-        <button
-          type="button"
-          className="hsk-type-mgmt-action hsk-type-mgmt-action-danger"
-          onClick={onDelete}
-          disabled={qtype.questionCount > 0}
-          title={qtype.questionCount > 0 ? '该题型下还有题目，无法删除' : '删除题型'}
-        >
-          删除
-        </button>
+        <span className="hsk-type-mgmt-system-badge">一期固定题型</span>
       </div>
     </article>
   );

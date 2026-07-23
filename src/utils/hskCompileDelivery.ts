@@ -33,14 +33,15 @@ function rowToSingleRuntime(
   const score = slot.scorePerQuestion || row.score;
   return {
     id: slot.questionNumber ?? slot.globalIndex + 1,
+    questionNumber: slot.questionNumber,
+    isExample: slot.isExample,
     type: registry?.renderKey ?? row.type_id,
     typeName: registry?.runtimeTypeName ?? row.type_id,
     category: slot.moduleId,
     section: slot.sectionName,
     content: row.payload?.content ?? (row.stem ? { phrase: row.stem } : undefined),
     options: toRuntimeOptions(row),
-    answer: row.correctAnswer || undefined,
-    score,
+    score: slot.isExample ? 0 : score,
     audioUrl: row.payload?.audioUrl ?? row.audioUrl,
   };
 }
@@ -52,6 +53,7 @@ function compileCompoundGroup(
 ): HskRuntimeQuestion | null {
   if (!slots.length) return null;
   const firstSlot = slots[0];
+  const firstScoringSlot = slots.find((slot) => !slot.isExample) ?? firstSlot;
   const firstRow = rows.find((r) => r.question_uid === firstSlot.questionId);
   const sharedOptions = firstRow ? toRuntimeOptions(firstRow) : undefined;
   const sharedContent = firstRow?.payload?.content;
@@ -59,20 +61,21 @@ function compileCompoundGroup(
 
   const subFromPayload = firstRow?.payload?.subQuestions;
   const questions = slots.map((slot, idx) => {
-    const row = rows.find((r) => r.question_uid === slot.questionId);
     const qNum = slot.questionNumber ?? slot.globalIndex + 1;
     const sub = subFromPayload?.[idx];
     return {
       id: sub?.id ?? qNum,
-      answer: sub?.answer ?? row?.correctAnswer ?? '',
-      score: sub?.score ?? slot.scorePerQuestion,
+      questionNumber: slot.questionNumber,
+      isExample: slot.isExample || Boolean(sub?.isExample),
+      score: slot.isExample || sub?.isExample ? 0 : (sub?.score ?? slot.scorePerQuestion),
       question: sub?.question,
       options: sub?.options,
     };
   });
 
   return {
-    id: firstSlot.questionNumber ?? firstSlot.globalIndex + 1,
+    id: firstScoringSlot.questionNumber ?? firstScoringSlot.globalIndex + 1,
+    questionNumber: firstScoringSlot.questionNumber,
     type: registry?.renderKey ?? firstSlot.questionType,
     typeName: registry?.runtimeTypeName ?? firstSlot.questionType,
     category: firstSlot.moduleId,
@@ -93,10 +96,9 @@ type SlotGroup = {
 };
 
 function groupSlots(slots: HskPaperSlot[]): SlotGroup[] {
-  const scoring = slots.filter((s) => !s.isExample);
   const groups: SlotGroup[] = [];
 
-  for (const slot of scoring) {
+  for (const slot of slots) {
     const compound = slot.isCompound;
     const last = groups[groups.length - 1];
     const sameGroup =
@@ -186,6 +188,7 @@ export function compileExamDelivery(
     totalScore: exam.totalScore || template.totalScore,
     passScore: exam.passScore || template.passScore,
     showPinyin: exam.showPinyin ?? true,
+    maxPlayCount: 2,
     noticeRules: exam.noticeRules?.length
       ? exam.noticeRules
       : standard?.defaultNoticeRules ?? [],
@@ -218,6 +221,8 @@ export function validateDeliveryCompile(
   const scoring = paper.slots.filter((s) => !s.isExample);
   const missing = scoring.filter((s) => !s.questionId);
   if (missing.length) return `还有 ${missing.length} 道题未选题，无法编译`;
+  const missingExamples = paper.slots.filter((slot) => slot.isExample && !slot.questionId);
+  if (missingExamples.length) return `还有 ${missingExamples.length} 道示例未选题，无法编译`;
 
   for (const slot of scoring) {
     const row = questions.find((q) => q.question_uid === slot.questionId);
@@ -230,26 +235,11 @@ export function validateDeliveryCompile(
     }
   }
 
-  const level = levelToNumber(String(paper.level));
-  if (level) {
-    const err = validateLevelStandardScore(level, paper.totalScore, countRuntimeQuestions(paper));
-    if (err) return err;
-  }
-
   if (template.passScore > template.totalScore) {
     return '模板及格分不能高于卷面总分';
   }
 
   return null;
-}
-
-function countRuntimeQuestions(paper: HskComposedPaper): number {
-  return groupSlots(paper.slots).reduce((sum, g) => {
-    if (g.isCompound && getRegistryEntry(g.questionType, true)?.isCompoundGroup) {
-      return sum + g.slots.length;
-    }
-    return sum + g.slots.length;
-  }, 0);
 }
 
 export function previewExamDelivery(

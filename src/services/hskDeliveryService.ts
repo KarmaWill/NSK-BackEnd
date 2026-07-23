@@ -1,22 +1,15 @@
 import type { ExamDeliveryPackage } from '../types/hskExams';
+import { getExamDeliveryApi } from './assessmentExamBankApi';
 
 export async function syncHskDeliveryToServer(examId: string, pkg: ExamDeliveryPackage): Promise<void> {
-  try {
-    await fetch(`/api/hsk/exams/${encodeURIComponent(examId)}/delivery`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pkg),
-    });
-  } catch {
-    // 开发环境无 API 时静默失败，delivery 仍保存在 localStorage
-  }
+  void examId;
+  void pkg;
+  // 兼容旧调用点：stage 6 起 delivery 只能通过正式 publish API 生成，禁止再写旧 PUT 桩。
 }
 
 export async function fetchHskDelivery(examId: string): Promise<ExamDeliveryPackage | null> {
   try {
-    const res = await fetch(`/api/hsk/exams/${encodeURIComponent(examId)}/delivery`);
-    if (!res.ok) return null;
-    return (await res.json()) as ExamDeliveryPackage;
+    return await getExamDeliveryApi(examId);
   } catch {
     return null;
   }

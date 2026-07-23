@@ -1,9 +1,8 @@
 import { normalizeQuestionLevel, normalizeQuestionStatus } from '../config/hskQuestionWorkflow';
 import { resolveExplanationByLang } from '../config/languages';
-import { HSK_QUESTION_TYPE_DEFS, ensureQuestionTypes, levelToNumber, migrateLegacyTypeId } from '../config/hskQuestionTypes';
+import { ensureQuestionTypes, levelToNumber, migrateLegacyTypeId } from '../config/hskQuestionTypes';
 import { getLevelStandard } from '../config/hskLevelStandards';
-import { createDefaultQuestionTags, ensureQuestionTags } from '../config/hskQuestionTags';
-import { createAdminSeedQuestions, ensureAdminSeedQuestions } from '../data/hskAdminSeedQuestions';
+import { ensureQuestionTags } from '../config/hskQuestionTags';
 import type {
   ExamDeliveryPackage,
   HskComposedPaper,
@@ -16,9 +15,10 @@ import type {
   HskQuestionTagCatalog,
   HskQuestionTypeDef,
 } from '../types/hskExams';
-import { DEFAULT_HSK_QUESTION_TAG_CATALOG } from '../types/hskExams';
 import { compileExamDelivery, validateDeliveryCompile } from '../utils/hskCompileDelivery';
-import { syncHskDeliveryToServer } from '../services/hskDeliveryService';
+import { fetchHskSnapshot, putHskSnapshot } from '../lib/api';
+import { createDefaultHskStore } from '../utils/hskDefaultStore';
+import { resolveSnapshotArray } from '../utils/hskStoreSnapshot';
 import {
   buildSlotsFromTemplate,
   calcPaperScore,
@@ -31,197 +31,12 @@ import {
 
 export const HSK_EXAM_STORAGE_KEY = 'nsk-hsk-exams-v1';
 export const HSK_EXAMS_UPDATED_EVENT = 'nsk-hsk-exams-updated';
+const HSK_EXAM_PENDING_SYNC_KEY = `${HSK_EXAM_STORAGE_KEY}:pending-sync`;
 
 const stamp = () => new Date().toISOString();
+let remoteSaveQueue: Promise<void> = Promise.resolve();
 
-function seedQuestions(): HskQuestionRow[] {
-  return createAdminSeedQuestions();
-}
-
-function seedTags(): HskQuestionTag[] {
-  return createDefaultQuestionTags();
-}
-
-function seedTemplate(): HskPaperTemplate {
-  const standard = getLevelStandard(1)!;
-  let tpl = createEmptyTemplate({
-    id: 'tpl-hsk1-official',
-    name: 'HSK1 官方模板',
-    category: 'official',
-    level: 'HSK1',
-    parentCategory: 'HSK',
-    passScore: standard.passScore,
-    totalScore: standard.totalScore,
-    timeBlocks: { prep: 5, listening: 17, buffer: 3, reading: 15, writing: 0 },
-    status: 'published',
-  });
-  tpl.modules[0].sections = [
-    {
-      id: 'L_p1',
-      name: '第一部分',
-      questionType: 'L01',
-      isCompound: false,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-    {
-      id: 'L_p2',
-      name: '第二部分',
-      questionType: 'L03',
-      isCompound: false,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-    {
-      id: 'L_p3',
-      name: '第三部分',
-      questionType: 'L02',
-      isCompound: true,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-    {
-      id: 'L_p4',
-      name: '第四部分',
-      questionType: 'L04',
-      isCompound: false,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-  ];
-  tpl.modules[1].sections = [
-    {
-      id: 'R_p1',
-      name: '第一部分',
-      questionType: 'R01',
-      isCompound: false,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-    {
-      id: 'R_p2',
-      name: '第二部分',
-      questionType: 'R02',
-      isCompound: false,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-    {
-      id: 'R_p3',
-      name: '第三部分',
-      questionType: 'R03',
-      isCompound: true,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-    {
-      id: 'R_p4',
-      name: '第四部分',
-      questionType: 'R04',
-      isCompound: false,
-      groups: [{ questionCount: 5, hasExample: false, exampleCount: 0 }],
-      totalCount: 5,
-      scoringCount: 5,
-    },
-  ];
-  tpl = recalcTemplateTotals(tpl, HSK_QUESTION_TYPE_DEFS);
-  return tpl;
-}
-
-function seedPaper(template: HskPaperTemplate): HskComposedPaper {
-  const assignments: Record<number, string | null> = {
-    0: 'Q-L01-01',
-    1: 'Q-L01-02',
-    2: 'Q-L01-03',
-    3: 'Q-L01-04',
-    4: 'Q-L01-05',
-    5: 'Q-L03-01',
-    10: 'Q-L02-GROUP',
-    11: 'Q-L02-S02',
-    12: 'Q-L02-S03',
-    13: 'Q-L02-S04',
-    14: 'Q-L02-S05',
-    20: 'Q-R01-01',
-  };
-  const slots = buildSlotsFromTemplate(template, HSK_QUESTION_TYPE_DEFS, assignments);
-  const now = stamp();
-  return {
-    id: 'PAP-001',
-    templateId: template.id,
-    name: 'HSK1 基础测试卷 — 2026年3月',
-    description: '基于 HSK1 基础测试卷模板生成的正式考试试卷',
-    level: 'HSK1',
-    slots,
-    totalScore: calcPaperScore(slots),
-    totalQuestions: countScoringSlots(slots),
-    duration: template.totalDuration,
-    status: 'draft',
-    linkedCourses: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function seedExams(paper: HskComposedPaper, template: HskPaperTemplate): HskExamInstance[] {
-  const standard = getLevelStandard(1);
-  return [
-    {
-      id: 'exam-001',
-      name: 'HSK1 模拟考试 · 2024 春季',
-      paperId: paper.id,
-      templateId: template.id,
-      level: 'HSK1',
-      examType: 'mock',
-      duration: template.totalDuration,
-      totalScore: template.totalScore,
-      passScore: template.passScore,
-      status: 'draft',
-      scheduledAt: '2024-04-01T09:00:00',
-      noticeRules: standard?.defaultNoticeRules,
-      showPinyin: true,
-      deliveryCompiledAt: null,
-      updatedAt: stamp(),
-    },
-  ];
-}
-
-function seedDeliveryPackages(
-  exams: HskExamInstance[],
-  paper: HskComposedPaper,
-  template: HskPaperTemplate,
-  questions: HskQuestionRow[],
-): Record<string, ExamDeliveryPackage> {
-  const packages: Record<string, ExamDeliveryPackage> = {};
-  for (const exam of exams) {
-    packages[exam.id] = compileExamDelivery(exam, paper, template, questions, HSK_QUESTION_TYPE_DEFS);
-  }
-  return packages;
-}
-
-export function createDefaultHskStore(): HskExamStoreSnapshot {
-  const template = seedTemplate();
-  const questions = seedQuestions();
-  const paper = seedPaper(template);
-  const exams = seedExams(paper, template);
-  return {
-    questionTypes: structuredClone(HSK_QUESTION_TYPE_DEFS),
-    questions,
-    tags: seedTags(),
-    tagCatalog: { ...DEFAULT_HSK_QUESTION_TAG_CATALOG },
-    templates: [template],
-    templateStatus: { [template.id]: template.status },
-    papers: [paper],
-    exams,
-    deliveryPackages: seedDeliveryPackages(exams, paper, template, questions),
-  };
-}
+export { createDefaultHskStore };
 
 function migrateQuestionRows(questions: HskQuestionRow[]): HskQuestionRow[] {
   return questions.map((q) => {
@@ -236,19 +51,18 @@ function migrateQuestionRows(questions: HskQuestionRow[]): HskQuestionRow[] {
   });
 }
 
-function normalizeStore(raw: unknown): HskExamStoreSnapshot {
+export function normalizeHskStoreSnapshot(raw: unknown): HskExamStoreSnapshot {
   const fallback = createDefaultHskStore();
   if (!raw || typeof raw !== 'object') return fallback;
   const data = raw as Partial<HskExamStoreSnapshot>;
+  const questions = Array.isArray(data.questions) ? data.questions : fallback.questions;
   return {
     questionTypes: ensureQuestionTypes(
-      Array.isArray(data.questionTypes) && data.questionTypes.length ? data.questionTypes : fallback.questionTypes,
+      resolveSnapshotArray(data.questionTypes, fallback.questionTypes),
     ),
-    questions: migrateQuestionRows(
-      ensureAdminSeedQuestions(Array.isArray(data.questions) ? data.questions : fallback.questions),
-    ),
+    questions: migrateQuestionRows(questions),
     tags: ensureQuestionTags(
-      Array.isArray(data.tags) && data.tags.length ? data.tags : fallback.tags,
+      resolveSnapshotArray(data.tags, fallback.tags),
     ),
     tagCatalog: {
       customCategories: Array.isArray(data.tagCatalog?.customCategories)
@@ -258,7 +72,7 @@ function normalizeStore(raw: unknown): HskExamStoreSnapshot {
         ? data.tagCatalog.hiddenCategories
         : fallback.tagCatalog?.hiddenCategories ?? [],
     },
-    templates: Array.isArray(data.templates) && data.templates.length ? data.templates : fallback.templates,
+    templates: Array.isArray(data.templates) ? data.templates : fallback.templates,
     templateStatus: data.templateStatus && typeof data.templateStatus === 'object' ? data.templateStatus : fallback.templateStatus,
     papers: Array.isArray(data.papers) ? data.papers : fallback.papers,
     exams: Array.isArray(data.exams) ? data.exams : fallback.exams,
@@ -268,32 +82,141 @@ function normalizeStore(raw: unknown): HskExamStoreSnapshot {
   };
 }
 
+function writeLocalHskStore(snapshot: HskExamStoreSnapshot, emit = true) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(HSK_EXAM_STORAGE_KEY, JSON.stringify(snapshot));
+  if (emit && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HSK_EXAMS_UPDATED_EVENT));
+  }
+}
+
+function readPendingHskStore(): HskExamStoreSnapshot | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(HSK_EXAM_PENDING_SYNC_KEY);
+    return raw ? normalizeHskStoreSnapshot(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingHskStore(snapshot: HskExamStoreSnapshot) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(HSK_EXAM_PENDING_SYNC_KEY, JSON.stringify(snapshot));
+}
+
+function clearPendingHskStore() {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.removeItem(HSK_EXAM_PENDING_SYNC_KEY);
+}
+
 export function loadHskStore(): HskExamStoreSnapshot {
   try {
+    if (typeof localStorage === 'undefined') return createDefaultHskStore();
     const raw = localStorage.getItem(HSK_EXAM_STORAGE_KEY);
     if (!raw) {
       const initial = createDefaultHskStore();
-      saveHskStore(initial);
+      writeLocalHskStore(initial, false);
       return initial;
     }
     const parsed = JSON.parse(raw) as Partial<HskExamStoreSnapshot>;
-    const normalized = normalizeStore(parsed);
+    const normalized = normalizeHskStoreSnapshot(parsed);
     if (JSON.stringify(parsed.tags) !== JSON.stringify(normalized.tags)
       || JSON.stringify(parsed.questions) !== JSON.stringify(normalized.questions)
       || JSON.stringify(parsed.questionTypes) !== JSON.stringify(normalized.questionTypes)) {
-      saveHskStore(normalized);
+      writeLocalHskStore(normalized, false);
     }
     return normalized;
   } catch {
     const initial = createDefaultHskStore();
-    saveHskStore(initial);
+    writeLocalHskStore(initial, false);
     return initial;
   }
 }
 
-export function saveHskStore(snapshot: HskExamStoreSnapshot) {
-  localStorage.setItem(HSK_EXAM_STORAGE_KEY, JSON.stringify(snapshot));
-  window.dispatchEvent(new CustomEvent(HSK_EXAMS_UPDATED_EVENT));
+export async function loadHskStoreFromServer(): Promise<HskExamStoreSnapshot> {
+  const pending = readPendingHskStore();
+  if (pending) {
+    await saveHskStoreToServer(pending);
+    clearPendingHskStore();
+    writeLocalHskStore(pending);
+    return pending;
+  }
+
+  const snapshot = normalizeHskStoreSnapshot(await fetchHskSnapshot());
+  writeLocalHskStore(snapshot);
+  return snapshot;
+}
+
+export async function saveHskStoreToServer(snapshot: HskExamStoreSnapshot): Promise<void> {
+  await putHskSnapshot(normalizeHskStoreSnapshot(snapshot));
+}
+
+function enqueueRemoteSave(snapshot: HskExamStoreSnapshot): Promise<void> {
+  const saveTask = remoteSaveQueue
+    .catch(() => undefined)
+    .then(() => saveHskStoreToServer(snapshot))
+    .then(
+      () => clearPendingHskStore(),
+      (err) => {
+        writePendingHskStore(snapshot);
+        throw err;
+      },
+    );
+  remoteSaveQueue = saveTask.catch(() => undefined);
+  return saveTask;
+}
+
+export function saveHskStore(snapshot: HskExamStoreSnapshot): Promise<void> {
+  const normalized = normalizeHskStoreSnapshot(snapshot);
+  writeLocalHskStore(normalized);
+  const remoteSave = enqueueRemoteSave(normalized);
+  void remoteSave.catch((err) => {
+    console.warn('HSK snapshot 保存到后端失败，已保留本地缓存。', err);
+  });
+  return remoteSave;
+}
+
+export function syncQuestionBankLocalCache(input: {
+  questionTypes?: HskQuestionTypeDef[];
+  questions?: HskQuestionRow[];
+  tags?: HskQuestionTag[];
+  tagCatalog?: HskQuestionTagCatalog;
+}) {
+  const current = loadHskStore();
+  writeLocalHskStore({
+    ...current,
+    questionTypes: input.questionTypes ?? current.questionTypes,
+    questions: input.questions ?? current.questions,
+    tags: input.tags ?? current.tags,
+    tagCatalog: input.tagCatalog ?? current.tagCatalog,
+  });
+}
+
+export function syncTemplatesPapersLocalCache(input: {
+  templates?: HskPaperTemplate[];
+  templateStatus?: Record<string, HskPublishStatus>;
+  papers?: HskComposedPaper[];
+}) {
+  const current = loadHskStore();
+  writeLocalHskStore({
+    ...current,
+    templates: input.templates ?? current.templates,
+    templateStatus: input.templateStatus ?? current.templateStatus,
+    papers: input.papers ?? current.papers,
+  });
+}
+
+export function syncExamsDeliveryLocalCache(input: {
+  exams?: HskExamInstance[];
+  deliveryPackages?: Record<string, ExamDeliveryPackage>;
+}) {
+  const current = loadHskStore();
+  writeLocalHskStore({
+    ...current,
+    exams: input.exams ?? current.exams,
+    deliveryPackages: input.deliveryPackages ?? current.deliveryPackages,
+  });
 }
 
 export function countQuestionsByType(questions: HskQuestionRow[], typeId: string) {
@@ -453,7 +376,6 @@ export function publishExam(store: HskExamStoreSnapshot, examId: string): string
 
   const deliveryPackages = { ...store.deliveryPackages, [examId]: delivery };
   saveHskStore({ ...store, exams: store.exams.map((e) => (e.id === examId ? nextExam : e)), deliveryPackages });
-  void syncHskDeliveryToServer(examId, delivery);
   return null;
 }
 

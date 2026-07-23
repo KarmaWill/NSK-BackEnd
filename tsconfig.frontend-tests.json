@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noEmit": false,
+    "outDir": ".tmp/frontend-unit-tests",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/config/hskQuestionTypes.ts",
+    "src/config/hskTypeCardMeta.ts",
+    "src/config/languages.ts",
+    "src/utils/hskQuestionBankFilters.ts",
+    "src/utils/hskQuestionDetailRoute.ts",
+    "src/utils/hskQuestionTypeChangeGuard.ts",
+    "src/utils/hskPaperDeleteDecision.ts",
+    "src/utils/hskPaperListState.ts",
+    "src/utils/hskQuestionTypeSave.ts",
+    "src/utils/mediaPresentation.ts",
+    "src/types/hskExams.ts"
+  ],
+  "exclude": ["node_modules", ".tmp", "dist"]
+}

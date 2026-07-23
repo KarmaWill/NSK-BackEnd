@@ -25,6 +25,7 @@ import {
 } from '../config/hskTypeEditConfig';
 import type { HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
 import { nextAvailableTypeIdForSection } from '../utils/hskQuestionTypeDuplicate';
+import { submitQuestionTypeSave } from '../utils/hskQuestionTypeSave';
 
 type Props = {
   typeDef: HskQuestionTypeDef;
@@ -32,7 +33,7 @@ type Props = {
   questionCount?: number;
   otherTypeIds?: HskQuestionTypeCode[];
   onBack: () => void;
-  onSave: (next: HskQuestionTypeDef) => void;
+  onSave: (next: HskQuestionTypeDef) => Promise<void>;
   onDuplicateAndNew?: () => void;
 };
 
@@ -68,6 +69,8 @@ export function HskQuestionConfig({
   );
   const [features, setFeatures] = useState<TypeFeatureState>(() => initFormState(typeDef).features);
   const [toast, setToast] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const featuresLocked = questionCount > 0;
 
@@ -78,6 +81,7 @@ export function HskQuestionConfig({
     setUiAnswerMode(next.uiAnswerMode);
     setDefaultOptionCount(next.defaultOptionCount);
     setFeatures(next.features);
+    setSaveError(null);
     if (isNew) {
       setSection(typeDef.section);
       setTypeId(typeDef.id);
@@ -132,12 +136,14 @@ export function HskQuestionConfig({
 
   const applySection = (nextSection: HskSectionModule) => {
     setSection(nextSection);
+    setSaveError(null);
     const stubTypes = otherTypeIds.map((id) => ({ id, section: nextSection }) as HskQuestionTypeDef);
     const nextId = nextAvailableTypeIdForSection(nextSection, stubTypes);
     if (nextId) setTypeId(nextId);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setSaveError(null);
     if (!name.trim()) {
       showToast('请填写题型名称');
       return;
@@ -155,7 +161,7 @@ export function HskQuestionConfig({
         return;
       }
       if (otherTypeIds.includes(id)) {
-        showToast(`题型 ID ${id} 已存在`);
+        setSaveError(`题型 ID ${id} 已存在`);
         return;
       }
       savedId = id;
@@ -165,7 +171,7 @@ export function HskQuestionConfig({
     const nextOptionCount = featuresLocked ? lockedSnapshot.defaultOptionCount : defaultOptionCount;
     const nextFeatures = featuresLocked ? lockedSnapshot.features : features;
 
-    onSave({
+    const next = {
       ...typeDef,
       id: savedId,
       hskTypeCode: savedId,
@@ -176,8 +182,16 @@ export function HskQuestionConfig({
       defaultOptionCount: nextOptionCount,
       editorFieldFlags: editorFlagsFromFeatures(nextFeatures),
       lastModified: new Date().toISOString().slice(0, 10),
-    });
-    showToast(isNew ? '题型已创建' : '题型已保存');
+    };
+
+    setSaving(true);
+    const result = await submitQuestionTypeSave(onSave, next);
+    setSaving(false);
+    if (!result.ok) {
+      setSaveError(result.message);
+      return;
+    }
+    if (!isNew) showToast('题型已保存');
   };
 
   const renderFeatureRow = (
@@ -221,8 +235,8 @@ export function HskQuestionConfig({
           <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
             取消
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={handleSave}>
-            保存题型
+          <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+            {saving ? '保存中...' : '保存题型'}
           </button>
         </div>
       </header>
@@ -252,6 +266,11 @@ export function HskQuestionConfig({
                 <span className="hsk-type-edit-section-accent" aria-hidden />
                 基础信息
               </h2>
+              {!isNew && saveError && (
+                <p className="hsk-type-edit-field-error" role="alert">
+                  {saveError}
+                </p>
+              )}
 
               {isNew && (
                 <div className="hsk-type-edit-grid-2">
@@ -272,10 +291,21 @@ export function HskQuestionConfig({
                     <input
                       type="text"
                       value={typeId}
-                      onChange={(e) => setTypeId(e.target.value.toUpperCase())}
+                      onChange={(e) => {
+                        setTypeId(e.target.value.toUpperCase());
+                        setSaveError(null);
+                      }}
                       placeholder="如 R08"
+                      className={saveError ? 'hsk-type-edit-input-error' : undefined}
+                      aria-invalid={Boolean(saveError)}
+                      aria-describedby={saveError ? 'hsk-question-type-id-error' : undefined}
                     />
                     <p className="hsk-type-edit-hint">格式 L01 / R01 / W01，同分区内不可重复</p>
+                    {saveError && (
+                      <p id="hsk-question-type-id-error" className="hsk-type-edit-field-error" role="alert">
+                        {saveError}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -393,8 +423,8 @@ export function HskQuestionConfig({
               <button type="button" className="btn btn-secondary" onClick={onBack}>
                 取消
               </button>
-              <button type="button" className="btn btn-primary" onClick={handleSave}>
-                保存题型
+              <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? '保存中...' : '保存题型'}
               </button>
             </div>
           </div>

@@ -65,3 +65,28 @@ export function normalizeQuestionLevel(level: string | undefined): HskLevelCode 
   }
   return 'HSK1';
 }
+
+export function canEditQuestion(status: HskQuestionStatus): boolean {
+  return status === 'draft';
+}
+
+export function canDeleteQuestion(status: HskQuestionStatus): boolean {
+  return status === 'draft';
+}
+
+export function nextQuestionStatus(status: HskQuestionStatus): HskQuestionStatus | null {
+  switch (status) {
+    case 'draft':
+      return 'pending_review';
+    case 'pending_review':
+      return 'pending_publish';
+    case 'pending_publish':
+      return 'published';
+    default:
+      return null;
+  }
+}
+
+export function canWithdrawQuestion(status: HskQuestionStatus): boolean {
+  return status !== 'draft';
+}

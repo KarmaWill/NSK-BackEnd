@@ -53,6 +53,10 @@ function mapRawTemplate(raw: RawOfficialTemplate): HskPaperTemplate {
     timeBlocks: raw.timeBlocks,
     modules: raw.modules,
     status: 'published',
+    templateKind: 'official',
+    templateCode: isKlzw ? null : `HSK${raw.level}_OFFICIAL`,
+    sourceTemplateId: null,
+    audioRules: { autoPlayOnEnter: true, allowPause: false, maxPlayCount: 2 },
     updatedAt: raw.lastUpdated ?? '2024-01-15',
   };
   return recalcTemplateTotals(base, HSK_QUESTION_TYPE_DEFS);
@@ -60,7 +64,9 @@ function mapRawTemplate(raw: RawOfficialTemplate): HskPaperTemplate {
 
 const ALL_OFFICIAL = (OFFICIAL_TEMPLATES as RawOfficialTemplate[]).map(mapRawTemplate);
 
-export const HSK_OFFICIAL_TEMPLATES = ALL_OFFICIAL.filter((t) => t.parentCategory === 'HSK');
+export const HSK_OFFICIAL_TEMPLATES = ALL_OFFICIAL.filter(
+  (t) => t.parentCategory === 'HSK' && (t.level === 'HSK1' || t.level === 'HSK2'),
+);
 
 export const KLZW_OFFICIAL_TEMPLATES = ALL_OFFICIAL.filter((t) => t.parentCategory === 'KLZW');
 

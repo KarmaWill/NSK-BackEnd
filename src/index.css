@@ -8238,6 +8238,17 @@ details.news-publish-card > summary::-webkit-details-marker {
   padding-top: 8px;
 }
 
+.hsk-resource-modal-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.hsk-resource-modal-toolbar .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .hsk-resource-modal-list {
   display: flex;
   flex-direction: column;
@@ -8270,8 +8281,37 @@ details.news-publish-card > summary::-webkit-details-marker {
 }
 
 .hsk-resource-modal-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--stone-lighter);
   font-size: 20px;
   flex-shrink: 0;
+}
+
+.hsk-resource-modal-item-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hsk-resource-modal-state {
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--ink-light);
+  font-size: 14px;
+}
+
+.hsk-resource-modal-state.is-error {
+  color: #9c6065;
 }
 
 .hsk-resource-modal-item-main {
@@ -8300,6 +8340,16 @@ details.news-publish-card > summary::-webkit-details-marker {
   flex-shrink: 0;
 }
 
+.hsk-resource-modal-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--ink-light);
+  font-size: 12px;
+}
+
 .hsk-type-edit-score-field {
   max-width: 128px;
 }
@@ -8308,6 +8358,17 @@ details.news-publish-card > summary::-webkit-details-marker {
   padding-top: 12px;
   border-top: 1px solid var(--stone-dark);
   margin-top: 4px;
+}
+
+.hsk-type-edit-field-error {
+  margin: 6px 0 0;
+  color: #9c6065;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hsk-type-edit-input-error {
+  border-color: #9c6065 !important;
 }
 
 .input-readonly {
@@ -8845,6 +8906,10 @@ details.news-publish-card > summary::-webkit-details-marker {
   margin: -24px;
 }
 
+.hsk-question-preview-page {
+  margin: 0;
+}
+
 .hsk-question-edit-topbar {
   display: flex;
   align-items: center;
@@ -8943,6 +9008,11 @@ details.news-publish-card > summary::-webkit-details-marker {
   position: relative;
   flex: 1;
   min-height: 0;
+}
+
+.hsk-question-edit-body.is-saving {
+  pointer-events: none;
+  user-select: none;
 }
 
 .hsk-question-edit-form-col {
@@ -13274,7 +13344,11 @@ details.news-publish-card > summary::-webkit-details-marker {
 }
 
 .hsk-question-list-table .col-status {
-  width: 128px;
+  width: 96px;
+}
+
+.hsk-question-list-table .col-workflow {
+  width: 152px;
 }
 
 .hsk-question-list-table .col-actions {
@@ -13328,11 +13402,11 @@ details.news-publish-card > summary::-webkit-details-marker {
   white-space: nowrap;
 }
 
-.hsk-question-list-status-cell {
+.hsk-question-list-workflow-actions {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
 }
 
 .hsk-question-list-status.is-published {
@@ -13355,34 +13429,6 @@ details.news-publish-card > summary::-webkit-details-marker {
   color: #92400e;
 }
 
-.hsk-question-list-status-btn {
-  border: 1px solid var(--stone-dark);
-  background: #fff;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.hsk-question-list-status-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.hsk-question-list-status-btn.is-primary {
-  border-color: #0f6e56;
-  background: #e1f5ee;
-  color: #0f6e56;
-}
-
-.hsk-question-list-status-btn.is-primary:hover {
-  background: #0f6e56;
-  color: #fff;
-}
-
 .hsk-question-list-row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -13402,6 +13448,10 @@ details.news-publish-card > summary::-webkit-details-marker {
 
 .hsk-question-list-action:hover {
   text-decoration: underline;
+}
+
+.hsk-question-list-action-neutral {
+  color: var(--ink);
 }
 
 .hsk-question-list-action-danger {
@@ -13943,8 +13993,24 @@ details.news-publish-card > summary::-webkit-details-marker {
 
 .hsk-paper-table th.col-publish,
 .hsk-paper-table td.col-publish {
-  width: 72px;
+  width: 92px;
   text-align: center;
+}
+
+.hsk-paper-publish-control {
+  min-height: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.hsk-paper-pending-label {
+  font-size: 10px;
+  line-height: 1;
+  color: #6b7280;
+  white-space: nowrap;
 }
 
 .hsk-paper-table th.col-date,
@@ -14123,6 +14189,12 @@ details.news-publish-card > summary::-webkit-details-marker {
   cursor: not-allowed;
 }
 
+.hsk-paper-action:disabled {
+  color: #d1d5db;
+  cursor: not-allowed;
+  background: transparent;
+}
+
 .hsk-paper-empty {
   padding: 64px 24px;
   text-align: center;
@@ -14145,6 +14217,11 @@ details.news-publish-card > summary::-webkit-details-marker {
   color: var(--primary);
 }
 
+.hsk-paper-back:disabled {
+  color: #d1d5db;
+  cursor: wait;
+}
+
 .hsk-paper-template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -14164,6 +14241,16 @@ details.news-publish-card > summary::-webkit-details-marker {
 .hsk-paper-template-card:hover {
   border-color: var(--primary, #7c3aed);
   box-shadow: var(--shadow-sm);
+}
+
+.hsk-paper-template-card:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.hsk-paper-template-card:disabled:hover {
+  border-color: var(--stone-dark);
+  box-shadow: none;
 }
 
 .hsk-paper-template-card h3 {
@@ -14312,6 +14399,16 @@ details.news-publish-card > summary::-webkit-details-marker {
 
 .hsk-paper-modal-delete:hover {
   background: #b91c1c;
+}
+
+.hsk-paper-modal-delete:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.hsk-paper-composer.is-busy .hsk-paper-composer-body {
+  pointer-events: none;
+  opacity: 0.82;
 }
 
 @media (max-width: 1100px) {
@@ -16013,6 +16110,33 @@ details.news-publish-card > summary::-webkit-details-marker {
   opacity: 0.7;
 }
 
+.hsk-exam-type-card-edit-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.hsk-exam-type-card-edit-fields label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.hsk-exam-type-card-edit-fields input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 4px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #111827;
+  font: inherit;
+}
+
 .hsk-exam-type-range {
   margin: 6px 0 0;
   font-size: 11px;
@@ -17290,4 +17414,3 @@ details.news-publish-card > summary::-webkit-details-marker {
     justify-content: flex-start;
   }
 }
-
