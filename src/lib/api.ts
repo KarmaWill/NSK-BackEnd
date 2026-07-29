@@ -24,6 +24,10 @@ export function usesDevApiProxy(): boolean {
   return Boolean(import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL);
 }
 
+export function usesTrustedNetworkAuth(): boolean {
+  return import.meta.env.VITE_AUTH_MODE === 'trusted-network';
+}
+
 export type ProductCode = 'hsk_web' | 'tablet_app';
 
 export const PRODUCT_OPTIONS: { code: ProductCode; label: string; shortLabel: string }[] = [
@@ -115,8 +119,10 @@ async function fetchJson<T>(
   if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
-  const token = getToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (!usesTrustedNetworkAuth()) {
+    const token = getToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  }
 
   const url = resolveRequestUrl(path, base);
 
@@ -160,7 +166,7 @@ function resolveJavaExamPath(path: string): { path: string; base: string } {
 
 function withJavaAuthHeader(options: ApiFetchOptions = {}): ApiFetchOptions {
   const headers = new Headers(options.headers);
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && !usesTrustedNetworkAuth()) {
     const devKey = import.meta.env.VITE_CLINGO_DEV_KEY;
     if (devKey) {
       headers.set(import.meta.env.VITE_CLINGO_AUTH_HEADER || 'X-Clingo-Dev-Key', devKey);

@@ -5,21 +5,31 @@ import { Topbar } from './components/Topbar';
 import { PanelContent } from './panels';
 import { LoginGate } from './components/LoginGate';
 import { loadCourseLibs, COURSE_LIBS_UPDATED_EVENT } from './stores/courseLibs';
-import { getToken, logout, type AuthUser, getActiveProduct } from './lib/api';
+import {
+  getToken,
+  logout,
+  type AuthUser,
+  getActiveProduct,
+  usesTrustedNetworkAuth,
+} from './lib/api';
 import { isPanelAvailableForProduct } from './config/productNav';
 
 export default function App() {
+  const trustedNetworkAuth = usesTrustedNetworkAuth();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [activePanel, setActivePanel] = useState<PanelId>('dashboard');
   const [activeCourseLibId, setActiveCourseLibId] = useState<string>(() => loadCourseLibs()[0]?.id ?? '');
 
   useEffect(() => {
-    if (getToken()) {
+    if (trustedNetworkAuth) {
+      logout();
+      setUser({ id: 'internal', username: '内网用户', role: 'ADMIN' });
+    } else if (getToken()) {
       setUser({ id: '', username: 'admin', role: 'ADMIN' });
     }
     setAuthChecked(true);
-  }, []);
+  }, [trustedNetworkAuth]);
 
   useEffect(() => {
     const sync = () => {
@@ -62,6 +72,7 @@ export default function App() {
         <Topbar
           panelId={activePanel}
           username={user.username}
+          showLogout={!trustedNetworkAuth}
           onLogout={() => {
             logout();
             setUser(null);

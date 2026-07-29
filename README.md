@@ -36,8 +36,17 @@ VITE_CLINGO_DEV_KEY=dev-local-key npm run dev
 ```
 
 `dev-local-key` 只用于 Vite 开发模式的本地联调。生产构建不会读取或发送
-`VITE_CLINGO_DEV_KEY`；生产环境应由客户网关或会话鉴权保护管理端接口，不能把固定密钥
-注入浏览器前端。
+`VITE_CLINGO_DEV_KEY`，也不会把固定密钥注入浏览器前端。
+
+### 客户内网生产模式
+
+客户生产环境由内网和网关控制服务访问时，管理台使用可信内网模式，不显示自身登录页，也不向 Java 服务发送开发密钥：
+
+```bash
+npm run build
+```
+
+可信内网模式和网关路径已经固化在 `.env.production`。前端与网关同源部署时无需配置 API base URL；如果由不同域名承载，再通过 `VITE_CLINGO_ADMIN_API_BASE_URL` 和 `VITE_CLINGO_EXAM_API_BASE_URL` 指向客户网关。两个 Java 服务的 `application-prod.yml` 已默认关闭应用层鉴权，生产启动时启用 `prod` profile 即可。
 
 ### 局域网版本（同 WiFi 下手机 / 平板访问）
 

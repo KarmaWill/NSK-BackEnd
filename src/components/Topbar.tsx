@@ -7,9 +7,10 @@ type Props = {
   panelId: PanelId;
   username: string;
   onLogout: () => void;
+  showLogout?: boolean;
 };
 
-export function Topbar({ panelId, username, onLogout }: Props) {
+export function Topbar({ panelId, username, onLogout, showLogout = true }: Props) {
   const title = NAV_LABELS[panelId] ?? panelId;
   const [productLabel, setProductLabel] = useState(() => getActiveProductLabel());
 
@@ -43,14 +44,16 @@ export function Topbar({ panelId, username, onLogout }: Props) {
           API 已连接
         </div>
         <span style={{ fontSize: 13, marginLeft: 8, color: 'var(--ink-light)' }}>{username}</span>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          style={{ marginLeft: 8 }}
-          onClick={onLogout}
-        >
-          退出
-        </button>
+        {showLogout && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ marginLeft: 8 }}
+            onClick={onLogout}
+          >
+            退出
+          </button>
+        )}
       </div>
     </header>
   );
