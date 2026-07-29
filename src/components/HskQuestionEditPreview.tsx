@@ -59,6 +59,7 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
   const typeId = question.type_id;
   const registry = getRegistryEntry(typeId, defaultCompoundForType(typeId));
   const needsAudio = registry?.editorFields.includes('audio') ?? false;
+  const audioUrl = question.payload?.audioUrl ?? question.audioUrl;
   const audioTranscript = question.payload?.audioTranscript ?? '';
   const audioPending = isAudioPending(question, needsAudio);
   const imagePending = isImagePending(question);
@@ -158,7 +159,7 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
     return (
       <>
         <PreviewQuestionStem question={question} />
-        <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
+        <PreviewAudioBar pending={audioPending} audioUrl={audioUrl} audioTranscript={audioTranscript} />
         <PreviewTextOptions options={options} correctAnswer={question.correctAnswer ?? ''} />
       </>
     );
@@ -168,7 +169,7 @@ function renderByType(question: HskQuestionRow, typeDef?: HskQuestionTypeDef) {
     return (
       <>
         <PreviewQuestionStem question={question} />
-        <PreviewAudioBar pending={audioPending} audioTranscript={audioTranscript} />
+        <PreviewAudioBar pending={audioPending} audioUrl={audioUrl} audioTranscript={audioTranscript} />
         {options.length > 0 ? (
           <PreviewTextOptions options={options} correctAnswer={question.correctAnswer ?? ''} />
         ) : (

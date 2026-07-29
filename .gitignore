@@ -3,12 +3,18 @@ node_modules/
 
 # Build output
 dist/
+server/dist/
+server/data/
+server/uploads/
+.tmp/
+.codex/
 
 # IDE / OS
 .DS_Store
 *.log
 .vscode/
 .idea/
+.worktrees/
 
 # TypeScript
 *.tsbuildinfo

@@ -1,23 +1,26 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   KLZW_BOOK1_TESTS,
   KLZW_BOOK_TABS,
   type KlzwTestKey,
-  getKlzwTemplate,
-  getKlzwTemplatesByBook,
-  getOfficialTemplateByHskLevel,
 } from '../data/hskOfficialTemplates';
 import { useHskStore } from '../hooks/useHskStore';
 import {
-  deleteTemplate,
-  loadHskStore,
-  publishTemplate,
-  saveTemplate,
+  syncTemplatesPapersLocalCache,
 } from '../stores/hskExams';
+import {
+  createTemplate,
+  deleteTemplate as deleteTemplateApi,
+  listTemplates,
+  patchTemplate,
+  publishTemplateApi,
+  unpublishTemplateApi,
+} from '../services/assessmentExamBankApi';
 import type {
   HskAudioRules,
   HskPaperTemplate,
+  HskPublishStatus,
   HskQuestionTypeCode,
   HskQuestionTypeDef,
   HskSectionModule,
@@ -41,8 +44,17 @@ import {
   sectionHasExample,
   type SectionRange,
 } from '../utils/hskTemplateDisplay';
-import { applyTemplatePatch, createEmptyTemplate, getScorePerQuestion } from '../utils/hskPaperUtils';
-import { ASSESSMENT_TEMPLATE_ENTRIES } from '../config/assessmentTemplates';
+import {
+  applyTemplatePatch,
+  createEmptyTemplate,
+  getScorePerQuestion,
+  normalizeTemplateQuestionCountInput,
+  redistributeSectionQuestionCount,
+} from '../utils/hskPaperUtils';
+import {
+  reconcileTemplateList,
+  removePendingTemplate,
+} from '../utils/hskTemplateListState';
 import type { PanelId } from '../types';
 
 type PrimaryTab = 'HSK' | 'KLZW' | 'custom';
@@ -78,8 +90,15 @@ function saveHskCustomCategories(categories: HskCustomCategory[]) {
   localStorage.setItem(HSK_CUSTOM_CATEGORIES_KEY, JSON.stringify(categories));
 }
 
-function truncateTabLabel(name: string, max = 8): string {
-  return name.length > max ? `${name.slice(0, max)}…` : name;
+function templateStatusFromList(templates: HskPaperTemplate[]): Record<string, HskPublishStatus> {
+  return templates.reduce<Record<string, HskPublishStatus>>((acc, template) => {
+    acc[template.id] = template.status;
+    return acc;
+  }, {});
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 function ExamModalPortal({ children }: { children: ReactNode }) {
@@ -114,43 +133,11 @@ function ExamModalOverlay({
 const DEFAULT_AUDIO_RULES: HskAudioRules = {
   autoPlayOnEnter: true,
   allowPause: false,
-  maxPlayCount: 1,
+  maxPlayCount: 2,
 };
 
 function resolveAudioRules(template: HskPaperTemplate): HskAudioRules {
   return { ...DEFAULT_AUDIO_RULES, ...template.audioRules };
-}
-
-type CategoryOption = {
-  value: string;
-  label: string;
-  parentCategory: string | null;
-  categoryId: string | null;
-};
-
-function buildCategoryOptions(customCategories: HskCustomCategory[]): CategoryOption[] {
-  const opts: CategoryOption[] = [
-    { value: 'hsk-tab', label: 'HSK（显示在HSK标签页）', parentCategory: 'HSK', categoryId: null },
-    { value: 'klzw-tab', label: '快乐中文（显示在快乐中文标签页）', parentCategory: 'KLZW', categoryId: null },
-    { value: 'uncategorized', label: '未分类（显示在自定义模板标签页）', parentCategory: null, categoryId: null },
-  ];
-  for (const cat of customCategories) {
-    opts.push({
-      value: cat.id,
-      label: `${cat.name}（显示在HSK标签页）`,
-      parentCategory: 'HSK',
-      categoryId: cat.id,
-    });
-  }
-  return opts;
-}
-
-function templateCategoryValue(template: HskPaperTemplate): string {
-  if (template.parentCategory === null && template.categoryId === null) return 'uncategorized';
-  if (template.parentCategory === 'HSK' && template.categoryId) return template.categoryId;
-  if (template.parentCategory === 'HSK') return 'hsk-tab';
-  if (template.parentCategory === 'KLZW') return 'klzw-tab';
-  return 'uncategorized';
 }
 
 function StatCard({ label, value, unit }: { label: string; value: string | number; unit?: string }) {
@@ -197,17 +184,13 @@ function EditableStatCard({
 
 function TemplateMetaForm({
   template,
-  customCategories,
   onChange,
 }: {
   template: HskPaperTemplate;
-  customCategories: HskCustomCategory[];
   onChange: (patch: Partial<HskPaperTemplate>) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const audio = resolveAudioRules(template);
-  const categoryOptions = buildCategoryOptions(customCategories);
-  const categoryValue = templateCategoryValue(template);
 
   return (
     <div className="hsk-exam-meta-panel">
@@ -219,7 +202,7 @@ function TemplateMetaForm({
       >
         <div>
           <h3 className="hsk-exam-meta-panel-title">模板基础属性配置</h3>
-          <p className="hsk-exam-meta-panel-sub">时间规则 · 分值设定 · 分类归属</p>
+          <p className="hsk-exam-meta-panel-sub">名称 · 时间规则 · 合格分</p>
         </div>
         <span className="hsk-exam-meta-panel-toggle">{expanded ? '收起' : '展开'}</span>
       </button>
@@ -229,36 +212,6 @@ function TemplateMetaForm({
             <label>
               <span>模板名称</span>
               <input value={template.name} onChange={(e) => onChange({ name: e.target.value })} />
-            </label>
-            <label>
-              <span>归属分类</span>
-              <select
-                value={categoryValue}
-                onChange={(e) => {
-                  const opt = categoryOptions.find((o) => o.value === e.target.value);
-                  if (!opt) return;
-                  onChange({
-                    parentCategory: opt.parentCategory,
-                    categoryId: opt.categoryId,
-                    level: opt.parentCategory === 'HSK' && !opt.categoryId ? 'custom' : template.level,
-                  });
-                }}
-              >
-                {categoryOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>卷面总分</span>
-              <input
-                type="number"
-                min={0}
-                value={template.totalScore}
-                onChange={(e) => onChange({ totalScore: Math.max(0, Number(e.target.value) || 0) })}
-              />
             </label>
             <label>
               <span>合格分数</span>
@@ -328,24 +281,7 @@ function TemplateMetaForm({
             </div>
             <div className="hsk-exam-audio-play-count">
               <span className="hsk-exam-audio-play-label">最大播放次数</span>
-              <div className="hsk-exam-audio-play-options">
-                {[
-                  { value: 1, label: '1次（正式考试推荐）' },
-                  { value: 2, label: '2次' },
-                  { value: 3, label: '3次' },
-                  { value: null, label: '不限' },
-                ].map((opt) => (
-                  <label key={String(opt.value)} className="hsk-exam-audio-play-opt">
-                    <input
-                      type="radio"
-                      name={`audio-play-${template.id}`}
-                      checked={audio.maxPlayCount === opt.value}
-                      onChange={() => onChange({ audioRules: { ...audio, maxPlayCount: opt.value } })}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
+              <strong>2 次</strong>
             </div>
           </div>
         </div>
@@ -471,31 +407,54 @@ function TypeCard({
   range,
   typeDef,
   readOnly,
-  onDelete,
+  equalRatio,
+  onChange,
 }: {
   section: HskTemplateSection;
   range: string;
   typeDef?: HskQuestionTypeDef;
   readOnly?: boolean;
-  onDelete?: () => void;
+  equalRatio?: boolean;
+  onChange?: (patch: { questionCount?: number; scorePerQuestion?: number }) => void;
 }) {
   const prefix = getTypeCardColorPrefix(section.questionType);
   const colorClass = prefix === 'R' ? 'is-r' : prefix === 'W' ? 'is-w' : 'is-l';
 
   return (
     <div className={`hsk-exam-type-card ${colorClass}`}>
-      {!readOnly && onDelete && (
-        <button type="button" className="hsk-exam-type-card-delete" onClick={onDelete} title="删除此题型">
-          ×
-        </button>
-      )}
       <div className="hsk-exam-type-card-badges">
         <span className="hsk-exam-type-code">{section.questionType}</span>
         {section.isCompound && <span className="hsk-exam-type-tag is-compound">复合</span>}
         {sectionHasExample(section) && <span className="hsk-exam-type-tag is-example">含示例</span>}
       </div>
       <p className="hsk-exam-type-name">{typeDef?.name ?? section.questionType}</p>
-      <p className="hsk-exam-type-count">{section.totalCount} 题</p>
+      {readOnly || !onChange ? (
+        <p className="hsk-exam-type-count">
+          {section.scoringCount} 题 · {equalRatio ? '等权计分' : `${section.scorePerQuestion ?? 1} 分/题`}
+        </p>
+      ) : (
+        <div className="hsk-exam-type-card-edit-fields">
+          <label>
+            题量
+            <input
+              type="number"
+              min={0}
+              value={section.scoringCount}
+              onChange={(event) => onChange({ questionCount: normalizeTemplateQuestionCountInput(event.target.value) })}
+            />
+          </label>
+          <label>
+            单题分值
+            <input
+              type="number"
+              min={0}
+              step="0.5"
+              value={section.scorePerQuestion ?? typeDef?.defaultScore ?? 0}
+              onChange={(event) => onChange({ scorePerQuestion: Math.max(0, Number(event.target.value) || 0) })}
+            />
+          </label>
+        </div>
+      )}
       <p className="hsk-exam-type-range">{range}</p>
     </div>
   );
@@ -507,16 +466,14 @@ function ModuleBlock({
   sectionRanges,
   typeDefs,
   readOnly,
-  onDeleteSection,
-  onAddSection,
+  onUpdateSection,
 }: {
   mod: HskPaperTemplate['modules'][number];
   template: HskPaperTemplate;
   sectionRanges: SectionRange[];
   typeDefs: HskQuestionTypeDef[];
   readOnly?: boolean;
-  onDeleteSection?: (sectionId: string) => void;
-  onAddSection?: () => void;
+  onUpdateSection?: (sectionId: string, patch: { questionCount?: number; scorePerQuestion?: number }) => void;
 }) {
   const meta = MODULE_META[mod.id] ?? MODULE_META.listening;
   const rangeMap = Object.fromEntries(sectionRanges.map((r) => [r.sectionId, r.range]));
@@ -549,15 +506,10 @@ function ModuleBlock({
             range={rangeMap[sec.id] ?? ''}
             typeDef={findTypeDef(typeDefs, sec.questionType)}
             readOnly={readOnly}
-            onDelete={onDeleteSection ? () => onDeleteSection(sec.id) : undefined}
+            equalRatio={template.scoringMode === 'equal_ratio'}
+            onChange={onUpdateSection ? (patch) => onUpdateSection(sec.id, patch) : undefined}
           />
         ))}
-        {!readOnly && onAddSection && (
-          <button type="button" className="hsk-exam-add-type" onClick={onAddSection}>
-            <span className="hsk-exam-add-type-icon">+</span>
-            <span>添加题型</span>
-          </button>
-        )}
       </div>
       {mod.id === 'listening' && tb.buffer > 0 && (
         <p className="hsk-exam-module-hint">
@@ -573,38 +525,75 @@ function ModuleBlock({
 
 function TemplateDetailPanel({
   template,
+  baselineTemplate,
   typeDefs,
   readOnly,
-  customCategories,
   onChange,
   onSave,
   onPublish,
+  onUnpublish,
   publishError,
 }: {
   template: HskPaperTemplate;
+  baselineTemplate?: HskPaperTemplate;
   typeDefs: HskQuestionTypeDef[];
   readOnly?: boolean;
-  customCategories?: HskCustomCategory[];
   onChange?: (t: HskPaperTemplate) => void;
   onSave?: () => void;
   onPublish?: () => void;
+  onUnpublish?: () => void;
   publishError?: string | null;
 }) {
   const sectionRanges = useMemo(() => computeSectionNumberRanges(template), [template]);
   const colors = getTemplateColors(template);
   const duration = getTemplateDisplayDuration(template);
   const [addTypeModal, setAddTypeModal] = useState<AddTypeModalState | null>(null);
+  const sectionGroupBaselines = useRef(new Map<string, HskTemplateSection['groups']>());
+  template.modules.forEach((module, moduleIndex) => {
+    module.sections.forEach((section, sectionIndex) => {
+      const key = `${template.id}:${module.id}:${section.id}`;
+      if (!sectionGroupBaselines.current.has(key)) {
+        const sourceModule = baselineTemplate?.modules.find((candidate) => candidate.id === module.id)
+          ?? baselineTemplate?.modules[moduleIndex];
+        const sourceSection = sourceModule?.sections.find((candidate) => candidate.id === section.id)
+          ?? sourceModule?.sections[sectionIndex];
+        const baselineGroups = sourceSection?.groups.length === section.groups.length
+          ? sourceSection.groups
+          : section.groups;
+        sectionGroupBaselines.current.set(key, baselineGroups.map((group) => ({ ...group })));
+      }
+    });
+  });
 
   const updateTemplate = (patch: Partial<HskPaperTemplate>) => {
     if (!onChange) return;
     onChange(applyTemplatePatch(template, patch, typeDefs));
   };
 
-  const deleteSection = (moduleId: HskSectionModule, sectionId: string) => {
+  const updateSection = (
+    moduleId: HskSectionModule,
+    sectionId: string,
+    patch: { questionCount?: number; scorePerQuestion?: number },
+  ) => {
     if (!onChange) return;
-    const modules = template.modules.map((m) =>
-      m.id === moduleId ? { ...m, sections: m.sections.filter((s) => s.id !== sectionId) } : m,
-    );
+    const modules = template.modules.map((module) => {
+      if (module.id !== moduleId) return module;
+      return {
+        ...module,
+        sections: module.sections.map((section) => {
+          if (section.id !== sectionId) return section;
+          const baselineGroups = sectionGroupBaselines.current.get(`${template.id}:${moduleId}:${sectionId}`);
+          const groups = patch.questionCount === undefined
+            ? section.groups.map((group) => ({ ...group }))
+            : redistributeSectionQuestionCount(section.groups, patch.questionCount, baselineGroups);
+          return {
+            ...section,
+            groups,
+            scorePerQuestion: patch.scorePerQuestion ?? section.scorePerQuestion,
+          };
+        }),
+      };
+    });
     onChange(applyTemplatePatch(template, { modules }, typeDefs));
   };
 
@@ -632,6 +621,7 @@ function TemplateDetailPanel({
             groups: [{ questionCount: data.questionCount, hasExample: false, exampleCount: 0 }],
             totalCount: data.questionCount,
             scoringCount: data.questionCount,
+            scorePerQuestion: data.scorePerQuestion,
           },
         ],
       };
@@ -639,7 +629,7 @@ function TemplateDetailPanel({
     onChange(
       applyTemplatePatch(
         template,
-        { modules, customScorePerQuestion: data.scorePerQuestion },
+        { modules },
         typeDefs,
       ),
     );
@@ -651,7 +641,7 @@ function TemplateDetailPanel({
       <div className="hsk-exam-template-hero" style={{ borderLeftColor: colors.primary }}>
         <div>
           <div className="hsk-exam-template-hero-badges">
-            {readOnly ? (
+            {template.category === 'official' ? (
               <span className="hsk-exam-badge-official">📋 官方模板</span>
             ) : (
               <span className="hsk-exam-badge-custom" style={{ background: CUSTOM_COLORS.gradient }}>
@@ -682,6 +672,13 @@ function TemplateDetailPanel({
             </button>
           </div>
         )}
+        {readOnly && onUnpublish && (
+          <div className="hsk-exam-template-actions">
+            <button type="button" className="hsk-exam-btn-secondary" onClick={onUnpublish}>
+              撤回为草稿
+            </button>
+          </div>
+        )}
       </div>
 
       {publishError && <div className="hsk-exam-error">{publishError}</div>}
@@ -695,13 +692,7 @@ function TemplateDetailPanel({
           onChange={(v) => updateTemplate({ totalDuration: v })}
         />
         <StatCard label="题目总数" value={template.totalQuestions} unit="道" />
-        <EditableStatCard
-          label="卷面总分"
-          value={template.totalScore}
-          unit="分"
-          readOnly={readOnly}
-          onChange={(v) => updateTemplate({ totalScore: v })}
-        />
+        <StatCard label="卷面总分" value={template.totalScore} unit="分" />
         <EditableStatCard
           label="合格分数"
           value={template.passScore}
@@ -723,7 +714,6 @@ function TemplateDetailPanel({
       {!readOnly && (
         <TemplateMetaForm
           template={template}
-          customCategories={customCategories ?? []}
           onChange={updateTemplate}
         />
       )}
@@ -738,8 +728,7 @@ function TemplateDetailPanel({
             sectionRanges={sectionRanges}
             typeDefs={typeDefs}
             readOnly={readOnly}
-            onDeleteSection={readOnly ? undefined : (id) => deleteSection(mod.id, id)}
-            onAddSection={readOnly ? undefined : () => setAddTypeModal({ moduleId: mod.id })}
+            onUpdateSection={readOnly ? undefined : (id, patch) => updateSection(mod.id, id, patch)}
           />
         ))}
 
@@ -758,34 +747,36 @@ function TemplateDetailPanel({
 
 function CopyTemplateModal({
   template,
+  pending,
   onConfirm,
   onClose,
 }: {
   template: HskPaperTemplate;
+  pending: boolean;
   onConfirm: (name: string) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(`${template.name} (副本)`);
 
   return (
-    <ExamModalOverlay onClose={onClose}>
+    <ExamModalOverlay onClose={pending ? () => undefined : onClose}>
       <h3>复制为自定义模板</h3>
       <label className="hsk-exam-modal-field">
         <span>模板名称</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} />
+        <input value={name} disabled={pending} onChange={(e) => setName(e.target.value)} />
       </label>
       <div className="hsk-exam-modal-actions">
-        <button type="button" className="hsk-exam-btn-secondary" onClick={onClose}>
+        <button type="button" className="hsk-exam-btn-secondary" disabled={pending} onClick={onClose}>
           取消
         </button>
         <button
           type="button"
           className="hsk-exam-btn-primary"
           style={{ background: CUSTOM_COLORS.gradient }}
-          disabled={!name.trim()}
+          disabled={pending || !name.trim()}
           onClick={() => onConfirm(name.trim())}
         >
-          确认复制
+          {pending ? '复制中...' : '确认复制'}
         </button>
       </div>
     </ExamModalOverlay>
@@ -794,11 +785,11 @@ function CopyTemplateModal({
 
 function CustomTemplateCard({
   template,
-  onEdit,
+  onOpen,
   onDelete,
 }: {
   template: HskPaperTemplate;
-  onEdit: () => void;
+  onOpen: () => void;
   onDelete: () => void;
 }) {
   const duration = getTemplateDisplayDuration(template);
@@ -806,15 +797,17 @@ function CustomTemplateCard({
 
   return (
     <div className="hsk-exam-custom-card">
-      <button
-        type="button"
-        className="hsk-exam-custom-card-delete"
-        onClick={onDelete}
-        aria-label={`删除模板 ${template.name}`}
-        title="删除模板"
-      >
-        ×
-      </button>
+      {!isPublished && (
+        <button
+          type="button"
+          className="hsk-exam-custom-card-delete"
+          onClick={onDelete}
+          aria-label={`删除模板 ${template.name}`}
+          title="删除模板"
+        >
+          ×
+        </button>
+      )}
       <div className="hsk-exam-custom-card-top">
         <span className="hsk-exam-badge-custom-sm" style={{ background: CUSTOM_COLORS.gradient }}>
           自定义
@@ -836,35 +829,8 @@ function CustomTemplateCard({
         </p>
         <p className="muted">{template.modules.filter((m) => m.sections.length > 0).length} 个模块</p>
       </div>
-      <button type="button" className="hsk-exam-custom-edit-btn" onClick={onEdit}>
-        编辑
-      </button>
-    </div>
-  );
-}
-
-function AssessmentTemplateCard({
-  title,
-  description,
-  icon,
-  onConfigure,
-}: {
-  title: string;
-  description: string;
-  icon: string;
-  onConfigure: () => void;
-}) {
-  return (
-    <div className="hsk-exam-assess-card">
-      <div className="hsk-exam-assess-card-top">
-        <span className="hsk-exam-assess-icon" aria-hidden>
-          {icon}
-        </span>
-      </div>
-      <h3>{title}</h3>
-      <p className="hsk-exam-assess-desc">{description}</p>
-      <button type="button" className="hsk-exam-custom-edit-btn" onClick={onConfigure}>
-        配置
+      <button type="button" className="hsk-exam-custom-edit-btn" onClick={onOpen}>
+        {isPublished ? '查看' : '编辑'}
       </button>
     </div>
   );
@@ -1151,8 +1117,8 @@ function KlzwTestCard({
   );
 }
 
-export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => void }) {
-  const { store, refresh } = useHskStore();
+export function HskExamManager({ onNavigate: _onNavigate }: { onNavigate?: (id: PanelId) => void }) {
+  const { store } = useHskStore({ initialServerRefresh: false });
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>('HSK');
   const [hskActiveTab, setHskActiveTab] = useState<number | string>(1);
   const [customHskCategories, setCustomHskCategories] = useState<HskCustomCategory[]>(() =>
@@ -1162,10 +1128,15 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
   const [klzwTest, setKlzwTest] = useState<KlzwTestKey | null>(null);
   const [editingCustom, setEditingCustom] = useState<HskPaperTemplate | null>(null);
   const [copyModal, setCopyModal] = useState<CopyModalState | null>(null);
+  const [copyingTemplate, setCopyingTemplate] = useState(false);
   const [newTemplateModal, setNewTemplateModal] = useState<NewTemplateModalData | null>(null);
   const [showNewHskCategoryModal, setShowNewHskCategoryModal] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<HskPaperTemplate[]>(() => store.templates);
+  const templatesRef = useRef(templates);
+  const templateListEpoch = useRef(0);
+  const copiedTemplateUpserts = useRef(new Map<string, HskPaperTemplate>());
 
   useEffect(() => {
     saveHskCustomCategories(customHskCategories);
@@ -1176,26 +1147,104 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
     window.setTimeout(() => setToast(null), 2200);
   };
 
+  const applyTemplateList = useCallback((nextTemplates: HskPaperTemplate[]) => {
+    templatesRef.current = nextTemplates;
+    setTemplates(nextTemplates);
+    try {
+      syncTemplatesPapersLocalCache({
+        templates: nextTemplates,
+        templateStatus: templateStatusFromList(nextTemplates),
+      });
+    } catch (cacheError) {
+      console.warn('模板列表已更新，但本地缓存同步失败', cacheError);
+    }
+  }, []);
+
+  const reconcileCopiedTemplates = useCallback((nextTemplates: HskPaperTemplate[]) => {
+    const reconciled = reconcileTemplateList(
+      nextTemplates,
+      [...copiedTemplateUpserts.current.values()],
+    );
+    copiedTemplateUpserts.current.clear();
+    for (const template of reconciled.pendingTemplates) {
+      copiedTemplateUpserts.current.set(template.id, template);
+    }
+    return reconciled.templates;
+  }, []);
+
+  const reloadTemplates = useCallback(async () => {
+    const requestEpoch = ++templateListEpoch.current;
+    const nextTemplates = await listTemplates();
+    if (requestEpoch === templateListEpoch.current) {
+      applyTemplateList(reconcileCopiedTemplates(nextTemplates));
+    }
+    return nextTemplates;
+  }, [applyTemplateList, reconcileCopiedTemplates]);
+
+  useEffect(() => {
+    let active = true;
+    const requestEpoch = templateListEpoch.current;
+    void listTemplates()
+      .then((nextTemplates) => {
+        if (!active || requestEpoch !== templateListEpoch.current) return;
+        applyTemplateList(reconcileCopiedTemplates(nextTemplates));
+      })
+      .catch((err) => {
+        if (active) showToast(errorMessage(err, '模板列表加载失败'));
+      });
+    return () => {
+      active = false;
+    };
+  }, [applyTemplateList, reconcileCopiedTemplates]);
+
   const customTemplates = useMemo(
-    () => store.templates.filter((t) => t.category === 'custom' || t.category === 'practice'),
-    [store.templates],
+    () => templates.filter(
+      (t) => t.category === 'custom'
+        && t.parentCategory === 'HSK'
+        && (t.level === 'HSK1' || t.level === 'HSK2'),
+    ),
+    [templates],
+  );
+
+  const hskOfficialTemplates = useMemo(
+    () => templates.filter(
+      (t) => t.category === 'official'
+        && t.parentCategory === 'HSK'
+        && (t.level === 'HSK1' || t.level === 'HSK2'),
+    ),
+    [templates],
+  );
+
+  const klzwTemplatesForBook = useMemo(
+    () =>
+      templates.filter(
+        (t) =>
+          t.category === 'official' &&
+          t.parentCategory === 'KLZW' &&
+          t.categoryId === `book-${klzwBook}`,
+      ),
+    [klzwBook, templates],
   );
 
   const hskCategoryTemplate = useMemo(() => {
     if (typeof hskActiveTab !== 'string') return undefined;
-    return store.templates.find(
+    return templates.find(
       (t) => t.parentCategory === 'HSK' && t.categoryId === hskActiveTab,
     );
-  }, [hskActiveTab, store.templates]);
+  }, [hskActiveTab, templates]);
 
   const officialTemplate = useMemo(() => {
     if (primaryTab === 'HSK') {
-      if (typeof hskActiveTab === 'number') return getOfficialTemplateByHskLevel(hskActiveTab);
+      if (typeof hskActiveTab === 'number') {
+        return hskOfficialTemplates.find((t) => t.level === `HSK${hskActiveTab}`);
+      }
       return hskCategoryTemplate;
     }
-    if (primaryTab === 'KLZW' && klzwTest) return getKlzwTemplate(klzwTest, klzwBook);
+    if (primaryTab === 'KLZW' && klzwTest) {
+      return klzwTemplatesForBook.find((t) => t.level === klzwTest);
+    }
     return undefined;
-  }, [primaryTab, hskActiveTab, klzwTest, klzwBook, hskCategoryTemplate]);
+  }, [primaryTab, hskActiveTab, hskOfficialTemplates, klzwTest, klzwTemplatesForBook, hskCategoryTemplate]);
 
   const isViewingOfficialTemplate = officialTemplate?.category === 'official';
 
@@ -1225,90 +1274,138 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
     showToast(`已创建分类「${name}」`);
   };
 
-  const handleNewTemplateConfirm = (template: HskPaperTemplate) => {
-    saveTemplate(store, template);
-    refresh();
-    setNewTemplateModal(null);
-    if (template.parentCategory === 'HSK' && template.categoryId?.startsWith('hsk_cat_')) {
-      setPrimaryTab('HSK');
-      setHskActiveTab(template.categoryId);
-      setEditingCustom(template);
-    } else {
-      setPrimaryTab('custom');
-      setEditingCustom(template);
+  const handleNewTemplateConfirm = async (template: HskPaperTemplate) => {
+    try {
+      const created = await createTemplate(template);
+      await reloadTemplates();
+      setNewTemplateModal(null);
+      if (created.parentCategory === 'HSK' && created.categoryId?.startsWith('hsk_cat_')) {
+        setPrimaryTab('HSK');
+        setHskActiveTab(created.categoryId);
+        setEditingCustom(created);
+      } else {
+        setPrimaryTab('custom');
+        setEditingCustom(created);
+      }
+      showToast('模板已创建');
+    } catch (err) {
+      showToast(errorMessage(err, '模板创建失败'));
     }
-    showToast('模板已创建');
   };
 
   const viewingTemplate = editingCustom ?? officialTemplate;
+  const editingBaselineTemplate = useMemo(
+    () => editingCustom?.sourceTemplateId
+      ? templates.find((template) => template.id === editingCustom.sourceTemplateId)
+      : undefined,
+    [editingCustom?.sourceTemplateId, templates],
+  );
 
-  const handleCopyConfirm = (name: string) => {
-    if (!copyModal) return;
+  const handleCopyConfirm = async (name: string) => {
+    if (!copyModal || copyingTemplate) return;
     const source = copyModal.template;
-    const clone = structuredClone(source);
-    clone.id = `custom_${Date.now()}`;
-    clone.name = name;
-    clone.category = 'custom';
-    clone.status = 'draft';
-    clone.parentCategory = source.parentCategory;
-    clone.updatedAt = new Date().toISOString();
-    saveTemplate(store, clone);
-    refresh();
-    setCopyModal(null);
-    setPrimaryTab('custom');
-    setEditingCustom(clone);
-    showToast('已复制为自定义模板');
-  };
-
-  const handleCreateCustom = () => {
-    const tpl = createEmptyTemplate({
-      name: '未命名模板',
-      category: 'custom',
-      parentCategory: null,
-    });
-    saveTemplate(store, tpl);
-    refresh();
-    setPrimaryTab('custom');
-    setEditingCustom(tpl);
-    showToast('已创建空白自定义模板');
-  };
-
-  const handleSaveCustom = () => {
-    if (!editingCustom) return;
-    saveTemplate(store, { ...editingCustom, status: 'draft' });
-    refresh();
-    showToast('模板草稿已保存');
-  };
-
-  const handlePublishCustom = () => {
-    if (!editingCustom) return;
-    saveTemplate(store, editingCustom);
-    const err = publishTemplate(loadHskStore(), editingCustom.id);
-    if (err) {
-      setPublishError(err);
-      return;
+    setCopyingTemplate(true);
+    try {
+      const created = await createTemplate({
+        fromTemplateId: source.id,
+        id: `custom_${Date.now()}`,
+        name,
+      });
+      templateListEpoch.current += 1;
+      copiedTemplateUpserts.current.set(created.id, created);
+      const nextTemplates = [
+        ...templatesRef.current.filter((template) => template.id !== created.id),
+        created,
+      ];
+      applyTemplateList(nextTemplates);
+      setCopyModal(null);
+      setPrimaryTab('custom');
+      setEditingCustom(created);
+      showToast('已复制为自定义模板');
+    } catch (err) {
+      showToast(errorMessage(err, '模板复制失败'));
+    } finally {
+      setCopyingTemplate(false);
     }
-    setPublishError(null);
-    refresh();
-    setEditingCustom(null);
-    showToast('模板已发布');
   };
 
-  const handleDeleteCustom = () => {
+  const handleSaveCustom = async () => {
+    if (!editingCustom) return;
+    try {
+      const saved = await patchTemplate(editingCustom.id, { ...editingCustom, status: 'draft' });
+      await reloadTemplates();
+      setEditingCustom(saved);
+      showToast('模板草稿已保存');
+    } catch (err) {
+      showToast(errorMessage(err, '模板草稿保存失败'));
+    }
+  };
+
+  const handlePublishCustom = async () => {
+    if (!editingCustom) return;
+    try {
+      await patchTemplate(editingCustom.id, editingCustom);
+      await publishTemplateApi(editingCustom.id);
+      setPublishError(null);
+      await reloadTemplates();
+      setEditingCustom(null);
+      showToast('模板已发布');
+    } catch (err) {
+      const message = errorMessage(err, '模板发布失败');
+      setPublishError(message);
+      showToast(message);
+    }
+  };
+
+  const handleUnpublishCustom = async () => {
+    if (!editingCustom) return;
+    if (!window.confirm(`确认撤回模板「${editingCustom.name}」并恢复为草稿？`)) return;
+    try {
+      const draft = await unpublishTemplateApi(editingCustom.id);
+      await reloadTemplates();
+      setEditingCustom(draft);
+      setPublishError(null);
+      showToast('模板已撤回为草稿');
+    } catch (err) {
+      showToast(errorMessage(err, '模板撤回失败'));
+    }
+  };
+
+  const handleDeleteCustom = async () => {
     if (!editingCustom) return;
     if (!window.confirm(`确认删除模板「${editingCustom.name}」？`)) return;
-    deleteTemplate(store, editingCustom.id);
-    refresh();
-    setEditingCustom(null);
-    showToast('模板已删除');
+    try {
+      await deleteTemplateApi(editingCustom.id);
+      const remainingPending = removePendingTemplate(
+        [...copiedTemplateUpserts.current.values()],
+        editingCustom.id,
+      );
+      copiedTemplateUpserts.current.clear();
+      remainingPending.forEach((template) => copiedTemplateUpserts.current.set(template.id, template));
+      await reloadTemplates();
+      setEditingCustom(null);
+      showToast('模板已删除');
+    } catch (err) {
+      showToast(errorMessage(err, '模板删除失败'));
+    }
   };
 
-  const handleDeleteCustomCard = (tpl: HskPaperTemplate) => {
+  const handleDeleteCustomCard = async (tpl: HskPaperTemplate) => {
     if (!window.confirm(`确认删除模板「${tpl.name}」？`)) return;
-    deleteTemplate(store, tpl.id);
-    refresh();
-    if (editingCustom?.id === tpl.id) setEditingCustom(null);
-    showToast('模板已删除');
+    try {
+      await deleteTemplateApi(tpl.id);
+      const remainingPending = removePendingTemplate(
+        [...copiedTemplateUpserts.current.values()],
+        tpl.id,
+      );
+      copiedTemplateUpserts.current.clear();
+      remainingPending.forEach((template) => copiedTemplateUpserts.current.set(template.id, template));
+      await reloadTemplates();
+      if (editingCustom?.id === tpl.id) setEditingCustom(null);
+      showToast('模板已删除');
+    } catch (err) {
+      showToast(errorMessage(err, '模板删除失败'));
+    }
   };
 
   if (editingCustom) {
@@ -1325,17 +1422,21 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
           >
             ← 返回列表
           </button>
-          <button type="button" className="hsk-exam-btn-danger-text" onClick={handleDeleteCustom}>
-            删除模板
-          </button>
+          {editingCustom.status !== 'published' && (
+            <button type="button" className="hsk-exam-btn-danger-text" onClick={handleDeleteCustom}>
+              删除模板
+            </button>
+          )}
         </div>
         <TemplateDetailPanel
           template={editingCustom}
+          baselineTemplate={editingBaselineTemplate}
           typeDefs={store.questionTypes}
-          customCategories={customHskCategories}
-          onChange={setEditingCustom}
-          onSave={handleSaveCustom}
-          onPublish={handlePublishCustom}
+          readOnly={editingCustom.status === 'published'}
+          onChange={editingCustom.status === 'published' ? undefined : setEditingCustom}
+          onSave={editingCustom.status === 'published' ? undefined : handleSaveCustom}
+          onPublish={editingCustom.status === 'published' ? undefined : handlePublishCustom}
+          onUnpublish={editingCustom.status === 'published' ? handleUnpublishCustom : undefined}
           publishError={publishError}
         />
         {toast && <div className="hsk-toast show">{toast}</div>}
@@ -1366,7 +1467,7 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
       </div>
 
       <div className="hsk-exam-primary-tabs">
-        {(['HSK', 'KLZW', 'custom'] as PrimaryTab[]).map((tab) => (
+        {(['HSK', 'custom'] as PrimaryTab[]).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -1377,14 +1478,14 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
               setKlzwBook('1');
             }}
           >
-            {tab === 'HSK' ? 'HSK' : tab === 'KLZW' ? '快乐中文' : '✦自定义模板'}
+            {tab === 'HSK' ? '官方模板' : '自定义模板'}
           </button>
         ))}
       </div>
 
       {primaryTab === 'HSK' && (
         <div className="hsk-exam-level-tabs">
-          {[1, 2, 3, 4, 5, 6].map((lv) => (
+          {[1, 2].map((lv) => (
             <button
               key={lv}
               type="button"
@@ -1399,31 +1500,6 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
               HSK {lv}
             </button>
           ))}
-          {customHskCategories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`hsk-exam-level-tab hsk-exam-level-tab-custom${hskActiveTab === cat.id ? ' is-active' : ''}`}
-              title={cat.name}
-              onClick={() => setHskActiveTab(cat.id)}
-            >
-              {truncateTabLabel(cat.name)}
-            </button>
-          ))}
-          <button
-            type="button"
-            className="hsk-exam-level-tab is-add"
-            title="新建分类"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowNewHskCategoryModal(true);
-            }}
-          >
-            ＋
-          </button>
-          <button type="button" className="hsk-exam-version-btn" onClick={() => showToast('版本历史功能即将上线')}>
-            版本历史
-          </button>
         </div>
       )}
 
@@ -1469,22 +1545,22 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
         </div>
       )}
 
-      {primaryTab === 'KLZW' && !klzwTest && getKlzwTemplatesByBook(klzwBook).length > 0 && (
+      {primaryTab === 'KLZW' && !klzwTest && klzwTemplatesForBook.length > 0 && (
         <div className="hsk-exam-klzw-grid hsk-exam-klzw-grid-4">
-          {KLZW_BOOK1_TESTS.map((test, index) => (
+          {klzwTemplatesForBook.map((template, index) => (
             <KlzwTestCard
-              key={test.key}
-              label={test.label}
-              icon={test.icon}
+              key={template.id}
+              label={template.name}
+              icon={KLZW_BOOK1_TESTS[index]?.icon ?? '📋'}
               colorIndex={index}
-              template={getKlzwTemplate(test.key, klzwBook)}
-              onClick={() => setKlzwTest(test.key)}
+              template={template}
+              onClick={() => setKlzwTest(template.level as KlzwTestKey)}
             />
           ))}
         </div>
       )}
 
-      {primaryTab === 'KLZW' && !klzwTest && getKlzwTemplatesByBook(klzwBook).length === 0 && (
+      {primaryTab === 'KLZW' && !klzwTest && klzwTemplatesForBook.length === 0 && (
         <>
           <div className="hsk-exam-empty">
             <p>{KLZW_BOOK_TABS.find((b) => b.id === klzwBook)?.label ?? `第${klzwBook}册`}暂无模板</p>
@@ -1495,68 +1571,35 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
       )}
 
       {primaryTab === 'custom' && (
-        <>
-          <section className="hsk-exam-assess-section">
-            <div className="hsk-exam-assess-section-head">
-              <h2 className="hsk-exam-assess-section-title">测评类模板</h2>
-              <p className="hsk-exam-assess-section-desc">
-                入门诊断、多元智能、学习风格、MBTI 等非 HSK 标准卷，统一在此入口配置
-              </p>
+        <section className="hsk-exam-custom-section">
+          <div className="hsk-exam-custom-toolbar">
+            <div>
+              <h2 className="hsk-exam-custom-section-title">自定义模板</h2>
+              <p className="hsk-exam-custom-section-desc">从 HSK1 或 HSK2 官方模板复制后编辑</p>
             </div>
-            <div className="hsk-exam-assess-grid">
-              {ASSESSMENT_TEMPLATE_ENTRIES.map((entry) => (
-                <AssessmentTemplateCard
-                  key={entry.panel}
-                  title={entry.title}
-                  description={entry.description}
-                  icon={entry.icon}
-                  onConfigure={() => onNavigate?.(entry.panel)}
+          </div>
+
+          {customTemplates.length === 0 ? (
+            <div className="hsk-exam-empty hsk-exam-empty-compact">
+              <p className="muted">暂无自定义模板，请到官方模板页复制 HSK1 或 HSK2 模板</p>
+            </div>
+          ) : (
+            <div className="hsk-exam-custom-grid">
+              {customTemplates.map((tpl) => (
+                <CustomTemplateCard
+                  key={tpl.id}
+                  template={tpl}
+                  onOpen={() => setEditingCustom(structuredClone(tpl))}
+                  onDelete={() => handleDeleteCustomCard(tpl)}
                 />
               ))}
             </div>
-          </section>
-
-          <section className="hsk-exam-custom-section">
-            <div className="hsk-exam-custom-toolbar">
-              <div>
-                <h2 className="hsk-exam-custom-section-title">试卷自定义模板</h2>
-                <p className="hsk-exam-custom-section-desc">基于 HSK / 快乐中文结构复制的可编辑试卷模板</p>
-              </div>
-              <button
-                type="button"
-                className="hsk-exam-btn-primary"
-                style={{ background: CUSTOM_COLORS.gradient }}
-                onClick={handleCreateCustom}
-              >
-                + 新建自定义模板
-              </button>
-            </div>
-
-            {customTemplates.length === 0 ? (
-              <div className="hsk-exam-empty hsk-exam-empty-compact">
-                <p className="muted">暂无试卷自定义模板，可从官方模板复制或新建空白模板</p>
-              </div>
-            ) : (
-              <div className="hsk-exam-custom-grid">
-                {customTemplates.map((tpl) => (
-                  <CustomTemplateCard
-                    key={tpl.id}
-                    template={tpl}
-                    onEdit={() => setEditingCustom(structuredClone(tpl))}
-                    onDelete={() => handleDeleteCustomCard(tpl)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
+          )}
+        </section>
       )}
 
       {primaryTab === 'custom' ? null : primaryTab === 'KLZW' && !klzwTest ? null : viewingTemplate ? (
-        <>
-          <TemplateDetailPanel template={viewingTemplate} typeDefs={store.questionTypes} readOnly />
-          <CreateTemplateZone onClick={openNewTemplateModal} />
-        </>
+        <TemplateDetailPanel template={viewingTemplate} typeDefs={store.questionTypes} readOnly />
       ) : primaryTab === 'HSK' && typeof hskActiveTab === 'string' ? (
         <>
           <div className="hsk-exam-empty">
@@ -1574,8 +1617,11 @@ export function HskExamManager({ onNavigate }: { onNavigate?: (id: PanelId) => v
       {copyModal && (
         <CopyTemplateModal
           template={copyModal.template}
+          pending={copyingTemplate}
           onConfirm={handleCopyConfirm}
-          onClose={() => setCopyModal(null)}
+          onClose={() => {
+            if (!copyingTemplate) setCopyModal(null);
+          }}
         />
       )}
 

@@ -69,7 +69,6 @@ export function HskDeliveryPreview({ delivery, error }: Props) {
                 <th>名称 / 内容摘要</th>
                 <th style={{ width: 100 }}>部分</th>
                 <th style={{ width: 72 }}>分值</th>
-                <th style={{ width: 72 }}>答案</th>
               </tr>
             </thead>
             <tbody>
@@ -83,11 +82,6 @@ export function HskDeliveryPreview({ delivery, error }: Props) {
                   </td>
                   <td style={{ fontSize: 13 }}>{q.section}</td>
                   <td>{q.score}</td>
-                  <td style={{ fontSize: 13 }}>
-                    {q.questions?.length
-                      ? `${q.questions.length} 小题`
-                      : q.answer ?? '—'}
-                  </td>
                 </tr>
               ))}
             </tbody>

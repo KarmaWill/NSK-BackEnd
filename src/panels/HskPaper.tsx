@@ -1,29 +1,69 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { HskPaperComposer } from '../components/HskPaperComposer';
 import { HskPaperPreviewPage } from '../components/HskPaperPreviewPage';
 import { useHskStore } from '../hooks/useHskStore';
 import {
-  createPaperFromTemplate,
-  deletePaper,
-  loadHskStore,
-  publishPaper,
-  savePaper,
-  unpublishPaper,
+  syncQuestionBankLocalCache,
+  syncTemplatesPapersLocalCache,
 } from '../stores/hskExams';
-import type { HskComposedPaper, HskPaperTemplate } from '../types/hskExams';
+import {
+  createPaperFromTemplateApi,
+  deletePaper as deletePaperApi,
+  getPaperExamImpactCount,
+  listPapers,
+  listQuestions,
+  listTemplates,
+  listQuestionTypes,
+  patchPaper,
+  publishPaperApi,
+  unpublishPaperApi,
+} from '../services/assessmentExamBankApi';
+import { decidePaperDelete } from '../utils/hskPaperDeleteDecision';
+import { removePaperFromList, upsertPaperInList } from '../utils/hskPaperListState';
+import type {
+  HskComposedPaper,
+  HskPaperTemplate,
+  HskPublishStatus,
+  HskQuestionRow,
+  HskQuestionTypeDef,
+} from '../types/hskExams';
 import { validateDeliveryCompile } from '../utils/hskCompileDelivery';
 import { countFilledSlots, countScoringSlots } from '../utils/hskPaperUtils';
+import { isTemplateAvailableForPaper } from '../utils/hskPhaseOneScope';
 
 type ListStep = 'list' | 'selectTemplate';
 
 type DeleteModal = {
   paper: HskComposedPaper;
-  linkedExams: number;
 };
 
 type PublishModal =
   | { type: 'incomplete'; paper: HskComposedPaper; emptySlots: number }
   | { type: 'unpublish'; paper: HskComposedPaper; linkedExams: number };
+
+type PaperMutationAction = 'save' | 'publish' | 'unpublish' | 'delete';
+
+type PendingPaperMutation = {
+  paperId: string;
+  action: PaperMutationAction;
+};
+
+let paperMutationInFlight = false;
+let templateCreationInFlight = false;
+let paperOperationCompletion: Promise<void> | null = null;
+let resolvePaperOperation: (() => void) | null = null;
+
+function startPaperOperation() {
+  paperOperationCompletion = new Promise<void>((resolve) => {
+    resolvePaperOperation = resolve;
+  });
+}
+
+function finishPaperOperation() {
+  resolvePaperOperation?.();
+  resolvePaperOperation = null;
+  paperOperationCompletion = null;
+}
 
 function formatPaperDate(iso?: string): string {
   if (!iso) return '—';
@@ -53,8 +93,19 @@ function countEmptySlots(paper: HskComposedPaper): number {
   return Math.max(0, scoring - filled);
 }
 
+function templateStatusFromList(templates: HskPaperTemplate[]): Record<string, HskPublishStatus> {
+  return templates.reduce<Record<string, HskPublishStatus>>((acc, template) => {
+    acc[template.id] = template.status;
+    return acc;
+  }, {});
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
 export function HskPaper() {
-  const { store, refresh } = useHskStore();
+  const { store } = useHskStore({ initialServerRefresh: false });
   const [listStep, setListStep] = useState<ListStep>('list');
   const [toast, setToast] = useState<string | null>(null);
   const [editingPaper, setEditingPaper] = useState<HskComposedPaper | null>(null);
@@ -62,27 +113,131 @@ export function HskPaper() {
   const [deleteModal, setDeleteModal] = useState<DeleteModal | null>(null);
   const [publishModal, setPublishModal] = useState<PublishModal | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [paperList, setPaperList] = useState<HskComposedPaper[]>(() => store.papers);
+  const [templateList, setTemplateList] = useState<HskPaperTemplate[]>(() => store.templates);
+  const [questionList, setQuestionList] = useState<HskQuestionRow[]>(() => store.questions);
+  const [questionTypeList, setQuestionTypeList] = useState<HskQuestionTypeDef[]>(() => store.questionTypes);
+  const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null);
+  const [pendingPaperMutation, setPendingPaperMutation] = useState<PendingPaperMutation | null>(null);
+  const [hydrating, setHydrating] = useState(true);
+  const [paperLoadError, setPaperLoadError] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const creatingTemplateRef = useRef(false);
+  const paperMutationRef = useRef(false);
+  const paperListRef = useRef<HskComposedPaper[]>(store.papers);
+  const paperDataEpochRef = useRef(0);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2200);
   };
 
+  const applyPaperList = (papers: HskComposedPaper[]) => {
+    paperListRef.current = papers;
+    setPaperList(papers);
+    try {
+      syncTemplatesPapersLocalCache({ papers });
+    } catch {
+      // The API response remains visible in memory even when browser persistence is unavailable.
+    }
+  };
+
+  const cachePaper = (paper: HskComposedPaper) => {
+    paperDataEpochRef.current += 1;
+    applyPaperList(upsertPaperInList(paperListRef.current, paper));
+  };
+
+  const beginPaperMutation = (paperId: string, action: PaperMutationAction): boolean => {
+    if (
+      hydrating
+      ||
+      paperMutationInFlight
+      || templateCreationInFlight
+      || paperMutationRef.current
+      || creatingTemplateRef.current
+    ) return false;
+    paperMutationInFlight = true;
+    startPaperOperation();
+    paperMutationRef.current = true;
+    setPendingPaperMutation({ paperId, action });
+    return true;
+  };
+
+  const endPaperMutation = () => {
+    paperMutationInFlight = false;
+    finishPaperOperation();
+    paperMutationRef.current = false;
+    setPendingPaperMutation(null);
+  };
+
+  useEffect(() => {
+    let active = true;
+    const loadEpoch = paperDataEpochRef.current;
+    setHydrating(true);
+    setPaperLoadError(false);
+    const pendingOperation = paperOperationCompletion;
+    void (pendingOperation ?? Promise.resolve())
+      .then(() => Promise.allSettled([listTemplates(), listPapers(), listQuestions(), listQuestionTypes()]))
+      .then(([templatesResult, papersResult, questionsResult, questionTypesResult]) => {
+        if (!active) return;
+        if (papersResult.status === 'rejected') throw papersResult.reason;
+        const papers = papersResult.value;
+        const templates = templatesResult.status === 'fulfilled' ? templatesResult.value : undefined;
+        const questions = questionsResult.status === 'fulfilled' ? questionsResult.value : undefined;
+        const questionTypes = questionTypesResult.status === 'fulfilled' ? questionTypesResult.value : undefined;
+        if (templates) setTemplateList(templates);
+        if (questions) setQuestionList(questions);
+        if (questionTypes) setQuestionTypeList(questionTypes);
+        const paperSnapshotIsCurrent = loadEpoch === paperDataEpochRef.current;
+        if (paperSnapshotIsCurrent) {
+          paperListRef.current = papers;
+          setPaperList(papers);
+        }
+        try {
+          syncQuestionBankLocalCache({ questions, questionTypes });
+          syncTemplatesPapersLocalCache({
+            templates,
+            ...(templates ? { templateStatus: templateStatusFromList(templates) } : {}),
+            ...(paperSnapshotIsCurrent ? { papers } : {}),
+          });
+        } catch {
+          // The complete server snapshot is already available in component memory.
+        }
+        if (
+          templatesResult.status === 'rejected'
+          || questionsResult.status === 'rejected'
+          || questionTypesResult.status === 'rejected'
+        ) {
+          showToast('部分辅助数据加载失败，试卷列表已更新');
+        }
+        setHydrating(false);
+      })
+      .catch((err) => {
+        if (active) {
+          setPaperLoadError(true);
+          showToast(errorMessage(err, '试卷列表加载失败'));
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [reloadNonce]);
+
   const sortedPapers = useMemo(
     () =>
-      [...store.papers].sort((a, b) => {
+      [...paperList].sort((a, b) => {
         const at = new Date(a.createdAt ?? a.updatedAt).getTime();
         const bt = new Date(b.createdAt ?? b.updatedAt).getTime();
         return bt - at;
       }),
-    [store.papers],
+    [paperList],
   );
 
   const filteredPapers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return sortedPapers;
     return sortedPapers.filter((paper) => {
-      const tpl = store.templates.find((t) => t.id === paper.templateId);
+      const tpl = templateList.find((t) => t.id === paper.templateId);
       return (
         paper.id.toLowerCase().includes(q) ||
         paper.name.toLowerCase().includes(q) ||
@@ -90,26 +245,35 @@ export function HskPaper() {
         tpl?.name.toLowerCase().includes(q)
       );
     });
-  }, [searchQuery, sortedPapers, store.templates]);
+  }, [searchQuery, sortedPapers, templateList]);
 
   const publishedCount = sortedPapers.filter((p) => p.status === 'published').length;
 
+  const availableTemplates = useMemo(
+    () => templateList.filter(isTemplateAvailableForPaper),
+    [templateList],
+  );
+
   const getTemplate = (paper: HskComposedPaper) =>
-    store.templates.find((t) => t.id === paper.templateId);
+    templateList.find((t) => t.id === paper.templateId);
 
-  const getLinkedExamCount = (paperId: string) =>
-    store.exams.filter((e) => e.paperId === paperId).length;
-
-  const handleTogglePublish = (paper: HskComposedPaper) => {
+  const handleTogglePublish = async (paper: HskComposedPaper) => {
     if (paper.status === 'published') {
-      const linkedExams = getLinkedExamCount(paper.id);
-      if (linkedExams > 0) {
-        setPublishModal({ type: 'unpublish', paper, linkedExams });
-        return;
+      if (!beginPaperMutation(paper.id, 'unpublish')) return;
+      try {
+        const linkedExams = await getPaperExamImpactCount(paper.id);
+        if (linkedExams > 0) {
+          setPublishModal({ type: 'unpublish', paper, linkedExams });
+          return;
+        }
+        const unpublished = await unpublishPaperApi(paper.id);
+        cachePaper(unpublished);
+        showToast('已取消发布');
+      } catch (err) {
+        showToast(errorMessage(err, '试卷取消发布失败'));
+      } finally {
+        endPaperMutation();
       }
-      unpublishPaper(store, paper.id);
-      refresh();
-      showToast('已取消发布');
       return;
     }
     const emptySlots = countEmptySlots(paper);
@@ -117,47 +281,92 @@ export function HskPaper() {
       setPublishModal({ type: 'incomplete', paper, emptySlots });
       return;
     }
-    const err = publishPaper(loadHskStore(), paper.id);
-    if (err) {
-      showToast(err);
-      return;
+    if (!beginPaperMutation(paper.id, 'publish')) return;
+    try {
+      const published = await publishPaperApi(paper.id);
+      cachePaper(published);
+      showToast('试卷已发布');
+    } catch (err) {
+      showToast(errorMessage(err, '试卷发布失败'));
+    } finally {
+      endPaperMutation();
     }
-    refresh();
-    showToast('试卷已发布');
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteModal) return;
-    deletePaper(store, deleteModal.paper.id);
-    refresh();
-    setDeleteModal(null);
-    showToast(`已删除试卷 ${deleteModal.paper.id}`);
+    if (!beginPaperMutation(deleteModal.paper.id, 'delete')) return;
+    const paper = deleteModal.paper;
+    try {
+      await deletePaperApi(paper.id);
+      paperDataEpochRef.current += 1;
+      applyPaperList(removePaperFromList(paperListRef.current, paper.id));
+      setDeleteModal(null);
+      showToast(`已删除试卷 ${paper.id}`);
+    } catch (err) {
+      showToast(errorMessage(err, '试卷删除失败'));
+    } finally {
+      endPaperMutation();
+    }
   };
 
-  const handleCreateFromTemplate = (template: HskPaperTemplate) => {
-    const paper = createPaperFromTemplate(store, template.id);
-    if (!paper) {
-      showToast('模板不存在');
-      return;
+  const handleCreateFromTemplate = async (template: HskPaperTemplate) => {
+    if (
+      hydrating
+      ||
+      templateCreationInFlight
+      || paperMutationInFlight
+      || creatingTemplateRef.current
+      || paperMutationRef.current
+    ) return;
+    templateCreationInFlight = true;
+    startPaperOperation();
+    creatingTemplateRef.current = true;
+    setCreatingTemplateId(template.id);
+    try {
+      const paper = await createPaperFromTemplateApi({ templateId: template.id });
+      setListStep('list');
+      setEditingPaper(structuredClone(paper));
+      showToast('已创建试卷，请从题库选题');
+      cachePaper(paper);
+    } catch (err) {
+      showToast(errorMessage(err, '试卷创建失败'));
+    } finally {
+      templateCreationInFlight = false;
+      finishPaperOperation();
+      creatingTemplateRef.current = false;
+      setCreatingTemplateId(null);
     }
-    refresh();
-    setListStep('list');
-    setEditingPaper(structuredClone(paper));
-    showToast('已创建试卷，请从题库选题');
   };
+
+  const confirmUnpublish = async (paper: HskComposedPaper) => {
+    if (!beginPaperMutation(paper.id, 'unpublish')) return;
+    try {
+      const unpublished = await unpublishPaperApi(paper.id);
+      cachePaper(unpublished);
+      setPublishModal(null);
+      showToast('已取消发布');
+    } catch (err) {
+      showToast(errorMessage(err, '试卷取消发布失败'));
+    } finally {
+      endPaperMutation();
+    }
+  };
+
+  const listBusy = hydrating || pendingPaperMutation !== null || creatingTemplateId !== null;
 
   if (previewPaper) {
     const template = getTemplate(previewPaper);
     const compileWarning = template
-      ? validateDeliveryCompile(previewPaper, store.questions, template)
+      ? validateDeliveryCompile(previewPaper, questionList, template)
       : '未找到关联模板';
     return (
       <>
         <HskPaperPreviewPage
           paper={previewPaper}
           template={template}
-          questions={store.questions}
-          typeDefs={store.questionTypes}
+          questions={questionList}
+          typeDefs={questionTypeList}
           compileWarning={compileWarning}
           onBack={() => setPreviewPaper(null)}
         />
@@ -168,36 +377,53 @@ export function HskPaper() {
 
   if (editingPaper) {
     const template = getTemplate(editingPaper);
-    const compileErr = template ? validateDeliveryCompile(editingPaper, store.questions, template) : null;
+    const compileErr = template ? validateDeliveryCompile(editingPaper, questionList, template) : null;
     return (
       <>
         <HskPaperComposer
           paper={editingPaper}
           template={template}
-          questions={store.questions}
-          typeDefs={store.questionTypes}
+          questions={questionList}
+          typeDefs={questionTypeList}
           compileError={compileErr}
+          busyAction={pendingPaperMutation?.paperId === editingPaper.id
+            && (pendingPaperMutation.action === 'save' || pendingPaperMutation.action === 'publish')
+            ? pendingPaperMutation.action
+            : null}
           onBack={() => setEditingPaper(null)}
           onChange={setEditingPaper}
-          onSaveDraft={() => {
-            savePaper(store, { ...editingPaper, status: 'draft' });
-            refresh();
-            showToast('组卷草稿已保存');
+          onSaveDraft={async () => {
+            if (!beginPaperMutation(editingPaper.id, 'save')) return;
+            try {
+              const saved = await patchPaper(editingPaper.id, { ...editingPaper, status: 'draft' });
+              cachePaper(saved);
+              setEditingPaper(saved);
+              showToast('组卷草稿已保存');
+            } catch (err) {
+              showToast(errorMessage(err, '组卷草稿保存失败'));
+            } finally {
+              endPaperMutation();
+            }
           }}
-          onPublish={() => {
+          onPublish={async () => {
             if (compileErr) {
               showToast(compileErr);
               return;
             }
-            savePaper(store, editingPaper);
-            const err = publishPaper(loadHskStore(), editingPaper.id);
-            if (err) {
-              showToast(err);
-              return;
+            if (!beginPaperMutation(editingPaper.id, 'publish')) return;
+            try {
+              const saved = await patchPaper(editingPaper.id, editingPaper);
+              cachePaper(saved);
+              setEditingPaper(saved);
+              const published = await publishPaperApi(editingPaper.id);
+              cachePaper(published);
+              showToast('试卷已发布');
+              setEditingPaper(null);
+            } catch (err) {
+              showToast(errorMessage(err, '试卷发布失败'));
+            } finally {
+              endPaperMutation();
             }
-            refresh();
-            showToast('试卷已发布');
-            setEditingPaper(null);
           }}
         />
         {toast && <div className="hsk-toast show">{toast}</div>}
@@ -210,7 +436,12 @@ export function HskPaper() {
       <div className="hsk-paper-mgmt">
         <div className="hsk-paper-mgmt-header">
           <div className="hsk-paper-mgmt-header-main">
-            <button type="button" className="hsk-paper-back" onClick={() => setListStep('list')}>
+            <button
+              type="button"
+              className="hsk-paper-back"
+              disabled={hydrating || creatingTemplateId !== null}
+              onClick={() => setListStep('list')}
+            >
               ← 返回列表
             </button>
             <h2 className="hsk-paper-mgmt-title">选择试卷模板</h2>
@@ -219,20 +450,26 @@ export function HskPaper() {
         </div>
         <div className="hsk-paper-mgmt-body">
         <div className="hsk-paper-template-grid">
-          {store.templates.length === 0 && (
-            <div className="hsk-paper-empty">暂无模板，请先在考试管理中配置试卷模板。</div>
+          {availableTemplates.length === 0 && (
+            <div className="hsk-paper-empty">暂无可用模板，请先在考试管理中发布 HSK1/2 模板。</div>
           )}
-          {store.templates.map((tpl) => (
+          {availableTemplates.map((tpl) => (
             <button
               key={tpl.id}
               type="button"
               className="hsk-paper-template-card"
+              disabled={hydrating || creatingTemplateId !== null}
+              aria-busy={creatingTemplateId === tpl.id}
               onClick={() => handleCreateFromTemplate(tpl)}
             >
               <div className="hsk-paper-template-card-top">
                 <span className="hsk-paper-template-level">{tpl.level}</span>
                 <span className={`hsk-paper-template-status${tpl.status === 'published' ? ' is-published' : ''}`}>
-                  {tpl.status === 'published' ? '已发布' : '草稿'}
+                  {creatingTemplateId === tpl.id
+                    ? '创建中...'
+                    : tpl.status === 'published'
+                      ? '已发布'
+                      : '草稿'}
                 </span>
               </div>
               <h3>{tpl.name}</h3>
@@ -258,6 +495,15 @@ export function HskPaper() {
           </p>
         </div>
         <div className="hsk-paper-mgmt-header-actions">
+          {paperLoadError && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setReloadNonce((value) => value + 1)}
+            >
+              重新加载
+            </button>
+          )}
           <input
             type="search"
             className="hsk-paper-mgmt-search"
@@ -265,7 +511,12 @@ export function HskPaper() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <button type="button" className="hsk-paper-create-btn" onClick={() => setListStep('selectTemplate')}>
+          <button
+            type="button"
+            className="hsk-paper-create-btn"
+            disabled={listBusy}
+            onClick={() => setListStep('selectTemplate')}
+          >
             + 新建试卷
           </button>
         </div>
@@ -323,14 +574,27 @@ export function HskPaper() {
                   </td>
                   <td className="col-score">{paper.totalScore} 分</td>
                   <td className="col-publish">
-                    <label className="status-toggle" title={paper.status === 'published' ? '已发布' : '草稿'}>
+                    <div className="hsk-paper-publish-control">
+                    <label
+                      className="status-toggle"
+                      title={pendingPaperMutation?.paperId === paper.id
+                        ? pendingPaperMutation.action === 'publish' ? '发布中' : '撤回中'
+                        : paper.status === 'published' ? '已发布' : '草稿'}
+                    >
                       <input
                         type="checkbox"
                         checked={paper.status === 'published'}
+                        disabled={listBusy}
                         onChange={() => handleTogglePublish(paper)}
                       />
                       <span className="toggle-slider" />
                     </label>
+                    {pendingPaperMutation?.paperId === paper.id && pendingPaperMutation.action !== 'delete' && (
+                      <span className="hsk-paper-pending-label">
+                        {pendingPaperMutation.action === 'publish' ? '发布中...' : '撤回中...'}
+                      </span>
+                    )}
+                    </div>
                   </td>
                   <td className="col-date">{formatPaperDate(paper.createdAt ?? paper.updatedAt)}</td>
                   <td className="col-actions">
@@ -345,6 +609,7 @@ export function HskPaper() {
                       <button
                         type="button"
                         className="hsk-paper-action hsk-paper-action-compose"
+                        disabled={listBusy}
                         onClick={() => setEditingPaper(structuredClone(paper))}
                       >
                         组卷编辑
@@ -357,12 +622,18 @@ export function HskPaper() {
                         <button
                           type="button"
                           className="hsk-paper-action hsk-paper-action-danger"
-                          onClick={() =>
-                            setDeleteModal({
-                              paper,
-                              linkedExams: getLinkedExamCount(paper.id),
-                            })
-                          }
+                          disabled={listBusy}
+                          onClick={() => {
+                            const decision = decidePaperDelete({
+                              paperStatus: paper.status,
+                              localLinkedExamCount: 0,
+                            });
+                            if (!decision.shouldCallApi) {
+                              showToast(decision.blockReason ?? '当前试卷不可删除');
+                              return;
+                            }
+                            setDeleteModal({ paper });
+                          }}
                         >
                           删除
                         </button>
@@ -383,24 +654,34 @@ export function HskPaper() {
       </div>
 
       {deleteModal && (
-        <div className="hsk-paper-modal-overlay" onClick={() => setDeleteModal(null)} role="presentation">
+        <div
+          className="hsk-paper-modal-overlay"
+          onClick={() => {
+            if (!pendingPaperMutation) setDeleteModal(null);
+          }}
+          role="presentation"
+        >
           <div className="hsk-paper-modal" onClick={(e) => e.stopPropagation()} role="dialog">
             <h3 className="hsk-paper-modal-title">删除试卷「{deleteModal.paper.name}」</h3>
-            {deleteModal.linkedExams > 0 ? (
-              <div className="hsk-paper-modal-warning">
-                该试卷已关联 <strong>{deleteModal.linkedExams}</strong> 场考试。删除后相关考试将一并移除，确认删除？
-              </div>
-            ) : (
-              <p className="hsk-paper-modal-text">
-                确认删除试卷「{deleteModal.paper.id}」？此操作不可恢复。
-              </p>
-            )}
+            <p className="hsk-paper-modal-text">
+              确认删除试卷「{deleteModal.paper.id}」？若该试卷已被真实考试引用，后端将返回影响范围并阻止删除。
+            </p>
             <div className="hsk-paper-modal-actions">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDeleteModal(null)}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={pendingPaperMutation !== null}
+                onClick={() => setDeleteModal(null)}
+              >
                 取消
               </button>
-              <button type="button" className="hsk-paper-modal-delete" onClick={confirmDelete}>
-                确认删除
+              <button
+                type="button"
+                className="hsk-paper-modal-delete"
+                disabled={pendingPaperMutation !== null}
+                onClick={confirmDelete}
+              >
+                {pendingPaperMutation?.action === 'delete' ? '删除中...' : '确认删除'}
               </button>
             </div>
           </div>
@@ -434,27 +715,34 @@ export function HskPaper() {
       )}
 
       {publishModal?.type === 'unpublish' && (
-        <div className="hsk-paper-modal-overlay" onClick={() => setPublishModal(null)} role="presentation">
+        <div
+          className="hsk-paper-modal-overlay"
+          onClick={() => {
+            if (!pendingPaperMutation) setPublishModal(null);
+          }}
+          role="presentation"
+        >
           <div className="hsk-paper-modal" onClick={(e) => e.stopPropagation()} role="dialog">
             <h3 className="hsk-paper-modal-title">取消发布</h3>
             <div className="hsk-paper-modal-warning">
               该试卷已关联 <strong>{publishModal.linkedExams}</strong> 场考试。取消发布后，相关考试可能需要重新配置。
             </div>
             <div className="hsk-paper-modal-actions">
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPublishModal(null)}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={pendingPaperMutation !== null}
+                onClick={() => setPublishModal(null)}
+              >
                 取消
               </button>
               <button
                 type="button"
                 className="hsk-paper-modal-delete"
-                onClick={() => {
-                  unpublishPaper(store, publishModal.paper.id);
-                  refresh();
-                  setPublishModal(null);
-                  showToast('已取消发布');
-                }}
+                disabled={pendingPaperMutation !== null}
+                onClick={() => void confirmUnpublish(publishModal.paper)}
               >
-                确认取消发布
+                {pendingPaperMutation?.action === 'unpublish' ? '撤回中...' : '确认取消发布'}
               </button>
             </div>
           </div>

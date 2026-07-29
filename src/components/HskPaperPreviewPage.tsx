@@ -160,7 +160,9 @@ export function HskPaperPreviewPage({
                 <div className="hsk-paper-preview-question-head-left">
                   <span className="hsk-paper-preview-qnum">{safeIdx + 1}</span>
                   <span className="hsk-paper-preview-qmeta">
-                    {currentItem.sectionName} · {currentItem.slot.scorePerQuestion} 分
+                    {currentItem.sectionName} · {paper.scoringMode === 'equal_ratio'
+                      ? '等权计分'
+                      : `${currentItem.slot.scorePerQuestion} 分`}
                   </span>
                 </div>
                 {currentTypeDef && (

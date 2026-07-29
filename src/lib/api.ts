@@ -1,8 +1,8 @@
 /** 开发模式默认走 Vite 同源代理 /api → localhost:3000，局域网访问 iPad 也能连 Mac 上的后端 */
-import type { ExamDeliveryPackage } from '../types/hskExams';
+import type { ExamDeliveryPackage, HskExamStoreSnapshot } from '../types/hskExams';
 
 function resolveApiBase(): string {
-  const env = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
+  const env = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
   if (env) return env;
   if (import.meta.env.DEV) return '';
   return 'http://localhost:3000';
@@ -10,8 +10,22 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+export type ApiFetchOptions = RequestInit;
+
+type JavaResponse<T> = {
+  code: number;
+  msg?: string;
+  data?: T;
+};
+
+export type JavaPageResult<T> = { total: number; records: T[] };
+
 export function usesDevApiProxy(): boolean {
-  return import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL;
+  return Boolean(import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL);
+}
+
+export function usesTrustedNetworkAuth(): boolean {
+  return import.meta.env.VITE_AUTH_MODE === 'trusted-network';
 }
 
 export type ProductCode = 'hsk_web' | 'tablet_app';
@@ -30,10 +44,32 @@ export function getApiBase(): string {
   return 'http://localhost:3000';
 }
 
-function formatFetchError(err: unknown, path: string): Error {
+function isAbsoluteUrl(path: string): boolean {
+  return /^https?:\/\//i.test(path);
+}
+
+function joinPath(base: string, path: string): string {
+  if (!base) return path || '';
+  if (!path) return base;
+  return `${base.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+}
+
+function withPrefix(path: string, prefix: string): string {
+  if (isAbsoluteUrl(path)) return path;
+  return joinPath(prefix || '', path);
+}
+
+function resolveRequestUrl(path: string, base = API_BASE): string {
+  if (isAbsoluteUrl(path)) return path;
+  return base ? joinPath(base, path) : path;
+}
+
+function formatFetchError(err: unknown, path: string, targetUrl?: string): Error {
   if (err instanceof Error && /failed to fetch|networkerror|load failed/i.test(err.message)) {
-    const target = `${getApiBase()}${path}`;
-    const hint = usesDevApiProxy()
+    const target = targetUrl || `${getApiBase()}${path}`;
+    const hint = targetUrl
+      ? `请确认 API 可访问：${targetUrl}`
+      : usesDevApiProxy()
       ? '请确认 API 后端已在 Mac 本机 3000 端口运行（Vite 会把 /api 转发过去）。'
       : `请确认 API 可访问：${getApiBase()}`;
     return new Error(`无法连接 API（${target}）。${hint}`);
@@ -69,16 +105,26 @@ export function setActiveProduct(code: ProductCode): void {
 
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {},
+): Promise<T> {
+  return fetchJson<T>(path, options);
+}
+
+async function fetchJson<T>(
+  path: string,
+  options: ApiFetchOptions = {},
+  base = API_BASE,
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  if (!headers.has('Content-Type') && options.body) {
+  if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
-  const token = getToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (!usesTrustedNetworkAuth()) {
+    const token = getToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  }
 
-  const url = API_BASE ? `${API_BASE}${path}` : path;
+  const url = resolveRequestUrl(path, base);
 
   let res: Response;
   try {
@@ -88,14 +134,59 @@ export async function apiFetch<T>(
       credentials: 'include',
     });
   } catch (err) {
-    throw formatFetchError(err, path);
+    throw formatFetchError(err, path, url);
   }
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `Request failed (${res.status})`);
+    const errorData = data as { error?: string; msg?: string };
+    throw new Error(errorData.error || errorData.msg || `Request failed (${res.status})`);
+  }
+  if (data && typeof data === 'object' && typeof (data as JavaResponse<T>).code === 'number') {
+    const javaData = data as JavaResponse<T>;
+    if (javaData.code === 0) return javaData.data as T;
+    throw new Error(javaData.msg || '接口请求失败');
   }
   return data as T;
+}
+
+function resolveJavaAdminPath(path: string): { path: string; base: string } {
+  return {
+    path: withPrefix(path, import.meta.env.VITE_CLINGO_ADMIN_PATH_PREFIX || '/admin'),
+    base: (import.meta.env.VITE_CLINGO_ADMIN_API_BASE_URL || '').replace(/\/$/, ''),
+  };
+}
+
+function resolveJavaExamPath(path: string): { path: string; base: string } {
+  return {
+    path: withPrefix(path, import.meta.env.VITE_CLINGO_EXAM_PATH_PREFIX || '/api'),
+    base: (import.meta.env.VITE_CLINGO_EXAM_API_BASE_URL || '').replace(/\/$/, ''),
+  };
+}
+
+function withJavaAuthHeader(options: ApiFetchOptions = {}): ApiFetchOptions {
+  const headers = new Headers(options.headers);
+  if (import.meta.env.DEV && !usesTrustedNetworkAuth()) {
+    const devKey = import.meta.env.VITE_CLINGO_DEV_KEY;
+    if (devKey) {
+      headers.set(import.meta.env.VITE_CLINGO_AUTH_HEADER || 'X-Clingo-Dev-Key', devKey);
+    }
+  }
+  return { ...options, headers };
+}
+
+export function unwrapPageRecords<T>(page: JavaPageResult<T> | T[]): T[] {
+  return Array.isArray(page) ? page : page.records || [];
+}
+
+export function javaAdminFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+  const resolved = resolveJavaAdminPath(path);
+  return fetchJson<T>(resolved.path, withJavaAuthHeader(options), resolved.base);
+}
+
+export function javaExamFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+  const resolved = resolveJavaExamPath(path);
+  return fetchJson<T>(resolved.path, withJavaAuthHeader(options), resolved.base);
 }
 
 export type AuthUser = { id: string; username: string; role: string };
@@ -284,5 +375,18 @@ export async function deleteCmsBanner(id: string): Promise<void> {
 }
 
 export async function fetchHskExamDelivery(examId: string): Promise<ExamDeliveryPackage> {
-  return apiFetch<ExamDeliveryPackage>(`/api/hsk/exams/${encodeURIComponent(examId)}/delivery`);
+  return javaExamFetch<ExamDeliveryPackage>(`/exams/${encodeURIComponent(examId)}/delivery`);
+}
+
+export async function fetchHskSnapshot(): Promise<HskExamStoreSnapshot> {
+  return apiFetch<HskExamStoreSnapshot>('/api/hsk/snapshot');
+}
+
+export async function putHskSnapshot(
+  snapshot: HskExamStoreSnapshot,
+): Promise<{ ok: true; updatedAt: string }> {
+  return apiFetch<{ ok: true; updatedAt: string }>('/api/hsk/snapshot', {
+    method: 'PUT',
+    body: JSON.stringify(snapshot),
+  });
 }

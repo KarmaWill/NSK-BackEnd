@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type SetStateAction } from 'react';
 import { HskQuestionAudioSection } from '../components/HskQuestionAudioSection';
 import { HskQuestionEditPreview } from '../components/HskQuestionEditPreview';
 import { HskQuestionExplanationSection } from '../components/HskQuestionExplanationSection';
@@ -17,7 +17,7 @@ import {
 import { isImageOptionQuestionType, isJudgmentQuestionType, supportsQuestionExampleFlag } from '../config/hskQuestionTypeGroups';
 import { HskQuestionWorkflowProgress } from '../components/HskQuestionWorkflowProgress';
 import { defaultCompoundForType, getRegistryEntry } from '../config/hskQuestionTypeRegistry';
-import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTag, HskQuestionTagCatalog, HskQuestionTypeDef, HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
+import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTag, HskQuestionTagCatalog, HskQuestionTypeCode, HskQuestionTypeDef, HskRuntimeOption, HskSubQuestionPayload } from '../types/hskExams';
 import { DEFAULT_HSK_QUESTION_TAG_CATALOG } from '../types/hskExams';
 import { HSK_QUESTION_LEVELS } from '../types/hskExams';
 import { HskQuestionChoiceSubQuestionsEditor } from '../components/HskQuestionChoiceSubQuestionsEditor';
@@ -136,6 +136,10 @@ import {
 } from '../utils/hskW04TopicEssay';
 import { resolveQuestionImageUrl } from '../components/HskQuestionPreviewParts';
 import { levelToNumber } from '../config/hskQuestionTypes';
+import {
+  isQuestionDraftDirty,
+  shouldConfirmQuestionTypeChange,
+} from '../utils/hskQuestionTypeChangeGuard';
 
 type Props = {
   question: HskQuestionRow;
@@ -143,7 +147,7 @@ type Props = {
   tags: HskQuestionTag[];
   tagCatalog?: HskQuestionTagCatalog;
   onBack: () => void;
-  onSave: (question: HskQuestionRow) => void;
+  onSave: (question: HskQuestionRow) => void | Promise<void>;
   onGlobalTagsChange?: (nextTags: HskQuestionTag[]) => void;
   onTagCatalogChange?: (nextCatalog: HskQuestionTagCatalog) => void;
 };
@@ -174,6 +178,25 @@ const DEFAULT_IMAGE_OPTIONS: HskRuntimeOption[] = [
   { key: 'C', text: '图片C', image: '' },
 ];
 
+function buildQuestionForType(
+  source: HskQuestionRow,
+  typeId: HskQuestionTypeCode,
+): HskQuestionRow {
+  const next = {
+    ...structuredClone(source),
+    type_id: typeId,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (isJudgmentQuestionType(typeId)) return normalizeJudgmentQuestion(next);
+  if (typeId === 'R09') return normalizeR09Question(next);
+  if (typeId === 'W01') return normalizeW01Question(next);
+  if (typeId === 'W02') return normalizeW02Question(next);
+  if (typeId === 'W03') return normalizeW03Question(next);
+  if (typeId === 'W04') return normalizeW04Question(next);
+  return next;
+}
+
 export function HskQuestionEditPage({
   question,
   types,
@@ -184,16 +207,29 @@ export function HskQuestionEditPage({
   onGlobalTagsChange,
   onTagCatalogChange,
 }: Props) {
-  const [draft, setDraft] = useState<HskQuestionRow>(() => structuredClone(question));
+  const [draft, setDraftState] = useState<HskQuestionRow>(() => structuredClone(question));
+  const cleanDraftRef = useRef<HskQuestionRow>(structuredClone(question));
+  const isResettingDraftRef = useRef(false);
+  const setDraft = (next: SetStateAction<HskQuestionRow>) => {
+    if (isResettingDraftRef.current && typeof next !== 'function') {
+      cleanDraftRef.current = structuredClone(next);
+    }
+    setDraftState(next);
+  };
   const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const [tabletPreview, setTabletPreview] = useState(false);
   const [previewResetKey, setPreviewResetKey] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [explanationLangTab, setExplanationLangTab] = useState<ExplanationEditorTab>('CN');
+  const [pendingTypeId, setPendingTypeId] = useState<HskQuestionTypeCode | null>(null);
+  const isNewQuestion = !draft.question_uid.trim();
 
   useEffect(() => {
-    let next = structuredClone(question);
-    if (next.type_id === 'L02') {
+    isResettingDraftRef.current = true;
+    try {
+      let next = structuredClone(question);
+      if (next.type_id === 'L02') {
       const keys =
         next.payload?.runtimeOptions?.map((o) => o.key) ??
         (next.options ?? []).map((o) => o.label);
@@ -208,9 +244,9 @@ export function HskQuestionEditPage({
         correctAnswer: buildLegacyL02CorrectAnswer(subs, keys),
         payload: { ...next.payload, subQuestions: subs },
       });
-      return;
-    }
-    if (next.type_id === 'L05') {
+        return;
+      }
+      if (next.type_id === 'L05') {
       const subs = resolveL05SubQuestions(next.payload?.subQuestions);
       const totalScore = sumSubQuestionScores(subs);
       setDraft({
@@ -218,9 +254,9 @@ export function HskQuestionEditPage({
         score: totalScore || next.score,
         payload: { ...next.payload, subQuestions: subs },
       });
-      return;
-    }
-    if (next.type_id === 'R01') {
+        return;
+      }
+      if (next.type_id === 'R01') {
       const imageOpts =
         next.payload?.runtimeOptions ??
         (next.options ?? []).map((o) => ({ key: o.label, text: o.text, image: o.image }));
@@ -236,9 +272,9 @@ export function HskQuestionEditPage({
         },
         correctAnswer: next.correctAnswer || buildR01CorrectAnswer(pairingsFromR01CorrectAnswer(next.correctAnswer, keys.length >= 2 ? keys : ['A', 'B', 'C']), keys.length >= 2 ? keys : ['A', 'B', 'C']),
       });
-      return;
-    }
-    if (next.type_id === 'R02') {
+        return;
+      }
+      if (next.type_id === 'R02') {
       const content = next.payload?.content as
         | { questionItems?: HskR02QuestionItem[]; answerItems?: HskR02AnswerItem[] }
         | undefined;
@@ -258,9 +294,9 @@ export function HskQuestionEditPage({
           next.correctAnswer ||
           buildR02CorrectAnswer(pairingsFromR02CorrectAnswer(next.correctAnswer)),
       });
-      return;
-    }
-    if (next.type_id === 'R03') {
+        return;
+      }
+      if (next.type_id === 'R03') {
       const content = next.payload?.content as
         | {
             sentenceBlanks?: HskR03SentenceBlank[];
@@ -309,9 +345,9 @@ export function HskQuestionEditPage({
         correctAnswer:
           next.correctAnswer || buildR03CorrectAnswer(pairings, sentenceBlanks, wordItems),
       });
-      return;
-    }
-    if (next.type_id === 'R04') {
+        return;
+      }
+      if (next.type_id === 'R04') {
       const content = next.payload?.content as
         | {
             segments?: HskR04Segment[];
@@ -329,9 +365,9 @@ export function HskQuestionEditPage({
           content: { ...(next.payload?.content ?? {}), segments },
         },
       });
-      return;
-    }
-    if (next.type_id === 'R05') {
+        return;
+      }
+      if (next.type_id === 'R05') {
       const resolved = resolveR05Content(
         next.payload?.content as Parameters<typeof resolveR05Content>[0],
         next.correctAnswer,
@@ -362,9 +398,9 @@ export function HskQuestionEditPage({
           },
         },
       });
-      return;
-    }
-    if (next.type_id === 'R06') {
+        return;
+      }
+      if (next.type_id === 'R06') {
       const resolved = resolveR06Content(
         next.payload?.content as Parameters<typeof resolveR06Content>[0],
         next.correctAnswer,
@@ -382,9 +418,9 @@ export function HskQuestionEditPage({
           },
         },
       });
-      return;
-    }
-    if (next.type_id === 'R07') {
+        return;
+      }
+      if (next.type_id === 'R07') {
       const resolved = resolveR07Content(
         next.payload?.content as Parameters<typeof resolveR07Content>[0],
         next.payload?.subQuestions,
@@ -406,33 +442,36 @@ export function HskQuestionEditPage({
           },
         },
       });
-      return;
-    }
-    if (isJudgmentQuestionType(next.type_id)) {
+        return;
+      }
+      if (isJudgmentQuestionType(next.type_id)) {
       setDraft(normalizeJudgmentQuestion(next));
-      return;
-    }
-    if (next.type_id === 'R09') {
+        return;
+      }
+      if (next.type_id === 'R09') {
       setDraft(normalizeR09Question(next));
-      return;
-    }
-    if (next.type_id === 'W01') {
+        return;
+      }
+      if (next.type_id === 'W01') {
       setDraft(normalizeW01Question(next));
-      return;
-    }
-    if (next.type_id === 'W02') {
+        return;
+      }
+      if (next.type_id === 'W02') {
       setDraft(normalizeW02Question(next));
-      return;
-    }
-    if (next.type_id === 'W03') {
+        return;
+      }
+      if (next.type_id === 'W03') {
       setDraft(normalizeW03Question(next));
-      return;
-    }
-    if (next.type_id === 'W04') {
+        return;
+      }
+      if (next.type_id === 'W04') {
       setDraft(normalizeW04Question(next));
-      return;
+        return;
+      }
+      setDraft(next);
+    } finally {
+      isResettingDraftRef.current = false;
     }
-    setDraft(next);
   }, [question]);
 
   const typeDef = types.find((t) => t.id === draft.type_id);
@@ -681,6 +720,8 @@ export function HskQuestionEditPage({
 
   const showAudioSection = registry?.editorFields.includes('audio') || !!draft.audioUrl;
   const audioUrl = draft.payload?.audioUrl ?? draft.audioUrl ?? '';
+  const requiresAudio = registry?.editorFields.includes('audio') ?? false;
+  const hasMissingImageOption = usesImageOptions && imageOptions.some((option) => !option.image?.trim());
   const audioTranscript = draft.payload?.audioTranscript ?? '';
   const questionImageUrl = resolveQuestionImageUrl(draft);
 
@@ -1260,7 +1301,16 @@ export function HskQuestionEditPage({
     }));
   };
 
-  const handleSave = (status: HskQuestionStatus) => {
+  const handleSave = async (status: HskQuestionStatus) => {
+    if (saving) return;
+    if (status === 'published' && requiresAudio && !audioUrl.trim()) {
+      showToast('请上传音频文件');
+      return;
+    }
+    if (status === 'published' && hasMissingImageOption) {
+      showToast('请为每个选项配置图片');
+      return;
+    }
     if (isJudgment && !questionImageUrl) {
       showToast('请上传题目图片');
       return;
@@ -1348,7 +1398,31 @@ export function HskQuestionEditPage({
       showToast('请至少添加 1 道子题');
       return;
     }
-    onSave({ ...draft, status });
+    setSaving(true);
+    try {
+      await onSave({ ...draft, status });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isDirty = isQuestionDraftDirty(draft, cleanDraftRef.current);
+  const pendingTypeName = pendingTypeId
+    ? types.find((type) => type.id === pendingTypeId)?.name ?? pendingTypeId
+    : '';
+
+  const requestQuestionTypeChange = (typeId: HskQuestionTypeCode) => {
+    if (shouldConfirmQuestionTypeChange(draft.type_id, typeId, isDirty)) {
+      setPendingTypeId(typeId);
+      return;
+    }
+    setDraft(buildQuestionForType(draft, typeId));
+  };
+
+  const discardDraftAndChangeType = () => {
+    if (!pendingTypeId) return;
+    setDraft(buildQuestionForType(cleanDraftRef.current, pendingTypeId));
+    setPendingTypeId(null);
   };
 
   const exampleFieldEditor = supportsExampleFlag ? (
@@ -1445,7 +1519,9 @@ export function HskQuestionEditPage({
           <button type="button" className="hsk-question-edit-back" onClick={() => setFullscreenPreview(false)}>
             ← 返回编辑
           </button>
-          <span className="hsk-question-edit-topbar-title">全屏预览 · {draft.question_uid}</span>
+          <span className="hsk-question-edit-topbar-title">
+            全屏预览 · {isNewQuestion ? '新建题目' : draft.question_uid}
+          </span>
         </header>
         <div className="hsk-question-edit-fullscreen-preview">
           <HskQuestionEditPreview
@@ -1465,10 +1541,17 @@ export function HskQuestionEditPage({
     <div className="hsk-question-edit-page">
       <header className="hsk-question-edit-topbar">
         <div className="hsk-question-edit-topbar-left">
-          <button type="button" className="hsk-question-edit-back" onClick={onBack}>
+          <button
+            type="button"
+            className="hsk-question-edit-back"
+            onClick={onBack}
+            disabled={saving}
+          >
             返回
           </button>
-          <h1 className="hsk-question-edit-title">编辑题目 {draft.question_uid}</h1>
+          <h1 className="hsk-question-edit-title">
+            {isNewQuestion ? '新建题目' : `编辑题目 ${draft.question_uid}`}
+          </h1>
           {typeDef && (
             <span className="hsk-question-edit-type-badge">
               {typeDef.name}
@@ -1481,7 +1564,13 @@ export function HskQuestionEditPage({
         </div>
       </header>
 
-      <div className="hsk-question-edit-body">
+      <div
+        className={`hsk-question-edit-body${saving ? ' is-saving' : ''}`}
+        aria-busy={saving}
+        aria-disabled={saving}
+        onClickCapture={saving ? (event) => event.preventDefault() : undefined}
+        onKeyDownCapture={saving ? (event) => event.preventDefault() : undefined}
+      >
         <div className="hsk-question-edit-form-col">
           <div className="hsk-question-edit-form-inner">
             <SectionHeader icon="📋" title="元数据" />
@@ -1489,25 +1578,19 @@ export function HskQuestionEditPage({
             <div className="hsk-question-edit-meta-grid">
               <div className="hsk-question-edit-meta-field">
                 <label>题目ID</label>
-                <input type="text" value={draft.question_uid} readOnly className="input-readonly" />
+                <input
+                  type="text"
+                  value={isNewQuestion ? '保存时自动生成' : draft.question_uid}
+                  readOnly
+                  className="input-readonly"
+                />
               </div>
               <div className="hsk-question-edit-meta-field">
                 <label>题型</label>
                 <HskQuestionEditTypeSelect
                   value={draft.type_id}
                   types={visibleTypes}
-                  onChange={(typeId) => {
-                    setDraft((prev) => {
-                      const next = { ...prev, type_id: typeId, updatedAt: new Date().toISOString() };
-                      if (isJudgmentQuestionType(typeId)) return normalizeJudgmentQuestion(next);
-                      if (typeId === 'R09') return normalizeR09Question(next);
-                      if (typeId === 'W01') return normalizeW01Question(next);
-                      if (typeId === 'W02') return normalizeW02Question(next);
-                      if (typeId === 'W03') return normalizeW03Question(next);
-                      if (typeId === 'W04') return normalizeW04Question(next);
-                      return next;
-                    });
-                  }}
+                  onChange={requestQuestionTypeChange}
                 />
               </div>
               <div className="hsk-question-edit-meta-field is-span-2">
@@ -1527,7 +1610,7 @@ export function HskQuestionEditPage({
                 >
                   {HSK_QUESTION_LEVELS.map((level) => (
                     <option key={level} value={level}>
-                      {level === 'HSK7-9' ? 'HSK 7-9' : level.replace('HSK', 'HSK ')}
+                      {level.replace('HSK', 'HSK ')}
                     </option>
                   ))}
                 </select>
@@ -1906,22 +1989,69 @@ export function HskQuestionEditPage({
           <span className="required">*</span> 必填：{requiredSummary.text || '—'} （共 {requiredSummary.count} 项）
         </span>
         <div className="hsk-question-edit-footer-actions">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onBack}
+            disabled={saving}
+          >
             取消
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleSave('draft')}>
-            保存草稿
           </button>
           <button
             type="button"
-            className="btn btn-primary btn-sm"
-            disabled={draft.status === 'published'}
-            onClick={() => handleSave('published')}
+            className="btn btn-secondary btn-sm"
+            onClick={() => void handleSave('draft')}
+            disabled={saving}
           >
-            {draft.status === 'published' ? '已发布' : '发布'}
+            {saving ? '保存中...' : '保存草稿'}
           </button>
         </div>
       </footer>
+
+      {pendingTypeId && (
+        <div className="modal-overlay open" role="presentation">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="hsk-question-type-change-title"
+          >
+            <div className="modal-header">
+              <h2 id="hsk-question-type-change-title" className="modal-title">切换题型前请确认</h2>
+            </div>
+            <div className="modal-body">
+              <p>当前题目有未保存修改。切换到“{pendingTypeName}”会按新题型重建题目配置。</p>
+              <p>保存草稿会保留当前修改并返回题目列表；只有放弃修改才会继续切换题型。</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setPendingTypeId(null)}
+                disabled={saving}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={discardDraftAndChangeType}
+                disabled={saving}
+              >
+                放弃修改并切换
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleSave('draft')}
+                disabled={saving}
+              >
+                {saving ? '保存中...' : '保存草稿并返回'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <div className="hsk-toast show">{toast}</div>}
     </div>

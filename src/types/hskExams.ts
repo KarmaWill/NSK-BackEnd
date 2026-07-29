@@ -15,11 +15,6 @@ export type HskLevelCode =
 export const HSK_QUESTION_LEVELS = [
   'HSK1',
   'HSK2',
-  'HSK3',
-  'HSK4',
-  'HSK5',
-  'HSK6',
-  'HSK7-9',
 ] as const satisfies readonly HskLevelCode[];
 
 export type HskPublishStatus = 'draft' | 'published';
@@ -123,14 +118,15 @@ export type HskQuestionRow = {
 
 export type HskRuntimeQuestion = {
   id: number;
+  questionNumber?: number | null;
+  isExample?: boolean;
   type: string;
   typeName: string;
   category: HskSectionModule;
   section: string;
   content?: Record<string, unknown>;
   options?: HskRuntimeOption[];
-  questions?: Array<{ id: number; answer: string; score: number; question?: string; options?: HskRuntimeOption[] }>;
-  answer?: string;
+  questions?: Array<{ id: number; questionNumber?: number | null; isExample?: boolean; score: number; question?: string; options?: HskRuntimeOption[] }>;
   score: number;
   audioUrl?: string;
 };
@@ -142,11 +138,15 @@ export type ExamDeliveryPackage = {
   durationMinutes: number;
   totalScore: number;
   passScore: number;
+  scoringMode: HskScoringMode;
   showPinyin: boolean;
+  maxPlayCount: number;
   noticeRules: string[];
   sectionSummary: Array<{ module: string; count: number; minutes?: number }>;
   questions: HskRuntimeQuestion[];
 };
+
+export type HskScoringMode = 'equal_ratio' | 'per_item';
 
 export type HskQuestionTag = {
   id: string;
@@ -170,6 +170,8 @@ export type HskTemplateSection = {
   groups: HskSectionGroup[];
   totalCount: number;
   scoringCount: number;
+  /** 当前 section 的试卷实际单题分值 */
+  scorePerQuestion?: number;
   writingConfig?: Record<string, unknown> | null;
 };
 
@@ -206,9 +208,14 @@ export type HskPaperTemplate = {
   totalDuration: number;
   totalScore: number;
   passScore: number;
+  scoringMode: HskScoringMode;
+  passScoreAuto?: boolean;
   timeBlocks: HskTimeBlocks;
   modules: HskTemplateModule[];
   status: HskPublishStatus;
+  templateKind?: 'official' | 'custom';
+  templateCode?: string | null;
+  sourceTemplateId?: string | null;
   updatedAt: string;
   audioRules?: HskAudioRules;
   /** 自定义模板可覆盖默认单题分值 */
@@ -216,6 +223,9 @@ export type HskPaperTemplate = {
 };
 
 export type HskPaperSlot = {
+  slotUid?: string;
+  blockUid?: string | null;
+  sourceSubId?: string | null;
   moduleId: HskSectionModule;
   moduleName: string;
   sectionId: string;
@@ -239,8 +249,11 @@ export type HskComposedPaper = {
   level: HskLevelCode | string;
   slots: HskPaperSlot[];
   totalScore: number;
+  scoringMode: HskScoringMode;
   totalQuestions: number;
+  passScore?: number;
   duration: number;
+  templateSnapshot?: Record<string, unknown>;
   status: HskPublishStatus;
   linkedCourses: number;
   createdAt?: string;

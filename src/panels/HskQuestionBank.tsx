@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageTabPanel, PageTabs } from '../components/PageTabs';
 import { HskQuestionListTable } from '../components/HskQuestionListTable';
 import { HskQuestionTypeSelect } from '../components/HskQuestionTypeSelect';
@@ -7,18 +7,27 @@ import { HskTagManager } from '../components/HskTagManager';
 import { useHskStore } from '../hooks/useHskStore';
 import {
   mergeTypeCounts,
-  upsertQuestionTypes,
-  upsertQuestions,
-  upsertTagCatalog,
-  upsertTags,
+  syncQuestionBankLocalCache,
 } from '../stores/hskExams';
-import type { HskLevelCode, HskQuestionRow, HskQuestionStatus, HskQuestionTypeCode, HskQuestionTypeDef, HskSectionModule } from '../types/hskExams';
+import type {
+  HskLevelCode,
+  HskQuestionRow,
+  HskQuestionStatus,
+  HskQuestionTag,
+  HskQuestionTagCatalog,
+  HskQuestionTypeCode,
+  HskQuestionTypeDef,
+  HskSectionModule,
+} from '../types/hskExams';
 import { DEFAULT_HSK_QUESTION_TAG_CATALOG, HSK_QUESTION_LEVELS } from '../types/hskExams';
 import { HSK_QUESTION_STATUS_FILTER_OPTIONS } from '../config/hskQuestionWorkflow';
-import { buildDuplicateQuestionType, createBlankQuestionType } from '../utils/hskQuestionTypeDuplicate';
-import { isLegacyGenericTypeId } from '../config/hskQuestionTypes';
-import { HskQuestionConfig } from './HskQuestionConfig';
+import { filterHskQuestionRows } from '../utils/hskQuestionBankFilters';
+import { buildDefaultQuestionOptions, isLegacyGenericTypeId } from '../config/hskQuestionTypes';
+import * as questionBankApi from '../services/assessmentExamBankApi';
 import { HskQuestionEditPage } from './HskQuestionEditPage';
+import { HskQuestionPreviewPage } from './HskQuestionPreviewPage';
+import { createQuestionDetailRoute, type HskQuestionDetailRoute } from '../utils/hskQuestionDetailRoute';
+import { persistHskQuestionWithLocalSync } from '../utils/hskQuestionPersistence';
 
 const QUESTION_BANK_TABS = [
   { id: 'questions', label: '题目列表' },
@@ -26,8 +35,28 @@ const QUESTION_BANK_TABS = [
   { id: 'tags', label: '标签管理' },
 ] as const;
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : '题库接口请求失败';
+}
+
+function buildTagPatch(previous: HskQuestionTag, next: HskQuestionTag): Partial<HskQuestionTag> | null {
+  const patch: Partial<HskQuestionTag> = {};
+  if (previous.label !== next.label) patch.label = next.label;
+  if ((previous.description ?? '') !== (next.description ?? '')) {
+    patch.description = next.description;
+  }
+  if ((previous.category ?? '') !== (next.category ?? '')) {
+    patch.category = next.category;
+  }
+  return Object.keys(patch).length > 0 ? patch : null;
+}
+
+function waitForSynchronousCatalogChange(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
 export function HskQuestionBank() {
-  const { store } = useHskStore();
+  const { store } = useHskStore({ initialServerRefresh: false });
   const [activeTab, setActiveTab] = useState<string>('questions');
   const [selectedSection, setSelectedSection] = useState<HskSectionModule | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,15 +67,164 @@ export function HskQuestionBank() {
   const [questionDifficultyFilter, setQuestionDifficultyFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
   const [questionTagFilter, setQuestionTagFilter] = useState<string>('all');
   const [toast, setToast] = useState<string | null>(null);
-  const [editingQuestion, setEditingQuestion] = useState<HskQuestionRow | null>(null);
-  const [configMode, setConfigMode] = useState<HskQuestionTypeCode | null>(null);
-  const [newTypeDraft, setNewTypeDraft] = useState<HskQuestionTypeDef | null>(null);
+  const [questionDetail, setQuestionDetail] = useState<HskQuestionDetailRoute | null>(null);
   const [localTypes, setLocalTypes] = useState(store.questionTypes);
   const [localQuestions, setLocalQuestions] = useState(store.questions);
   const [localTags, setLocalTags] = useState(store.tags);
   const [localTagCatalog, setLocalTagCatalog] = useState(
     store.tagCatalog ?? DEFAULT_HSK_QUESTION_TAG_CATALOG,
   );
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const pendingCatalogSyncRef = useRef<{ removedCategories: Set<string> } | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  }, []);
+
+  const applyQuestionBankLocalState = useCallback((input: {
+    questionTypes?: HskQuestionTypeDef[];
+    questions?: HskQuestionRow[];
+    tags?: HskQuestionTag[];
+    tagCatalog?: HskQuestionTagCatalog;
+  }) => {
+    const nextTypes = input.questionTypes ?? localTypes;
+    const nextQuestions = input.questions ?? localQuestions;
+    const nextTags = input.tags ?? localTags;
+    const nextTagCatalog = input.tagCatalog ?? localTagCatalog;
+
+    if (input.questionTypes !== undefined) setLocalTypes(input.questionTypes);
+    if (input.questions !== undefined) setLocalQuestions(input.questions);
+    if (input.tags !== undefined) setLocalTags(input.tags);
+    if (input.tagCatalog !== undefined) setLocalTagCatalog(input.tagCatalog);
+
+    syncQuestionBankLocalCache({
+      questionTypes: nextTypes,
+      questions: nextQuestions,
+      tags: nextTags,
+      tagCatalog: nextTagCatalog,
+    });
+  }, [localTagCatalog, localQuestions, localTags, localTypes]);
+
+  const loadFormalQuestionBank = useCallback(async () => {
+    setRemoteLoading(true);
+    try {
+      const [questionTypesData, questionsData, tagsData, tagCatalogData] = await Promise.all([
+        questionBankApi.listQuestionTypes(),
+        questionBankApi.listQuestions(),
+        questionBankApi.listTags(),
+        questionBankApi.getTagCatalog(),
+      ]);
+
+      setLocalTypes(questionTypesData);
+      setLocalQuestions(questionsData);
+      setLocalTags(tagsData);
+      setLocalTagCatalog(tagCatalogData);
+      syncQuestionBankLocalCache({
+        questionTypes: questionTypesData,
+        questions: questionsData,
+        tags: tagsData,
+        tagCatalog: tagCatalogData,
+      });
+      return true;
+    } catch (err) {
+      showToast(errorMessage(err));
+      return false;
+    } finally {
+      setRemoteLoading(false);
+    }
+  }, [showToast]);
+
+  const syncTagsWithApi = useCallback(async (
+    previousTags: HskQuestionTag[],
+    nextTags: HskQuestionTag[],
+  ) => {
+    const previousById = new Map(previousTags.map((tag) => [tag.id, tag]));
+    const nextById = new Map(nextTags.map((tag) => [tag.id, tag]));
+    let syncedTags = nextTags;
+
+    for (const tag of previousTags) {
+      if (!nextById.has(tag.id)) {
+        await questionBankApi.deleteTag(tag.id);
+      }
+    }
+
+    for (const tag of nextTags) {
+      const previous = previousById.get(tag.id);
+      if (!previous) continue;
+      const patch = buildTagPatch(previous, tag);
+      if (!patch) continue;
+      const updated = await questionBankApi.patchTag(tag.id, patch);
+      syncedTags = syncedTags.map((item) => (item.id === tag.id ? updated : item));
+    }
+
+    for (const tag of nextTags) {
+      if (previousById.has(tag.id)) continue;
+      const created = await questionBankApi.createTag(tag);
+      syncedTags = syncedTags.map((item) => (item.id === tag.id ? created : item));
+    }
+
+    return syncedTags;
+  }, []);
+
+  const handleGlobalTagsChange = useCallback(async (nextTags: HskQuestionTag[]) => {
+    const nextTagIds = new Set(nextTags.map((tag) => tag.id));
+    const removedTags = localTags.filter((tag) => !nextTagIds.has(tag.id));
+    const labelSet = new Set(nextTags.map((tag) => tag.label));
+    const nextQuestions = localQuestions.map((question) => ({
+      ...question,
+      tags: question.tags.filter((label) => labelSet.has(label)),
+    }));
+
+    if (removedTags.length > 0) {
+      await waitForSynchronousCatalogChange();
+      const catalogSync = pendingCatalogSyncRef.current;
+      if (
+        catalogSync &&
+        removedTags.every((tag) => tag.category && catalogSync.removedCategories.has(tag.category))
+      ) {
+        applyQuestionBankLocalState({ questions: nextQuestions, tags: nextTags });
+        return;
+      }
+    }
+
+    try {
+      const syncedTags = await syncTagsWithApi(localTags, nextTags);
+      applyQuestionBankLocalState({ questions: nextQuestions, tags: syncedTags });
+    } catch (err) {
+      showToast(errorMessage(err));
+      void loadFormalQuestionBank();
+    }
+  }, [
+    applyQuestionBankLocalState,
+    loadFormalQuestionBank,
+    localQuestions,
+    localTags,
+    showToast,
+    syncTagsWithApi,
+  ]);
+
+  const handleTagCatalogChange = useCallback(async (nextCatalog: HskQuestionTagCatalog) => {
+    const nextCustomCategories = new Set(nextCatalog.customCategories);
+    const removedCategories = new Set(
+      localTagCatalog.customCategories.filter((category) => !nextCustomCategories.has(category)),
+    );
+    const catalogSync = removedCategories.size > 0 ? { removedCategories } : null;
+    pendingCatalogSyncRef.current = catalogSync;
+
+    try {
+      const updatedCatalog = await questionBankApi.patchTagCatalog(nextCatalog);
+      applyQuestionBankLocalState({ tagCatalog: updatedCatalog });
+      await loadFormalQuestionBank();
+    } catch (err) {
+      showToast(errorMessage(err));
+      void loadFormalQuestionBank();
+    } finally {
+      if (pendingCatalogSyncRef.current === catalogSync) {
+        pendingCatalogSyncRef.current = null;
+      }
+    }
+  }, [applyQuestionBankLocalState, loadFormalQuestionBank, localTagCatalog, showToast]);
 
   useEffect(() => {
     setLocalTypes(store.questionTypes);
@@ -54,6 +232,10 @@ export function HskQuestionBank() {
     setLocalTags(store.tags);
     setLocalTagCatalog(store.tagCatalog ?? DEFAULT_HSK_QUESTION_TAG_CATALOG);
   }, [store]);
+
+  useEffect(() => {
+    void loadFormalQuestionBank();
+  }, [loadFormalQuestionBank]);
 
   const questionTypes = useMemo(
     () =>
@@ -64,11 +246,6 @@ export function HskQuestionBank() {
     [localTypes, localQuestions],
   );
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  };
-
   const sectionCounts = useMemo(() => {
     const listening = questionTypes.filter((t) => t.section === 'listening').length;
     const reading = questionTypes.filter((t) => t.section === 'reading').length;
@@ -76,175 +253,97 @@ export function HskQuestionBank() {
     return { all: questionTypes.length, listening, reading, writing };
   }, [questionTypes]);
 
-  const duplicateQuestionType = (source: HskQuestionTypeDef, openConfig = false) => {
-    const auto = buildDuplicateQuestionType(source, localTypes);
-    if (!auto) {
-      showToast('同分区下已无可用题型 ID');
-      return;
-    }
-    const name = window.prompt('新题型名称', auto.name);
-    if (!name?.trim()) return;
-    const idRaw = window.prompt('新题型 ID（如 L07、R08）', auto.id);
-    if (!idRaw?.trim()) return;
-    const id = idRaw.trim().toUpperCase() as HskQuestionTypeCode;
-    if (localTypes.some((t) => t.id === id)) {
-      showToast(`题型 ID ${id} 已存在`);
-      return;
-    }
-    if (!/^[LRW]\d{2}$/.test(id)) {
-      showToast('题型 ID 格式应为 L01、R01、W01 等');
-      return;
-    }
-    const row: HskQuestionTypeDef = {
-      ...auto,
-      id,
-      hskTypeCode: id,
-      name: name.trim(),
-    };
-    const next = [...localTypes, row];
-    setLocalTypes(next);
-    upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, next);
-    showToast(`已新建题型 ${id}：${name.trim()}`);
-    if (openConfig) setConfigMode(id);
-  };
-
-  const duplicateFromConfig = (source: HskQuestionTypeDef) => {
-    duplicateQuestionType(source, true);
-  };
-
-  const updateQuestionStatus = (question: HskQuestionRow, status: HskQuestionStatus) => {
-    const next = {
-      ...question,
-      status,
-      updatedAt: new Date().toISOString(),
-    };
-    const updated = localQuestions.map((q) =>
-      q.question_uid === next.question_uid ? next : q,
-    );
-    setLocalQuestions(updated);
-    upsertQuestions({ ...store, tags: localTags }, updated);
-    if (status === 'pending_review') {
-      showToast(`已提交审核 ${question.question_uid}`);
-    } else if (status === 'pending_publish') {
-      showToast(`已审核，${question.question_uid} 进入待发布`);
-    } else if (status === 'published') {
-      showToast(`已发布 ${question.question_uid}`);
-    } else {
-      showToast(`已保存草稿 ${question.question_uid}`);
+  const updateQuestionStatus = async (question: HskQuestionRow, status: HskQuestionStatus) => {
+    try {
+      const next = await questionBankApi.patchQuestionStatus(question.question_uid, status);
+      const updated = localQuestions.map((q) =>
+        q.question_uid === next.question_uid ? next : q,
+      );
+      applyQuestionBankLocalState({ questions: updated });
+      if (next.status === 'pending_review') {
+        showToast(`已提交审核 ${next.question_uid}`);
+      } else if (next.status === 'pending_publish') {
+        showToast(`已审核，${next.question_uid} 进入待发布`);
+      } else if (next.status === 'published') {
+        showToast(`已发布 ${next.question_uid}`);
+      } else {
+        showToast(`已保存草稿 ${next.question_uid}`);
+      }
+    } catch (err) {
+      showToast(errorMessage(err));
     }
   };
 
-  const deleteQuestionType = (id: HskQuestionTypeCode) => {
-    const row = questionTypes.find((t) => t.id === id);
-    if (!row) return;
-    if (row.questionCount > 0) {
-      showToast('该题型下还有题目，无法删除');
-      return;
-    }
-    if (!window.confirm(`确定删除题型 ${id}（${row.name}）？`)) return;
-    const next = localTypes.filter((t) => t.id !== id);
-    setLocalTypes(next);
-    upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, next);
-    showToast(`已删除题型 ${id}`);
-  };
+  const toastNode = toast ? <div className="hsk-toast show">{toast}</div> : null;
 
-  const createQuestionTypeFromTemplate = () => {
-    const section = selectedSection === 'all' ? 'reading' : selectedSection;
-    setNewTypeDraft(createBlankQuestionType(localTypes, section));
-  };
-
-  useEffect(() => {
-    if (configMode && !localTypes.some((t) => t.id === configMode)) {
-      setConfigMode(null);
-    }
-  }, [configMode, localTypes]);
-
-  if (editingQuestion) {
+  if (questionDetail?.mode === 'preview') {
     return (
-      <HskQuestionEditPage
-        question={editingQuestion}
-        types={localTypes}
-        tags={localTags}
-        tagCatalog={localTagCatalog}
-        onBack={() => setEditingQuestion(null)}
-        onGlobalTagsChange={(nextTags) => {
-          const labelSet = new Set(nextTags.map((tag) => tag.label));
-          const nextQuestions = localQuestions.map((question) => ({
-            ...question,
-            tags: question.tags.filter((label) => labelSet.has(label)),
-          }));
-          setLocalTags(nextTags);
-          setLocalQuestions(nextQuestions);
-          upsertTags({ ...store, questions: nextQuestions, tagCatalog: localTagCatalog }, nextTags);
-          upsertQuestions({ ...store, tags: nextTags, tagCatalog: localTagCatalog }, nextQuestions);
-        }}
-        onTagCatalogChange={(nextCatalog) => {
-          setLocalTagCatalog(nextCatalog);
-          upsertTagCatalog({ ...store, tags: localTags, questions: localQuestions }, nextCatalog);
-        }}
-        onSave={(next) => {
-          const updated = localQuestions.map((q) =>
-            q.question_uid === next.question_uid ? next : q,
-          );
-          setLocalQuestions(updated);
-          upsertQuestions({ ...store, tags: localTags }, updated);
-          showToast(
-            next.status === 'published'
-              ? `已发布 ${next.question_uid}`
-              : next.status === 'pending_review'
-                ? `已提交审核 ${next.question_uid}`
-                : next.status === 'pending_publish'
-                  ? `已保存为待发布 ${next.question_uid}`
-                  : `已保存草稿 ${next.question_uid}`,
-          );
-          setEditingQuestion(null);
-        }}
-      />
+      <>
+        <HskQuestionPreviewPage
+          question={questionDetail.question}
+          types={localTypes}
+          onBack={() => setQuestionDetail(null)}
+        />
+        {toastNode}
+      </>
     );
   }
 
-  if (newTypeDraft) {
+  if (questionDetail?.mode === 'edit') {
     return (
-      <HskQuestionConfig
-        typeDef={newTypeDraft}
-        isNew
-        questionCount={0}
-        otherTypeIds={localTypes.map((t) => t.id)}
-        onBack={() => setNewTypeDraft(null)}
-        onSave={(next) => {
-          const nextTypes = [...localTypes, next];
-          setLocalTypes(nextTypes);
-          upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, nextTypes);
-          setNewTypeDraft(null);
-          showToast(`已新建题型 ${next.id}：${next.name}`);
-        }}
-      />
-    );
-  }
-
-  if (configMode) {
-    const editingType = localTypes.find((t) => t.id === configMode);
-    if (editingType) {
-      const typeQuestionCount =
-        questionTypes.find((t) => t.id === editingType.id)?.questionCount ?? 0;
-      return (
-        <HskQuestionConfig
-          typeDef={editingType}
-          questionCount={typeQuestionCount}
-          otherTypeIds={localTypes.filter((t) => t.id !== editingType.id).map((t) => t.id)}
-          onBack={() => setConfigMode(null)}
-          onDuplicateAndNew={() => duplicateFromConfig(editingType)}
-          onSave={(next) => {
-            const nextTypes = localTypes.map((t) => (t.id === editingType.id ? next : t));
-            setLocalTypes(nextTypes);
-            upsertQuestionTypes({ ...store, questions: localQuestions, tags: localTags }, nextTypes);
-            if (next.id !== editingType.id) {
-              setConfigMode(next.id);
+      <>
+        <HskQuestionEditPage
+          question={questionDetail.question}
+          types={localTypes}
+          tags={localTags}
+          tagCatalog={localTagCatalog}
+          onBack={() => setQuestionDetail(null)}
+          onGlobalTagsChange={handleGlobalTagsChange}
+          onTagCatalogChange={handleTagCatalogChange}
+          onSave={async (next) => {
+            const editingQuestion = questionDetail.question;
+            try {
+              const isNewQuestion = !next.question_uid.trim();
+              const { saved, localSyncError } = await persistHskQuestionWithLocalSync(
+                next,
+                {
+                  create: questionBankApi.createQuestion,
+                  update: questionBankApi.patchQuestion,
+                },
+                (persisted) => {
+                  const updated = isNewQuestion
+                    ? [...localQuestions, persisted]
+                    : localQuestions.map((q) =>
+                        q.question_uid === persisted.question_uid ? persisted : q,
+                      );
+                  applyQuestionBankLocalState({ questions: updated });
+                },
+              );
+              if (localSyncError) {
+                console.warn('题目已保存到后端，但浏览器本地缓存同步失败。', localSyncError);
+              }
+              showToast(
+                saved.status === 'published'
+                  ? `已发布 ${saved.question_uid}`
+                  : saved.status === 'pending_review'
+                    ? `已提交审核 ${saved.question_uid}`
+                    : saved.status === 'pending_publish'
+                      ? `已保存为待发布 ${saved.question_uid}`
+                      : `已保存草稿 ${saved.question_uid}`,
+              );
+              setQuestionDetail((current) =>
+                current?.mode === 'edit' && current.question === editingQuestion
+                  ? null
+                  : current,
+              );
+            } catch (err) {
+              showToast(errorMessage(err));
             }
           }}
         />
-      );
-    }
+        {toastNode}
+      </>
+    );
   }
 
   const filteredTypes = questionTypes.filter((q) => {
@@ -257,48 +356,38 @@ export function HskQuestionBank() {
     return matchesSection && matchesSearch;
   });
 
-  const filteredQuestions = localQuestions.filter((q) => {
-    if (questionTypeFilter !== 'all' && q.type_id !== questionTypeFilter) return false;
-    if (questionLevelFilter !== 'all' && q.level !== questionLevelFilter) return false;
-    if (questionStatusFilter !== 'all' && q.status !== questionStatusFilter) return false;
-    if (questionTagFilter !== 'all') {
-      const tag = localTags.find((t) => t.id === questionTagFilter);
-      if (tag && !q.tags.includes(tag.label)) return false;
-    }
-    if (questionDifficultyFilter !== 'all') {
-      const typeDef = localTypes.find((t) => t.id === q.type_id);
-      const stars = (typeDef?.difficulty.match(/★/g) ?? []).length;
-      if (String(stars) !== questionDifficultyFilter) return false;
-    }
-    if (!questionSearch.trim()) return true;
-    const s = questionSearch.toLowerCase();
-    return (
-      q.question_uid.toLowerCase().includes(s) ||
-      q.stem.toLowerCase().includes(s) ||
-      q.type_id.toLowerCase().includes(s) ||
-      q.level.toLowerCase().includes(s) ||
-      q.tags.some((tag) => tag.toLowerCase().includes(s))
-    );
+  const filteredQuestions = filterHskQuestionRows({
+    questions: localQuestions,
+    types: localTypes,
+    tags: localTags,
+    typeFilter: questionTypeFilter,
+    levelFilter: questionLevelFilter,
+    statusFilter: questionStatusFilter,
+    tagFilter: questionTagFilter,
+    difficultyFilter: questionDifficultyFilter,
+    searchQuery: questionSearch,
   });
 
 
   const createQuestion = () => {
     const typeId = questionTypeFilter === 'all' ? 'L01' : questionTypeFilter;
-    const id = `Q-${String(localQuestions.length + 1).padStart(3, '0')}`;
+    const typeDef = localTypes.find((type) => type.id === typeId);
+    const levelNumber = typeDef?.hskLevels.find((level) => level === 1 || level === 2) ?? 1;
+    const defaultOptions = buildDefaultQuestionOptions(typeDef?.defaultOptionCount);
     const row: HskQuestionRow = {
-      question_uid: id,
+      question_uid: '',
       type_id: typeId,
-      level: 'HSK1',
+      level: `HSK${levelNumber}` as HskLevelCode,
       tags: [],
       stem: '新题目题干',
-      options: [
-        { label: 'A', text: '' },
-        { label: 'B', text: '' },
-      ],
+      options: defaultOptions,
       correctAnswer: 'A',
       explanation: '',
-      score: 5,
-      payload: { content: { phrase: '' }, runtimeOptions: [{ key: 'A' }, { key: 'B' }, { key: 'C' }] },
+      score: typeDef?.defaultScore ?? 0,
+      payload: {
+        content: { phrase: '' },
+        runtimeOptions: defaultOptions.map((option) => ({ key: option.label })),
+      },
       audioStatus: 'none',
       imageStatus: 'none',
       linked_courses: [],
@@ -308,18 +397,19 @@ export function HskQuestionBank() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    const next = [...localQuestions, row];
-    setLocalQuestions(next);
-    upsertQuestions(store, next);
-    showToast(`已新建题目 ${id}`);
+    setQuestionDetail(createQuestionDetailRoute('edit', row));
   };
 
-  const deleteQuestion = (question: HskQuestionRow) => {
+  const deleteQuestion = async (question: HskQuestionRow) => {
     if (!window.confirm(`确定删除题目 ${question.question_uid}？`)) return;
-    const next = localQuestions.filter((q) => q.question_uid !== question.question_uid);
-    setLocalQuestions(next);
-    upsertQuestions(store, next);
-    showToast(`已删除 ${question.question_uid}`);
+    try {
+      await questionBankApi.deleteQuestion(question.question_uid);
+      const next = localQuestions.filter((q) => q.question_uid !== question.question_uid);
+      applyQuestionBankLocalState({ questions: next });
+      showToast(`已删除 ${question.question_uid}`);
+    } catch (err) {
+      showToast(errorMessage(err));
+    }
   };
 
   const typesPanel = (
@@ -328,12 +418,9 @@ export function HskQuestionBank() {
         <div>
           <h2 className="hsk-type-mgmt-page-title">题型管理</h2>
           <p className="hsk-type-mgmt-lead">
-            管理题库的题型模板，可通过复制现有题型来创建新题型
+            查看 HSK1-2 一期固定题型及其结构
           </p>
         </div>
-        <button type="button" className="btn btn-primary btn-sm" onClick={createQuestionTypeFromTemplate}>
-          + 新建题型
-        </button>
       </div>
 
       <div className="hsk-type-mgmt-filters">
@@ -376,9 +463,6 @@ export function HskQuestionBank() {
           <HskQuestionTypeCard
             key={qtype.id}
             qtype={qtype}
-            onEdit={() => setConfigMode(qtype.id)}
-            onDuplicate={() => duplicateQuestionType(qtype)}
-            onDelete={() => deleteQuestionType(qtype.id)}
           />
         ))}
       </div>
@@ -401,7 +485,12 @@ export function HskQuestionBank() {
           </p>
         </div>
         <div className="hsk-question-list-header-actions">
-          <button type="button" className="btn btn-primary btn-sm" onClick={createQuestion}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={createQuestion}
+            disabled={remoteLoading}
+          >
             + 新建题目
           </button>
         </div>
@@ -475,10 +564,10 @@ export function HskQuestionBank() {
       <HskQuestionListTable
         questions={filteredQuestions}
         types={localTypes}
-        onEdit={setEditingQuestion}
-        onPreview={setEditingQuestion}
-        onDelete={deleteQuestion}
-        onStatusChange={updateQuestionStatus}
+        onEdit={(question) => setQuestionDetail(createQuestionDetailRoute('edit', question))}
+        onPreview={(question) => setQuestionDetail(createQuestionDetailRoute('preview', question))}
+        onDelete={(question) => void deleteQuestion(question)}
+        onStatusChange={(question, status) => void updateQuestionStatus(question, status)}
       />
 
       {filteredQuestions.length === 0 && (
@@ -492,9 +581,15 @@ export function HskQuestionBank() {
       tags={localTags}
       questions={localQuestions}
       onTagsChange={(nextTags, nextQuestions) => {
-        setLocalTags(nextTags);
-        setLocalQuestions(nextQuestions);
-        upsertQuestions({ ...store, tags: nextTags }, nextQuestions);
+        void (async () => {
+          try {
+            const syncedTags = await syncTagsWithApi(localTags, nextTags);
+            applyQuestionBankLocalState({ questions: nextQuestions, tags: syncedTags });
+          } catch (err) {
+            showToast(errorMessage(err));
+            void loadFormalQuestionBank();
+          }
+        })();
       }}
       onToast={showToast}
       onNavigateToTag={(tagLabel) => {

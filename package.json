@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "dev:lan": "cross-env LAN=1 vite",
+    "test:frontend-unit": "node scripts/run-frontend-unit-tests.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "preview:lan": "cross-env LAN=1 vite preview"

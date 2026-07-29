@@ -1,4 +1,16 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { getApiBase } from '../lib/api';
+import { formatMediaDuration, resolveMediaThumbnailState } from '../utils/mediaPresentation';
+import {
+  deleteMediaAsset,
+  listMediaDirs,
+  pageMediaAssets,
+  replaceMediaAsset,
+  uploadMediaAsset,
+  type MediaAsset,
+  type MediaAssetType,
+  type MediaDirNode,
+} from '../services/mediaApi';
 
 type LessonItem = { id: string; label: string };
 type UnitItem = { id: string; label: string; lessons: LessonItem[] };
@@ -13,51 +25,13 @@ type AssetRow = {
   format: string;
   size: string;
   duration: string;
-  used: string;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
   mediaUrl?: string;
 };
 
-const LESSON_MAP: LevelItem[] = [
-  {
-    id: '1',
-    label: 'Level 1',
-    units: [
-      {
-        id: 'N10100',
-        label: 'Unit 1 · 日常主食',
-        lessons: [
-          { id: 'N10101', label: 'Lesson 1 · 米饭' },
-          { id: 'N10102', label: 'Lesson 2 · 饺子' },
-          { id: 'N10103', label: 'Lesson 3 · 吃包子' },
-        ],
-      },
-      {
-        id: 'N10200',
-        label: 'Unit 2 · 日常饮品',
-        lessons: [
-          { id: 'N10201', label: 'Lesson 1 · 水' },
-          { id: 'N10202', label: 'Lesson 2 · 茶' },
-          { id: 'N10203', label: 'Lesson 3 · 喝牛奶' },
-        ],
-      },
-    ],
-  },
-];
-
-const defaultAssets: AssetRow[] = [
-  { id: 'Y100001', dirId: 'N10101', bucket: '私有桶', name: '米饭.mp3', type: '音频', format: 'mp3', size: '128 KB', duration: '00:00:12', used: '学习资源 · 题库', enabled: true, createdAt: '2026-03-02 09:22', updatedAt: '2026-03-04 12:13' },
-  { id: 'Y100005', dirId: 'N10102', bucket: '私有桶', name: '米.mp3', type: '音频', format: 'mp3', size: '64 KB', duration: '00:00:08', used: '学习资源', enabled: false, createdAt: '2026-03-01 16:40', updatedAt: '2026-03-03 18:45' },
-  { id: 'V100003', dirId: 'N10201', bucket: '私有桶', name: 'V100003.mp4', type: '视频', format: 'mp4', size: '2.1 MB', duration: '00:00:15', used: '文化视频管理', enabled: true, createdAt: '2026-02-28 14:10', updatedAt: '2026-03-02 10:20' },
-];
-
-function formatNow() {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
+const PAGE_SIZE = 20;
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -65,14 +39,125 @@ function formatSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function inferType(file: File): AssetType {
-  if (file.type.startsWith('audio/')) return '音频';
-  if (file.type.startsWith('video/')) return '视频';
+function backendTypeToUi(type: MediaAssetType): AssetType {
+  if (type === 'audio') return '音频';
+  if (type === 'video') return '视频';
   return '图片';
 }
 
+function selectedTypeToBackend(type: '全部' | AssetType): MediaAssetType | undefined {
+  if (type === '音频') return 'audio';
+  if (type === '视频') return 'video';
+  if (type === '图片') return 'image';
+  return undefined;
+}
+
+function formatTimestamp(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value || '--';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function resolveMediaUrl(url: string) {
+  if (/^(https?:|blob:|data:)/i.test(url)) return url;
+  if (url.startsWith('/uploads/')) return `${getApiBase().replace(/\/$/, '')}${url}`;
+  return url;
+}
+
+function mapAsset(asset: MediaAsset): AssetRow {
+  return {
+    id: asset.id,
+    dirId: asset.dirId ?? '',
+    bucket: asset.bucket,
+    name: asset.name,
+    type: backendTypeToUi(asset.type),
+    format: asset.format,
+    size: formatSize(asset.sizeBytes),
+    duration: formatMediaDuration(asset.durationSeconds),
+    enabled: asset.enabled,
+    createdAt: formatTimestamp(asset.createdAt),
+    updatedAt: formatTimestamp(asset.updatedAt),
+    mediaUrl: asset.url ? resolveMediaUrl(asset.url) : undefined,
+  };
+}
+
+function sortedDirNodes(nodes: MediaDirNode[] = []) {
+  return [...nodes].sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+}
+
+function mapDirTree(nodes: MediaDirNode[]): LevelItem[] {
+  return sortedDirNodes(nodes)
+    .filter((level) => level.kind === 'level')
+    .map((level) => ({
+      id: level.id,
+      label: level.label,
+      units: sortedDirNodes(level.children)
+        .filter((unit) => unit.kind === 'unit')
+        .map((unit) => ({
+          id: unit.id,
+          label: unit.label,
+          lessons: sortedDirNodes(unit.children)
+            .filter((lesson) => lesson.kind === 'lesson')
+            .map((lesson) => ({ id: lesson.id, label: lesson.label })),
+        })),
+    }));
+}
+
+function getErrorMessage(err: unknown, fallback: string) {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err) return err;
+  return fallback;
+}
+
+function MediaThumbnail({
+  asset,
+  imageFailed,
+  onImageError,
+}: {
+  asset: AssetRow;
+  imageFailed: boolean;
+  onImageError: () => void;
+}) {
+  const state = resolveMediaThumbnailState(asset.type, asset.mediaUrl, imageFailed);
+  const frameStyle = {
+    width: 64,
+    height: 40,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderRadius: 4,
+    color: 'var(--ink-light)',
+    background: 'var(--mist)',
+  } as const;
+
+  if (state === 'image') {
+    return (
+      <img
+        src={asset.mediaUrl}
+        alt={`${asset.name} 缩略图`}
+        loading="lazy"
+        decoding="async"
+        style={{ ...frameStyle, display: 'block', objectFit: 'cover' }}
+        onError={onImageError}
+      />
+    );
+  }
+  if (state === 'image-unavailable') {
+    return <span style={{ ...frameStyle, fontSize: 11 }} title="图片预览不可用">图片不可用</span>;
+  }
+  return <span style={frameStyle} aria-label={state === 'video' ? '视频素材' : '音频素材'}>{state === 'video' ? '🎬' : '🎵'}</span>;
+}
+
 export function MediaLib() {
-  const [assets, setAssets] = useState<AssetRow[]>(defaultAssets);
+  const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [totalAssets, setTotalAssets] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [jumpPage, setJumpPage] = useState('1');
+  const [lessonMap, setLessonMap] = useState<LevelItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [toastText, setToastText] = useState('');
   const [selectedType, setSelectedType] = useState<'全部' | AssetType>('全部');
@@ -83,40 +168,73 @@ export function MediaLib() {
   const [fileNameKeyword, setFileNameKeyword] = useState('');
   const [formatKeyword, setFormatKeyword] = useState('');
   const [globalKeyword, setGlobalKeyword] = useState('');
+  const [appliedFilters, setAppliedFilters] = useState({ name: '', format: '', global: '', dirId: '' });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const [replaceDraft, setReplaceDraft] = useState<{ index: number; file: File; url: string } | null>(null);
+  const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
+  const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
+  const [replaceDraft, setReplaceDraft] = useState<{ assetId: string; file: File } | null>(null);
+  const [imagePreviewFailures, setImagePreviewFailures] = useState<Record<string, string>>({});
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
+  const requestIdRef = useRef(0);
+  const toastTimerRef = useRef<number | null>(null);
 
   const unitOptions = useMemo(
-    () => (selectedLevel ? LESSON_MAP.find((l) => l.id === selectedLevel)?.units ?? [] : []),
-    [selectedLevel],
+    () => (selectedLevel ? lessonMap.find((l) => l.id === selectedLevel)?.units ?? [] : []),
+    [lessonMap, selectedLevel],
   );
   const lessonOptions = useMemo(
     () => (selectedUnit ? unitOptions.find((u) => u.id === selectedUnit)?.lessons ?? [] : []),
     [selectedUnit, unitOptions],
   );
+  const selectedDirIds = useMemo(() => {
+    if (selectedLesson) return [selectedLesson];
+    if (selectedUnit) {
+      return [selectedUnit, ...lessonOptions.map((lesson) => lesson.id)];
+    }
+    if (selectedLevel) {
+      const level = lessonMap.find((item) => item.id === selectedLevel);
+      return level
+        ? [level.id, ...level.units.flatMap((unit) => [unit.id, ...unit.lessons.map((lesson) => lesson.id)])]
+        : [];
+    }
+    return [];
+  }, [lessonMap, lessonOptions, selectedLesson, selectedLevel, selectedUnit]);
   const filteredAssets = useMemo(() => {
-    return assets.filter((a) => {
-      const typeMatch = selectedType === '全部' ? true : a.type === selectedType;
-      const unitMatch = selectedUnit ? a.dirId.startsWith(selectedUnit.slice(0, 4)) || a.dirId === selectedUnit : true;
-      const lessonMatch = selectedLesson ? a.dirId === selectedLesson : true;
-      const keywordMatch = dirKeyword ? a.dirId.toLowerCase().includes(dirKeyword.toLowerCase()) : true;
-      const fileMatch = fileNameKeyword ? a.name.toLowerCase().includes(fileNameKeyword.toLowerCase()) : true;
-      const formatMatch = formatKeyword ? a.format.toLowerCase().includes(formatKeyword.toLowerCase()) : true;
-      const globalMatch = globalKeyword
-        ? [a.name, a.id, a.dirId, a.bucket, a.format].join(' ').toLowerCase().includes(globalKeyword.toLowerCase())
-        : true;
-      return typeMatch && unitMatch && lessonMatch && keywordMatch && fileMatch && formatMatch && globalMatch;
-    });
-  }, [assets, selectedType, selectedUnit, selectedLesson, dirKeyword, fileNameKeyword, formatKeyword, globalKeyword]);
+    return assets;
+  }, [assets]);
+  const totalPages = Math.max(1, Math.ceil(totalAssets / PAGE_SIZE));
+  const latestLoadStateRef = useRef({
+    currentPage,
+    selectedType,
+    appliedFilters,
+    selectedDirIds,
+    hasDirTree: lessonMap.length > 0,
+  });
+  latestLoadStateRef.current = {
+    currentPage,
+    selectedType,
+    appliedFilters,
+    selectedDirIds,
+    hasDirTree: lessonMap.length > 0,
+  };
 
-  const confirmDelete = () => {
-    if (deleteIndex === null) return;
-    setAssets((prev) => prev.filter((_, i) => i !== deleteIndex));
-    setDeleteIndex(null);
+  useEffect(() => {
+    setJumpPage(String(currentPage));
+  }, [currentPage]);
+
+  const confirmDelete = async () => {
+    if (!deleteAssetId) return;
+    const targetId = deleteAssetId;
+    setDeleteAssetId(null);
+    try {
+      await deleteMediaAsset(targetId);
+      setSelectedIds((previous) => previous.filter((id) => id !== targetId));
+      await loadRemote();
+      showToast('素材删除成功');
+    } catch (err) {
+      setError(getErrorMessage(err, '素材删除失败'));
+    }
   };
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -130,70 +248,153 @@ export function MediaLib() {
     }
     setSelectedIds((prev) => [...new Set([...prev, ...ids])]);
   };
-  const currentPreview = previewIndex !== null ? assets[previewIndex] : null;
+  const currentPreview = previewAssetId ? assets.find((asset) => asset.id === previewAssetId) ?? null : null;
 
-  const onUploadNew = (file?: File) => {
-    if (!file) return;
-    const now = formatNow();
-    const type = inferType(file);
-    const prefix = type === '音频' ? 'Y' : type === '视频' ? 'V' : 'I';
-    const id = `${prefix}${String(100000 + assets.length + 1)}`;
-    const mediaUrl = URL.createObjectURL(file);
-    const row: AssetRow = {
-      id,
-      dirId: selectedLesson || selectedUnit || 'N10101',
-      bucket: '私有桶',
-      name: file.name,
-      type,
-      format: file.name.split('.').pop()?.toLowerCase() || '',
-      size: formatSize(file.size),
-      duration: '--',
-      used: '未引用',
-      enabled: true,
-      createdAt: now,
-      updatedAt: now,
-      mediaUrl,
+  const showToast = (text: string) => {
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
+    setToastText(text);
+    toastTimerRef.current = window.setTimeout(() => setToastText(''), 1600);
+  };
+  const clearUploadInput = () => {
+    if (uploadInputRef.current) uploadInputRef.current.value = '';
+  };
+
+  const loadRemote = async (options: { asRefresh?: boolean } = {}) => {
+    const loadState = latestLoadStateRef.current;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    if (options.asRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError('');
+
+    try {
+      const shouldLoadDirs = !loadState.hasDirTree || options.asRefresh;
+      const [dirs, remotePage] = await Promise.all([
+        shouldLoadDirs ? listMediaDirs() : Promise.resolve(null),
+        pageMediaAssets({
+          current: loadState.currentPage,
+          size: PAGE_SIZE,
+          type: selectedTypeToBackend(loadState.selectedType),
+          dirId: loadState.appliedFilters.dirId || undefined,
+          dirIds: loadState.appliedFilters.dirId ? undefined : loadState.selectedDirIds,
+          name: loadState.appliedFilters.name || undefined,
+          format: loadState.appliedFilters.format || undefined,
+          keyword: loadState.appliedFilters.global || undefined,
+        }),
+      ]);
+      if (requestIdRef.current !== requestId) return false;
+
+      const nextAssets = remotePage.records.map(mapAsset);
+      const validIds = new Set(nextAssets.map((asset) => asset.id));
+
+      if (dirs) setLessonMap(mapDirTree(dirs));
+      setAssets(nextAssets);
+      setTotalAssets(remotePage.total);
+      const lastPage = Math.max(1, Math.ceil(remotePage.total / PAGE_SIZE));
+      if (loadState.currentPage > lastPage) setCurrentPage(lastPage);
+      setImagePreviewFailures((previous) => {
+        const retained: Record<string, string> = {};
+        nextAssets.forEach((asset) => {
+          if (previous[asset.id] === asset.mediaUrl) retained[asset.id] = asset.mediaUrl || '';
+        });
+        return retained;
+      });
+      setPreviewAssetId((prev) => (prev && validIds.has(prev) ? prev : null));
+      setDeleteAssetId((prev) => (prev && validIds.has(prev) ? prev : null));
+      setReplaceDraft((prev) => (prev && validIds.has(prev.assetId) ? prev : null));
+      return true;
+    } catch (err) {
+      if (requestIdRef.current === requestId) {
+        setError(getErrorMessage(err, '资源库加载失败'));
+      }
+      return false;
+    } finally {
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    void loadRemote();
+  }, [appliedFilters, currentPage, selectedDirIds.join(','), selectedType]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     };
-    setAssets((prev) => [row, ...prev]);
+  }, []);
+
+  const onUploadNew = async (file?: File) => {
+    if (!file) return;
+
+    try {
+      await uploadMediaAsset(file, {
+        dirId: selectedLesson || undefined,
+        bucket: '私有桶',
+        name: file.name,
+      });
+      await loadRemote();
+      showToast('文件上传成功');
+    } catch (err) {
+      setError(getErrorMessage(err, '文件上传失败'));
+    } finally {
+      clearUploadInput();
+    }
   };
   const onPickReplace = (file?: File) => {
-    if (!file || previewIndex === null) return;
-    const url = URL.createObjectURL(file);
-    setReplaceDraft({ index: previewIndex, file, url });
+    if (!file || !previewAssetId) return;
+    setReplaceDraft({ assetId: previewAssetId, file });
   };
-  const confirmReplace = () => {
+  const confirmReplace = async () => {
     if (!replaceDraft) return;
-    const { index, file, url } = replaceDraft;
-    setAssets((prev) =>
-      prev.map((a, i) =>
-        i === index
-          ? {
-              ...a,
-              name: file.name,
-              type: inferType(file),
-              format: file.name.split('.').pop()?.toLowerCase() || '',
-              size: formatSize(file.size),
-              mediaUrl: url,
-              updatedAt: formatNow(),
-            }
-          : a,
-      ),
-    );
-    setReplaceDraft(null);
+    const target = assets.find((asset) => asset.id === replaceDraft.assetId);
+    if (!target) {
+      setReplaceDraft(null);
+      setError('未找到要替换的素材');
+      return;
+    }
+    try {
+      await replaceMediaAsset(target.id, replaceDraft.file);
+      setReplaceDraft(null);
+      setPreviewAssetId(null);
+      await loadRemote();
+      showToast('素材替换成功');
+    } catch (err) {
+      setError(getErrorMessage(err, '素材替换失败'));
+    } finally {
+      if (replaceInputRef.current) replaceInputRef.current.value = '';
+    }
   };
   const cancelReplace = () => {
-    if (replaceDraft?.url) URL.revokeObjectURL(replaceDraft.url);
+    if (replaceInputRef.current) replaceInputRef.current.value = '';
     setReplaceDraft(null);
   };
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     if (refreshing) return;
-    setRefreshing(true);
-    window.setTimeout(() => {
-      setAssets((prev) => [...prev]);
-      setRefreshing(false);
-      setToastText('资源库刷新完成');
-      window.setTimeout(() => setToastText(''), 1600);
-    }, 600);
+    const ok = await loadRemote({ asRefresh: true });
+    if (ok) showToast('资源库刷新完成');
+  };
+  const applySearchFilters = () => {
+    const requestedDirId = dirKeyword.trim();
+    if (requestedDirId && !/^\d+$/.test(requestedDirId)) {
+      setError('目录 ID 只能输入数字');
+      return;
+    }
+    setError('');
+    setCurrentPage(1);
+    if (requestedDirId) {
+      setSelectedLevel('');
+      setSelectedUnit('');
+      setSelectedLesson('');
+    }
+    setAppliedFilters({
+      name: fileNameKeyword.trim(),
+      format: formatKeyword.trim(),
+      global: globalKeyword.trim(),
+      dirId: requestedDirId,
+    });
   };
 
   return (
@@ -204,14 +405,30 @@ export function MediaLib() {
           <div className="page-subtitle">可按条件检索并勾选资源，一键匹配到课程/学习资源/题库</div>
         </div>
         <div className="page-actions">
-          <input ref={uploadInputRef} type="file" accept="audio/*,video/*,image/*" style={{ display: 'none' }} onChange={(e) => onUploadNew(e.target.files?.[0])} />
-          <button type="button" className="btn btn-secondary" onClick={handleRefresh} disabled={refreshing}>
+          <input ref={uploadInputRef} type="file" accept="audio/*,video/*,image/*" style={{ display: 'none' }} onChange={(e) => { void onUploadNew(e.target.files?.[0]); }} />
+          <button type="button" className="btn btn-secondary" onClick={() => { void handleRefresh(); }} disabled={refreshing}>
             <span className={`spin-icon ${refreshing ? 'spinning' : ''}`}>↻</span>
             刷新
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => uploadInputRef.current?.click()}>上传文件</button>
         </div>
       </div>
+
+      {(loading || error) && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: '8px 12px',
+            border: `1px solid ${error ? 'var(--rose)' : 'var(--stone-dark)'}`,
+            borderRadius: 8,
+            background: 'var(--white)',
+            color: error ? 'var(--rose)' : 'var(--ink-light)',
+            fontSize: 13,
+          }}
+        >
+          {error || '正在加载资源库...'}
+        </div>
+      )}
 
       <div
         style={{
@@ -228,7 +445,7 @@ export function MediaLib() {
       >
         <input className="filter-select" placeholder="文件名" value={fileNameKeyword} onChange={(e) => setFileNameKeyword(e.target.value)} />
         <input className="filter-select" placeholder="文件类型（mp3/mp4/png）" value={formatKeyword} onChange={(e) => setFormatKeyword(e.target.value)} />
-        <button type="button" className="btn btn-primary btn-sm">查询</button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={applySearchFilters}>查询</button>
         <button
           type="button"
           className="btn btn-secondary btn-sm"
@@ -238,6 +455,11 @@ export function MediaLib() {
             setGlobalKeyword('');
             setDirKeyword('');
             setSelectedType('全部');
+            setSelectedLevel('');
+            setSelectedUnit('');
+            setSelectedLesson('');
+            setAppliedFilters({ name: '', format: '', global: '', dirId: '' });
+            setCurrentPage(1);
           }}
         >
           重置
@@ -253,10 +475,13 @@ export function MediaLib() {
             setSelectedLevel(e.target.value);
             setSelectedUnit('');
             setSelectedLesson('');
+            setDirKeyword('');
+            setAppliedFilters((previous) => ({ ...previous, dirId: '' }));
+            setCurrentPage(1);
           }}
         >
           <option value="">全部级别</option>
-          {LESSON_MAP.map((lv) => (
+          {lessonMap.map((lv) => (
             <option key={lv.id} value={lv.id}>{lv.label}</option>
           ))}
         </select>
@@ -266,6 +491,9 @@ export function MediaLib() {
           onChange={(e) => {
             setSelectedUnit(e.target.value);
             setSelectedLesson('');
+            setDirKeyword('');
+            setAppliedFilters((previous) => ({ ...previous, dirId: '' }));
+            setCurrentPage(1);
           }}
           disabled={!selectedLevel}
         >
@@ -277,7 +505,12 @@ export function MediaLib() {
         <select
           className="filter-select"
           value={selectedLesson}
-          onChange={(e) => setSelectedLesson(e.target.value)}
+          onChange={(e) => {
+            setSelectedLesson(e.target.value);
+            setDirKeyword('');
+            setAppliedFilters((previous) => ({ ...previous, dirId: '' }));
+            setCurrentPage(1);
+          }}
           disabled={!selectedUnit}
         >
           <option value="">全部课程</option>
@@ -288,16 +521,16 @@ export function MediaLib() {
         <input
           className="filter-select"
           style={{ minWidth: 170 }}
-          placeholder="目录ID，如 N10101"
+          placeholder="按目录 ID 搜索"
           value={dirKeyword}
           onChange={(e) => setDirKeyword(e.target.value)}
         />
-        <span className={`filter-tag ${selectedType === '全部' ? 'active' : ''}`} onClick={() => setSelectedType('全部')}>全部</span>
-        <span className={`filter-tag ${selectedType === '音频' ? 'active' : ''}`} onClick={() => setSelectedType('音频')}>音频</span>
-        <span className={`filter-tag ${selectedType === '视频' ? 'active' : ''}`} onClick={() => setSelectedType('视频')}>视频</span>
-        <span className={`filter-tag ${selectedType === '图片' ? 'active' : ''}`} onClick={() => setSelectedType('图片')}>图片</span>
+        <span className={`filter-tag ${selectedType === '全部' ? 'active' : ''}`} onClick={() => { setSelectedType('全部'); setCurrentPage(1); }}>全部</span>
+        <span className={`filter-tag ${selectedType === '音频' ? 'active' : ''}`} onClick={() => { setSelectedType('音频'); setCurrentPage(1); }}>音频</span>
+        <span className={`filter-tag ${selectedType === '视频' ? 'active' : ''}`} onClick={() => { setSelectedType('视频'); setCurrentPage(1); }}>视频</span>
+        <span className={`filter-tag ${selectedType === '图片' ? 'active' : ''}`} onClick={() => { setSelectedType('图片'); setCurrentPage(1); }}>图片</span>
         <span style={{ flex: 1 }} />
-        <span className="table-count">共 {filteredAssets.length} 个素材</span>
+        <span className="table-count">共 {totalAssets} 个素材</span>
       </div>
 
       <div className="table-wrap">
@@ -343,7 +576,16 @@ export function MediaLib() {
                   <div style={{ fontWeight: 500 }}>{a.name}</div>
                   <div className="td-mono">{a.id} · {a.dirId}</div>
                 </td>
-                <td style={{ color: 'var(--ink-light)' }}>{a.type === '图片' ? '🖼️' : a.type === '视频' ? '🎬' : '🎵'}</td>
+                <td>
+                  <MediaThumbnail
+                    asset={a}
+                    imageFailed={imagePreviewFailures[a.id] === a.mediaUrl}
+                    onImageError={() => setImagePreviewFailures((previous) => ({
+                      ...previous,
+                      [a.id]: a.mediaUrl || '',
+                    }))}
+                  />
+                </td>
                 <td>{a.bucket}</td>
                 <td className="td-mono">{a.format || '--'}</td>
                 <td className="td-mono">{a.size}</td>
@@ -351,13 +593,13 @@ export function MediaLib() {
                 <td className="td-mono" style={{ fontSize: 12 }}>{a.createdAt}</td>
                 <td className="td-mono" style={{ fontSize: 12 }}>{a.updatedAt}</td>
                 <td>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewIndex(assets.findIndex((x) => x.id === a.id))}>详情</button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewIndex(assets.findIndex((x) => x.id === a.id))}>编辑</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewAssetId(a.id)}>详情</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewAssetId(a.id)}>编辑</button>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--rose)' }}
-                    onClick={() => setDeleteIndex(assets.findIndex((x) => x.id === a.id))}
+                    onClick={() => setDeleteAssetId(a.id)}
                   >
                     删除
                   </button>
@@ -375,27 +617,67 @@ export function MediaLib() {
         </table>
       </div>
 
-      <div className={`modal-overlay ${deleteIndex !== null ? 'open' : ''}`} onClick={() => setDeleteIndex(null)} role="dialog" aria-modal="true" aria-label="确认删除素材">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const target = Math.min(totalPages, Math.max(1, Number.parseInt(jumpPage, 10) || 1));
+          setCurrentPage(target);
+          setJumpPage(String(target));
+        }}
+        style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 12 }}
+      >
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={loading || currentPage <= 1}
+          onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+        >
+          上一页
+        </button>
+        <span className="table-count">第 {currentPage} / {totalPages} 页</span>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={loading || currentPage >= totalPages}
+          onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+        >
+          下一页
+        </button>
+        <span className="table-count">跳至</span>
+        <input
+          type="number"
+          className="form-input"
+          min={1}
+          max={totalPages}
+          value={jumpPage}
+          onChange={(event) => setJumpPage(event.target.value)}
+          aria-label="跳转页码"
+          style={{ width: 72, height: 32, padding: '4px 8px' }}
+        />
+        <button type="submit" className="btn btn-secondary btn-sm" disabled={loading}>跳转</button>
+      </form>
+
+      <div className={`modal-overlay ${deleteAssetId !== null ? 'open' : ''}`} onClick={() => setDeleteAssetId(null)} role="dialog" aria-modal="true" aria-label="确认删除素材">
         <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
           <div className="modal-header">
             <div className="modal-title">确认删除</div>
-            <button type="button" className="modal-close" onClick={() => setDeleteIndex(null)} aria-label="关闭">✕</button>
+            <button type="button" className="modal-close" onClick={() => setDeleteAssetId(null)} aria-label="关闭">✕</button>
           </div>
           <div className="modal-body">
             <p style={{ margin: 0 }}>确认删除该素材？删除后不可恢复。</p>
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-ghost" onClick={() => setDeleteIndex(null)}>取消</button>
-            <button type="button" className="btn btn-primary" onClick={confirmDelete}>确认删除</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setDeleteAssetId(null)}>取消</button>
+            <button type="button" className="btn btn-primary" onClick={() => { void confirmDelete(); }}>确认删除</button>
           </div>
         </div>
       </div>
 
-      <div className={`modal-overlay ${previewIndex !== null ? 'open' : ''}`} onClick={() => { setPreviewIndex(null); cancelReplace(); }} role="dialog" aria-modal="true" aria-label="预览素材">
+      <div className={`modal-overlay ${previewAssetId !== null ? 'open' : ''}`} onClick={() => { setPreviewAssetId(null); cancelReplace(); }} role="dialog" aria-modal="true" aria-label="预览素材">
         <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
           <div className="modal-header">
             <div className="modal-title">素材预览</div>
-            <button type="button" className="modal-close" onClick={() => { setPreviewIndex(null); cancelReplace(); }} aria-label="关闭">✕</button>
+            <button type="button" className="modal-close" onClick={() => { setPreviewAssetId(null); cancelReplace(); }} aria-label="关闭">✕</button>
           </div>
           <div className="modal-body">
             {currentPreview && (
@@ -420,7 +702,7 @@ export function MediaLib() {
                   <div style={{ marginTop: 10, padding: 10, border: '1px solid var(--stone-dark)', borderRadius: 8, background: 'var(--mist)' }}>
                     <div className="form-hint" style={{ marginBottom: 8 }}>待替换文件：{replaceDraft.file.name}</div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className="btn btn-primary btn-sm" onClick={confirmReplace}>确认替换</button>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={() => { void confirmReplace(); }}>确认替换</button>
                       <button type="button" className="btn btn-ghost btn-sm" onClick={cancelReplace}>取消</button>
                     </div>
                   </div>
@@ -429,7 +711,7 @@ export function MediaLib() {
             )}
           </div>
           <div className="modal-footer">
-            <button type="button" className="btn btn-ghost" onClick={() => { setPreviewIndex(null); cancelReplace(); }}>关闭</button>
+            <button type="button" className="btn btn-ghost" onClick={() => { setPreviewAssetId(null); cancelReplace(); }}>关闭</button>
           </div>
         </div>
       </div>
