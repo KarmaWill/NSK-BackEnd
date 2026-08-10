@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_CLINGO_EXAM_PATH_PREFIX?: string;
   readonly VITE_CLINGO_AUTH_HEADER?: string;
   readonly VITE_CLINGO_DEV_KEY?: string;
+  readonly VITE_CLINGO_GATEWAY_TOKEN?: string;
   readonly VITE_DEV_SKIP_AUTH?: string;
   readonly VITE_NEWS_AI_FORMAT?: string;
 }

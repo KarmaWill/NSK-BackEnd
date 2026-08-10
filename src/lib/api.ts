@@ -60,6 +60,13 @@ function resolveRequestUrl(path: string, base = API_BASE): string {
   return base ? joinPath(base, path) : path;
 }
 
+function appendGatewayToken(url: string): string {
+  const token = import.meta.env.VITE_CLINGO_GATEWAY_TOKEN?.trim();
+  if (!token) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}token=${encodeURIComponent(token)}`;
+}
+
 function formatFetchError(err: unknown, path: string, targetUrl?: string): Error {
   if (err instanceof Error && /failed to fetch|networkerror|load failed/i.test(err.message)) {
     const target = targetUrl || `${getApiBase()}${path}`;
@@ -118,7 +125,7 @@ async function fetchJson<T>(
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const url = resolveRequestUrl(path, base);
+  const url = appendGatewayToken(resolveRequestUrl(path, base));
 
   let res: Response;
   try {
